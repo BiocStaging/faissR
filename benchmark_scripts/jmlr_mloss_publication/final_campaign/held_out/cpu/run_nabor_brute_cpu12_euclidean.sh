@@ -15,7 +15,7 @@ set -euo pipefail
 BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
 SUITE_ROOT="${SUITE_ROOT:-${BASE_DIR}/benchmark_scripts/jmlr_mloss_publication}"
 SINGULARITY_IMAGE="${SINGULARITY_IMAGE:-${BASE_DIR}/singularity/fastembedr_cuda.sif}"
-export EXPECTED_FAISSR_VERSION='0.99.18'
+export EXPECTED_FAISSR_VERSION='0.99.19'
 mkdir -p "${BASE_DIR}/benchmark_logs"
 
 export METHOD_ID='nabor_brute'

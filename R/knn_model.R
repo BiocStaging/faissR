@@ -39,7 +39,10 @@
 #'   Use `0.9`, `0.95`, or `0.99`. CUDA `method = "auto"` uses it for
 #'   Flat-vs-IVF selection, CUDA IVF uses it for probing defaults, and HNSW uses
 #'   it for graph-search tiers. CUDA HNSW metadata records that the available
-#'   cuVS route is a CAGRA-to-HNSW wrapper.
+#'   cuVS route is a CAGRA-to-HNSW wrapper. For approximate methods this is a
+#'   selection objective, not a guarantee; inspect the underlying NN metadata,
+#'   including `tuning_benchmark_target_met`, and validate recall for the
+#'   application.
 #' @param cagra_implementation CUDA CAGRA provider passed to \code{\link{nn}()}
 #'   for `method = "cagra"` or CUDA-auto routes that select CAGRA. `NULL` uses
 #'   the global `faissR.cagra_implementation` option; `"auto"` uses the same
@@ -234,7 +237,9 @@ knn_model_fit <- function(Xtrain,
 #' @param target_recall Optional speed/recall tier for this prediction call.
 #'   `NULL` reuses the fitted model's value; otherwise use `0.9`, `0.95`, or
 #'   `0.99`. It affects CUDA auto Flat-vs-IVF selection, CUDA IVF probing, and
-#'   HNSW graph-search tiers when prediction needs a new NN search.
+#'   HNSW graph-search tiers when prediction needs a new NN search. For
+#'   approximate methods this is a selection objective rather than a recall
+#'   guarantee.
 #' @param cagra_implementation CUDA CAGRA provider for this prediction call.
 #'   `NULL` reuses the fitted model's setting, then the global option.
 #' @param cagra_build_algo Direct RAPIDS cuVS CAGRA graph-build algorithm for

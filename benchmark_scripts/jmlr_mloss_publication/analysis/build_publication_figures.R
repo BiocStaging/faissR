@@ -54,7 +54,7 @@ draw_auto_oracle <- function(auto, output, backend) {
   }
   usable$metric <- factor(usable$metric, levels = c("euclidean", "cosine", "correlation", "inner_product"))
   boxplot(log10(auto_over_oracle) ~ metric, data = usable, col = "grey85",
-          ylab = "log10(auto runtime / empirical-oracle runtime)", xlab = "Metric",
+          ylab = "log10(auto runtime / explicit-faissR-oracle runtime)", xlab = "Metric",
           main = paste("Automatic-selection regret on", toupper(backend)))
   abline(h = 0, lty = 2, col = "grey35")
   stripchart(log10(auto_over_oracle) ~ metric, data = usable, method = "jitter", vertical = TRUE,

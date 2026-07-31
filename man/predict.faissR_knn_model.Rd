@@ -40,7 +40,9 @@ defaults.}
 \item{target_recall}{Optional speed/recall tier for this prediction call.
 `NULL` reuses the fitted model's value; otherwise use `0.9`, `0.95`, or
 `0.99`. It affects CUDA auto Flat-vs-IVF selection, CUDA IVF probing, and
-HNSW graph-search tiers when prediction needs a new NN search.}
+HNSW graph-search tiers when prediction needs a new NN search. For
+approximate methods this is a selection objective rather than a recall
+guarantee.}
 
 \item{cagra_implementation}{CUDA CAGRA provider for this prediction call.
 `NULL` reuses the fitted model's setting, then the global option.}

@@ -2732,6 +2732,23 @@ test_that("publication aggregator requires complete held-out recall", {
   summary <- env$robust_summary(rows, expected_seeds = 2L, expected_repeats = 3L)
   expect_true(summary$target_met_all_runs)
 
+  missing_repeat <- rows[
+    !(rows$validation_seed == 20260807 & rows$repeat_id == 3L),
+    ,
+    drop = FALSE
+  ]
+  duplicated_repeat <- rbind(missing_repeat, missing_repeat[1L, , drop = FALSE])
+  expect_false(env$robust_summary(
+    missing_repeat,
+    expected_seeds = 2L,
+    expected_repeats = 3L
+  )$complete_validation)
+  expect_false(env$robust_summary(
+    duplicated_repeat,
+    expected_seeds = 2L,
+    expected_repeats = 3L
+  )$complete_validation)
+
   runs <- data.frame(
     backend = "cpu",
     method_id = "faissR_cpu_hnsw",
@@ -2745,6 +2762,52 @@ test_that("publication aggregator requires complete held-out recall", {
   newest <- env$latest_method_runs(runs)
   expect_setequal(newest$dataset, c("COIL20", "TabulaMuris"))
   expect_equal(newest$dataset_md5[newest$dataset == "TabulaMuris"], "tabula-v2")
+
+  result_root <- tempfile("faissR-held-out-reruns-")
+  old_dir <- file.path(result_root, "old_run")
+  new_dir <- file.path(result_root, "new_run")
+  dir.create(old_dir, recursive = TRUE)
+  dir.create(new_dir, recursive = TRUE)
+  old_file <- file.path(old_dir, "jmlr_tuned_benchmark_results.csv")
+  new_file <- file.path(new_dir, "jmlr_tuned_benchmark_results.csv")
+  write.csv(runs[2L, setdiff(names(runs), c("run_root", "source_mtime"))],
+            old_file, row.names = FALSE)
+  write.csv(runs[3L, setdiff(names(runs), c("run_root", "source_mtime"))],
+            new_file, row.names = FALSE)
+  Sys.setFileTime(old_file, Sys.time() - 60)
+  Sys.setFileTime(new_file, Sys.time())
+  reread <- env$read_union(c(old_file, new_file))
+  expect_setequal(reread$run_root, c(old_dir, new_dir))
+  expect_equal(
+    env$latest_method_runs(reread)$dataset_md5,
+    "tabula-v2"
+  )
+
+  selector_rows <- data.frame(
+    dataset = "MNIST",
+    dataset_md5 = "mnist-v1",
+    dataset_suite = "real",
+    backend = "cpu",
+    metric = "euclidean",
+    k = 30L,
+    target_recall = 0.99,
+    complete_validation = TRUE,
+    target_met_all_runs = TRUE,
+    median_time_sec = c(0.5, 0.4, 1, 1.5),
+    min_recall_at_k = c(0.995, 0.995, 0.995, 0.995),
+    implementation = c("FNN", "nabor", "faissR", "faissR"),
+    method_id = c(
+      "FNN_kd", "nabor_auto", "faissR_cpu_hnsw", "faissR_cpu_auto"
+    ),
+    public_method = c(NA, NA, "hnsw", "auto"),
+    result_backend = c(NA, NA, "faiss_hnsw", "faiss_hnsw"),
+    stringsAsFactors = FALSE
+  )
+  selector <- env$rank_qualifying(selector_rows)
+  expect_identical(selector$fastest_method, "nabor_auto")
+  expect_identical(selector$faissr_oracle_method, "faissR_cpu_hnsw")
+  expect_equal(selector$auto_over_oracle, 1.5)
+  expect_true(selector$auto_provider_agreement)
 })
 
 test_that("publication external comparison enforces a common recall tier", {
@@ -2984,6 +3047,24 @@ test_that("JSS reviewer-response scripts are parseable and preserve HPC contract
   held_out <- readLines(file.path(root, "common", "benchmark_jmlr_tuned_methods.R"), warn = FALSE)
   expect_true(any(grepl("nvidia-smi_process_sampled_100ms", ablation, fixed = TRUE)))
   expect_true(any(grepl("nvidia-smi_process_sampled_100ms", held_out, fixed = TRUE)))
+  expect_true(any(grepl("reference_backend_used", held_out, fixed = TRUE)))
+  expect_false(any(grepl(
+    'base$reference_source <- "precomputed_exact_cpu"',
+    held_out,
+    fixed = TRUE
+  )))
+
+  freeze <- readLines(r_files[[4L]], warn = FALSE)
+  expect_true(any(grepl("mismatched_faissR_result_versions.csv", freeze, fixed = TRUE)))
+  expect_true(any(grepl("^[[:xdigit:]]{40}$", freeze, fixed = TRUE)))
+  expect_true(any(grepl("^[[:xdigit:]]{64}$", freeze, fixed = TRUE)))
+
+  replication <- readLines(
+    test_path("../../manuscript/jss/replication_article.R"),
+    warn = FALSE
+  )
+  expect_true(any(grepl("publication_results_all_runs.csv", replication, fixed = TRUE)))
+  expect_true(any(grepl("combined <- latest_method_runs(all_runs)", replication, fixed = TRUE)))
 })
 
 test_that("final JSS campaign rejects a stale faissR Singularity image", {

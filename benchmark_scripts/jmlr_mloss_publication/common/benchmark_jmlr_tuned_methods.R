@@ -1017,6 +1017,8 @@ worker_main <- function(args) {
     quality_exact_sec = NA_real_,
     quality_status = NA_character_,
     reference_source = NA_character_,
+    reference_backend = NA_character_,
+    reference_backend_used = NA_character_,
     reference_path = NA_character_,
     quality_error = "",
     error = "",
@@ -1048,10 +1050,23 @@ worker_main <- function(args) {
       reference <- compute_reference(ds$data, rows, k, metric, threads)
       base$quality_exact_sec <- proc.time()[["elapsed"]] - ref_time
       base$reference_source <- "computed_in_worker"
+      base$reference_backend <- "cpu"
+      base$reference_backend_used <- "faiss_cpu_exact"
     } else {
       rows <- as.integer(reference$rows)
       base$quality_exact_sec <- 0
-      base$reference_source <- "precomputed_exact_cpu"
+      base$reference_backend <- as.character(reference$backend %||% NA_character_)
+      base$reference_backend_used <- as.character(
+        reference$backend_used %||% NA_character_
+      )
+      base$reference_source <- paste0(
+        "precomputed_exact_",
+        if (is.na(base$reference_backend) || !nzchar(base$reference_backend)) {
+          "unknown"
+        } else {
+          base$reference_backend
+        }
+      )
       base$reference_path <- reference$path
     }
     base$quality_eval_n <- length(rows)
@@ -1417,6 +1432,8 @@ main <- function() {
                 quality_exact_sec = NA_real_,
                 quality_status = "failed",
                 reference_source = NA_character_,
+                reference_backend = NA_character_,
+                reference_backend_used = NA_character_,
                 reference_path = NA_character_,
                 quality_error = paste("worker did not produce result; exit status", status),
                 error = paste("worker did not produce result; exit status", status),

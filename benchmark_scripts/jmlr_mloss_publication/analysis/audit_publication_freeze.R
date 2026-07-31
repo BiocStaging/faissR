@@ -83,6 +83,37 @@ main <- function() {
   stale <- unique(stale)
   write.csv(stale, file.path(out_dir, "stale_or_unverifiable_result_rows.csv"), row.names = FALSE)
 
+  package_version <- tryCatch(
+    as.character(utils::packageVersion("faissR")),
+    error = function(e) NA_character_
+  )
+  faissr_rows <- results$implementation == "faissR"
+  result_version <- if ("implementation_version" %in% names(results)) {
+    as.character(results$implementation_version)
+  } else {
+    rep(NA_character_, nrow(results))
+  }
+  version_mismatch <- faissr_rows & (
+    is.na(result_version) | !nzchar(result_version) |
+      is.na(package_version) | result_version != package_version
+  )
+  stale_versions <- unique(results[
+    version_mismatch,
+    intersect(
+      c(
+        "dataset", "backend", "method_id", "metric", "k",
+        "implementation_version", "archive_file"
+      ),
+      names(results)
+    ),
+    drop = FALSE
+  ])
+  write.csv(
+    stale_versions,
+    file.path(out_dir, "mismatched_faissR_result_versions.csv"),
+    row.names = FALSE
+  )
+
   provenance <- if (nzchar(provenance_path) && file.exists(provenance_path)) {
     read.csv(provenance_path, stringsAsFactors = FALSE, check.names = FALSE)
   } else {
@@ -97,16 +128,17 @@ main <- function() {
   })
   write.csv(provenance, file.path(out_dir, "dataset_provenance_audit.csv"), row.names = FALSE)
 
-  package_version <- tryCatch(as.character(utils::packageVersion("faissR")), error = function(e) NA_character_)
   backend <- tryCatch(paste(capture.output(print(faissR::backend_info())), collapse = "\n"),
                       error = function(e) paste("unavailable:", conditionMessage(e)))
+  package_commit <- Sys.getenv("FAISSR_PACKAGE_COMMIT", unset = "UNSET")
+  container_sha256 <- Sys.getenv("FAISSR_CONTAINER_SHA256", unset = "UNSET")
   freeze <- data.frame(
     field = c("audit_timestamp_utc", "faissR_version", "package_git_commit", "container_path",
               "container_sha256", "slurm_job_id", "hostname", "R", "OS"),
     value = c(format(Sys.time(), tz = "UTC", usetz = TRUE), package_version,
-              Sys.getenv("FAISSR_PACKAGE_COMMIT", unset = "UNSET"),
+              package_commit,
               Sys.getenv("FAISSR_CONTAINER_PATH", unset = "UNSET"),
-              Sys.getenv("FAISSR_CONTAINER_SHA256", unset = "UNSET"),
+              container_sha256,
               Sys.getenv("SLURM_JOB_ID", unset = "manual"), Sys.info()[["nodename"]],
               R.version.string, paste(Sys.info()[c("sysname", "release", "machine")], collapse = " ")),
     stringsAsFactors = FALSE
@@ -123,9 +155,10 @@ main <- function() {
   problems <- c(
     if (any(!manifest$file_exists)) paste(sum(!manifest$file_exists), "dataset files missing") else NULL,
     if (nrow(stale)) paste(nrow(stale), "stale/unverifiable result groups") else NULL,
+    if (nrow(stale_versions)) paste(nrow(stale_versions), "faissR result rows from another or unknown package version") else NULL,
     if (any(!provenance$provenance_complete)) paste(sum(!provenance$provenance_complete), "incomplete provenance rows") else NULL,
-    if (Sys.getenv("FAISSR_PACKAGE_COMMIT", unset = "UNSET") == "UNSET") "package commit unset" else NULL,
-    if (Sys.getenv("FAISSR_CONTAINER_SHA256", unset = "UNSET") == "UNSET") "container SHA-256 unset" else NULL
+    if (!grepl("^[[:xdigit:]]{40}$", package_commit)) "package commit is not a 40-character hexadecimal hash" else NULL,
+    if (!grepl("^[[:xdigit:]]{64}$", container_sha256)) "container SHA-256 is not a 64-character hexadecimal digest" else NULL
   )
   writeLines(c("# Publication freeze audit", "", if (length(problems)) paste0("- ", problems) else "All checks passed."),
              file.path(out_dir, "JSS_FREEZE_AUDIT_REPORT.md"))

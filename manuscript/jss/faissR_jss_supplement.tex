@@ -90,11 +90,12 @@ or general performance superiority.
 
 \section{Software and public interface}
 
-The evaluated development snapshot is \pkg{faissR} 0.99.18. FAISS is a
+The evaluated development snapshot is \pkg{faissR} 0.99.19. FAISS is a
 mandatory system dependency. NVIDIA CUDA, FAISS GPU, and RAPIDS cuVS are
 optional for CPU-only builds and required when the corresponding GPU features
 are explicitly requested. The package uses compiled C++/CUDA interfaces and
-does not require Python. \pkg{faissR} is distributed under the MIT license;
+does not require Python. \pkg{faissR} is distributed under the GPL-compatible
+MIT license;
 FAISS and NVIDIA libraries remain external dependencies under their own
 licenses. A minimal adaptation of the public DLPack C ABI is distributed under
 Apache License 2.0 with its copyright notice and full license installed in the
@@ -542,7 +543,9 @@ regular CPU computer with FAISS and \pkg{faissR} installed. It executes the
 article examples, checks dimensions and finite values, writes a compact summary,
 and records \code{sessionInfo()}. If \code{FAISSR\_JSS\_RESULTS\_DIR} identifies
 the frozen archive, the same script verifies every source file's schema,
-rejects duplicate benchmark keys, optionally matches dataset fingerprints to
+retains and checksums every raw rerun, selects the newest timestamped run per
+method cell, rejects duplicate benchmark keys within that selected evidence,
+optionally matches dataset fingerprints to
 \code{FAISSR\_JSS\_DATASET\_MANIFEST}, optionally verifies the SHA-256 ledger
 in \code{FAISSR\_JSS\_RESULT\_CHECKSUMS}, and regenerates held-out tables
 without launching Slurm. Full
@@ -562,10 +565,18 @@ independent exact-reference query rows (up to 1,024), reports conversion,
 construction, first-query, and three repeated-query timings separately, and
 does not mix its sampled-query times with the primary full all-row cold
 comparison.
+For the held-out aggregate, each timestamped method output directory is one
+run. The newest run is selected without pooling earlier reruns, and a
+publication-eligible cell must contain exactly one successful observation for
+every prespecified validation-seed/repeat pair. Every observation must meet the
+requested recall target.
 Generated launcher and campaign-source manifests record both MD5 identity keys
 and SHA-256 integrity digests. The installed-package CPU/CUDA route jobs are
 smoke and contract checks; they do not replace platform-specific package
 installation, unit-test, and package-check reports.
+The strict freeze audit additionally rejects held-out \pkg{faissR} rows from an
+unknown or different package version and requires canonical 40-character
+package-commit and 64-character container SHA-256 identifiers.
 The final archive groups the reproducibility metadata into five tables:
 (i) dataset source, release, dimensions, preprocessing, redistribution terms,
 and fingerprint; (ii) package, compiler, FAISS, CUDA, cuVS, driver, and
@@ -599,7 +610,9 @@ files and fingerprints. \\
 Held-out explicit-method benchmark & Missing from synchronized archive & Run
 separate CPU and CUDA jobs for both validation seeds. \\
 Automatic selector versus oracle & Pending held-out aggregate & Run only after
-the explicit-method benchmark passes completeness checks. \\
+the explicit-method benchmark passes completeness checks; the oracle is the
+fastest qualifying explicit \pkg{faissR} route, while cross-package winners are
+reported separately. \\
 Leave-one-dataset-out sensitivity & Pending held-out aggregate & Freeze rules
 without each dataset and evaluate the omitted dataset without revision. \\
 \bottomrule

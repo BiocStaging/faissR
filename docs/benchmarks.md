@@ -821,12 +821,20 @@ package snapshot.
 
 After all one-method jobs finish,
 `analysis/aggregate_publication_results.R` selects the newest run for each
-method/suite and requires complete seed/repetition coverage. A method enters a
-speed ranking only when every measured run reaches the requested recall. The
-output includes fastest and second-fastest methods, an exact baseline,
-`method = "auto"` versus the oracle qualifying method, recall-compliance counts,
+method/suite using the immediate timestamped output directory as the run
+identity. Older reruns are not pooled with the selected run. Complete evidence
+requires exactly one successful row for every expected validation-seed/repeat
+pair. A method enters a speed ranking only when every measured run reaches the
+requested recall. The output includes fastest and second-fastest methods, an exact baseline,
+cross-package winners, and `method = "auto"` versus the fastest qualifying
+explicitly requested faissR method that the selector could have chosen. It also
+records recall differences and resolved-provider agreement, recall-compliance counts,
 failure evidence, and successful route mismatches. CPU and CUDA have separate
 Slurm aggregation files and are never pooled into one ranking.
+The strict freeze audit rejects dataset-fingerprint mismatches, held-out
+`faissR` rows produced by another package version, incomplete provenance,
+noncanonical 40-character package commit hashes, and invalid 64-character
+container SHA-256 digests.
 
 The CPU and CUDA systems-ablation jobs compare double and float32 input,
 disabled and warm fitted-index/transformation caches, compiled and R-side

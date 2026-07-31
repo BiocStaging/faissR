@@ -173,6 +173,10 @@ differences measure provider and wrapper overhead.
 The default `method = "auto"` uses compiled shape-, metric-, `k`-, backend-,
 and target-recall-aware rules. These rules are deterministic; they do not run a
 slow tuning pass inside ordinary user calls.
+For approximate methods, `target_recall` selects a calibrated operating policy;
+it is not a guarantee for a new dataset. Inspect
+`tuning_benchmark_target_met` in the returned metadata and validate recall
+against an exact reference when the application requires a quality bound.
 
 ```{r nn-auto}
 auto_nearest <- nn(

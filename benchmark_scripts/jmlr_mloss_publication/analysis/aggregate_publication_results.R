@@ -23,7 +23,7 @@ read_union <- function(files) {
     x <- read.csv(path, stringsAsFactors = FALSE, check.names = FALSE)
     x$source_file <- normalizePath(path, mustWork = TRUE)
     x$source_mtime <- as.numeric(file.info(path)$mtime)
-    x$run_root <- dirname(dirname(path))
+    x$run_root <- dirname(path)
     x
   })
   columns <- unique(unlist(lapply(tables, names), use.names = FALSE))
@@ -92,9 +92,21 @@ robust_summary <- function(x, expected_seeds, expected_repeats) {
     }
     copies <- suppressWarnings(as.numeric(part$host_copy_sec[success]))
     target <- suppressWarnings(as.numeric(part$target_recall[[1L]]))
-    seeds <- unique(part$validation_seed[success])
+    seeds <- unique(part$validation_seed)
+    seeds <- seeds[!is.na(seeds)]
     expected_runs <- expected_seeds * expected_repeats
-    complete <- sum(success) >= expected_runs && length(seeds) >= expected_seeds
+    expected_repeat_ids <- seq_len(expected_repeats)
+    observed_pairs <- paste(part$validation_seed, part$repeat_id, sep = "\r")
+    complete <- length(seeds) == expected_seeds &&
+      nrow(part) == expected_runs &&
+      !anyDuplicated(observed_pairs) &&
+      all(success) &&
+      all(vapply(seeds, function(seed) {
+        identical(
+          sort(as.integer(part$repeat_id[part$validation_seed == seed])),
+          expected_repeat_ids
+        )
+      }, logical(1L)))
     data.frame(
       part[1L, columns, drop = FALSE],
       n_rows = nrow(part),
@@ -110,7 +122,7 @@ robust_summary <- function(x, expected_seeds, expected_repeats) {
       median_host_copy_sec = if (any(is.finite(copies))) median(copies[is.finite(copies)]) else NA_real_,
       mean_recall_at_k = if (any(is.finite(recalls))) mean(recalls[is.finite(recalls)]) else NA_real_,
       min_recall_at_k = if (any(is.finite(recalls))) min(recalls[is.finite(recalls)]) else NA_real_,
-      target_met_all_runs = complete && length(recalls) >= expected_runs &&
+      target_met_all_runs = complete && length(recalls) == expected_runs &&
         all(is.finite(recalls) & recalls >= target),
       stringsAsFactors = FALSE
     )
@@ -122,27 +134,34 @@ rank_qualifying <- function(summary) {
   group_apply(summary, keys, function(part) {
     qualifying <- part[part$complete_validation & part$target_met_all_runs & is.finite(part$median_time_sec), , drop = FALSE]
     qualifying <- qualifying[order(qualifying$median_time_sec, qualifying$method_id), , drop = FALSE]
-    exact <- qualifying[
-      qualifying$public_method %in% c("exact", "flat", "bruteforce") |
-        grepl("_(exact|flat|bruteforce)$", qualifying$method_id), , drop = FALSE
-    ]
-    auto <- qualifying[grepl("_auto$", qualifying$method_id), , drop = FALSE]
-    oracle <- qualifying[!grepl("_auto$", qualifying$method_id), , drop = FALSE]
-    exact_family <- oracle$public_method %in% c("exact", "flat", "bruteforce") |
-      grepl("_(exact|flat|bruteforce)$", oracle$method_id)
-    provider <- as.character(oracle$result_backend)
-    provider[is.na(provider) | !nzchar(provider)] <- oracle$method_id[
+    is_faissr_auto <- qualifying$implementation == "faissR" &
+      qualifying$public_method == "auto"
+    is_faissr_auto[is.na(is_faissr_auto)] <- FALSE
+    auto <- qualifying[is_faissr_auto, , drop = FALSE]
+    overall <- qualifying[!is_faissr_auto, , drop = FALSE]
+    exact_family <- overall$public_method %in% c("exact", "flat", "bruteforce") |
+      grepl("_(exact|flat|bruteforce)$", overall$method_id)
+    provider <- as.character(overall$result_backend)
+    provider[is.na(provider) | !nzchar(provider)] <- overall$method_id[
       is.na(provider) | !nzchar(provider)
     ]
     route_identity <- ifelse(
       exact_family,
-      paste("exact_family", oracle$backend, oracle$metric, provider, sep = "::"),
-      paste("method", oracle$method_id, sep = "::")
+      paste(
+        "exact_family", overall$implementation, overall$backend,
+        overall$metric, provider, sep = "::"
+      ),
+      paste("method", overall$method_id, sep = "::")
     )
-    oracle <- oracle[!duplicated(route_identity), , drop = FALSE]
-    exact <- oracle[
-      oracle$public_method %in% c("exact", "flat", "bruteforce") |
-        grepl("_(exact|flat|bruteforce)$", oracle$method_id), , drop = FALSE
+    overall <- overall[!duplicated(route_identity), , drop = FALSE]
+    faissr_oracle <- overall[
+      overall$implementation == "faissR",
+      ,
+      drop = FALSE
+    ]
+    exact <- overall[
+      overall$public_method %in% c("exact", "flat", "bruteforce") |
+        grepl("_(exact|flat|bruteforce)$", overall$method_id), , drop = FALSE
     ]
     pick <- function(tbl, i, column, default = NA) {
       if (nrow(tbl) < i) default else tbl[[column]][[i]]
@@ -151,17 +170,47 @@ rank_qualifying <- function(summary) {
       part[1L, keys, drop = FALSE],
       n_complete_methods = sum(part$complete_validation),
       n_qualifying_methods = nrow(qualifying),
-      fastest_method = pick(oracle, 1L, "method_id", NA_character_),
-      fastest_time_sec = pick(oracle, 1L, "median_time_sec", NA_real_),
-      fastest_recall = pick(oracle, 1L, "min_recall_at_k", NA_real_),
-      second_method = pick(oracle, 2L, "method_id", NA_character_),
-      second_time_sec = pick(oracle, 2L, "median_time_sec", NA_real_),
+      fastest_method = pick(overall, 1L, "method_id", NA_character_),
+      fastest_time_sec = pick(overall, 1L, "median_time_sec", NA_real_),
+      fastest_recall = pick(overall, 1L, "min_recall_at_k", NA_real_),
+      second_method = pick(overall, 2L, "method_id", NA_character_),
+      second_time_sec = pick(overall, 2L, "median_time_sec", NA_real_),
       exact_baseline_method = pick(exact, 1L, "method_id", NA_character_),
       exact_baseline_time_sec = pick(exact, 1L, "median_time_sec", NA_real_),
+      faissr_oracle_method = pick(
+        faissr_oracle, 1L, "method_id", NA_character_
+      ),
+      faissr_oracle_time_sec = pick(
+        faissr_oracle, 1L, "median_time_sec", NA_real_
+      ),
+      faissr_oracle_recall = pick(
+        faissr_oracle, 1L, "min_recall_at_k", NA_real_
+      ),
+      faissr_oracle_provider = pick(
+        faissr_oracle, 1L, "result_backend", NA_character_
+      ),
       auto_method = pick(auto, 1L, "method_id", NA_character_),
       auto_time_sec = pick(auto, 1L, "median_time_sec", NA_real_),
       auto_recall = pick(auto, 1L, "min_recall_at_k", NA_real_),
-      auto_over_oracle = if (nrow(auto) && nrow(oracle)) auto$median_time_sec[[1L]] / oracle$median_time_sec[[1L]] else NA_real_,
+      auto_provider = pick(auto, 1L, "result_backend", NA_character_),
+      auto_recall_difference = if (nrow(auto) && nrow(faissr_oracle)) {
+        auto$min_recall_at_k[[1L]] - faissr_oracle$min_recall_at_k[[1L]]
+      } else {
+        NA_real_
+      },
+      auto_provider_agreement = if (nrow(auto) && nrow(faissr_oracle)) {
+        identical(
+          as.character(auto$result_backend[[1L]]),
+          as.character(faissr_oracle$result_backend[[1L]])
+        )
+      } else {
+        NA
+      },
+      auto_over_oracle = if (nrow(auto) && nrow(faissr_oracle)) {
+        auto$median_time_sec[[1L]] / faissr_oracle$median_time_sec[[1L]]
+      } else {
+        NA_real_
+      },
       stringsAsFactors = FALSE
     )
   })
@@ -217,9 +266,9 @@ write_report <- function(out_dir, files, combined, summary, best, route_errors) 
     paste0("- Cells meeting recall in every run: ", sum(summary$complete_validation & summary$target_met_all_runs), "."),
     paste0("- Successful route mismatches: ", nrow(route_errors), "."),
     "",
-    "A result is publication-eligible only when it contains the requested number of independent validation seeds and repetitions and reaches the recall target in every successful run. Failed, timed-out, unsupported, incomplete, and route-mismatched rows remain in the archive.",
+    "A result is publication-eligible only when its newest run contains exactly one successful row for every expected validation-seed/repeat pair and every row reaches the recall target. Failed, timed-out, unsupported, duplicated, incomplete, and route-mismatched rows remain in the archive.",
     "",
-    "`jss_auto_vs_oracle.csv` compares method = auto with the fastest independently requested qualifying method. Values above one in `auto_over_oracle` quantify the remaining automatic-selection regret.",
+    "`jss_auto_vs_oracle.csv` compares method = auto with the fastest independently requested qualifying faissR method, the attainable oracle for the package selector. Values above one in `auto_over_oracle` quantify remaining automatic-selection regret. Cross-package winners remain separate in the fastest/second-fastest columns.",
     "",
     paste0("Complete fastest/second-fastest blocks: ", sum(!is.na(best$fastest_method)), " of ", nrow(best), ".")
   )
@@ -260,9 +309,13 @@ main <- function() {
   write.csv(combined[combined$status != "success", , drop = FALSE], file.path(out_dir, "jss_failures_and_unsupported.csv"), row.names = FALSE)
   write.csv(summary, file.path(out_dir, "jss_robust_method_summary.csv"), row.names = FALSE)
   write.csv(best, file.path(out_dir, "jss_fastest_second_exact_and_auto.csv"), row.names = FALSE)
-  write.csv(best[, c("dataset", "dataset_md5", "dataset_suite", "backend", "metric", "k", "target_recall",
-                     "fastest_method", "fastest_time_sec", "auto_method", "auto_time_sec",
-                     "auto_recall", "auto_over_oracle"), drop = FALSE],
+  write.csv(best[, c(
+    "dataset", "dataset_md5", "dataset_suite", "backend", "metric", "k",
+    "target_recall", "faissr_oracle_method", "faissr_oracle_time_sec",
+    "faissr_oracle_recall", "faissr_oracle_provider", "auto_method",
+    "auto_time_sec", "auto_recall", "auto_provider",
+    "auto_recall_difference", "auto_provider_agreement", "auto_over_oracle"
+  ), drop = FALSE],
             file.path(out_dir, "jss_auto_vs_oracle.csv"), row.names = FALSE)
   write.csv(compliance, file.path(out_dir, "jss_recall_compliance_table.csv"), row.names = FALSE)
   write.csv(routes, file.path(out_dir, "jss_successful_route_mismatches.csv"), row.names = FALSE)

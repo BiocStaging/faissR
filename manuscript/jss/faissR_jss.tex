@@ -1125,9 +1125,11 @@ collapsed into one unconditional league table.
 
 The automatic selector is evaluated as a method in its own right. Within each
 dataset, backend, metric, $k$, and desired recall cell, the empirical oracle is
-the fastest explicitly requested method that completed every validation repeat
-and met the recall threshold in every repeat. The comparison reports the
-auto/oracle time ratio, recall difference, executed-method agreement, and
+the fastest explicitly requested \pkg{faissR} method that completed every
+validation repeat and met the recall threshold in every repeat. This is the
+attainable oracle for a selector whose action space is limited to \pkg{faissR};
+the overall cross-package winner is reported separately. The comparison reports the
+auto/oracle time ratio, recall difference, resolved-provider agreement, and
 whether automatic selection reached the desired operating point. Cells with no
 qualifying explicit method are reported as unsupported evidence rather than
 assigned an oracle retrospectively. This analysis tests the selector without
@@ -1180,15 +1182,15 @@ in the archive but excluded from quantitative contrasts.}
 
 \section{Software quality and reproducibility} \label{sec:quality}
 
-The package is distributed under the MIT license. FAISS, CUDA, and cuVS are
-external system dependencies with their own licenses. No Python bridge or
+The package is distributed under the GPL-compatible MIT license. FAISS, CUDA,
+and cuVS are external system dependencies with their own licenses. No Python bridge or
 Python runtime is used. The repository contains API documentation, a vignette,
 unit tests, build-time feature detection, and separate benchmark scripts. The
 development source uses the Bioconductor pre-release version convention and is
 mirrored to a Bioconductor staging repository, but this draft does not claim
 acceptance into Bioconductor.
 
-Version 0.99.18 is the development snapshot described here. An isolated build
+Version 0.99.19 is the development snapshot described here. An isolated build
 or backend smoke test is not treated as a clean package-check matrix. Before
 submission, the frozen software evidence must include complete install, load,
 unit-test, and package-check reports for every claimed CPU platform, together
@@ -1205,6 +1207,12 @@ cropped for smaller $k$. Calibration, independent validation, and external-packa
 comparisons write append-only CSV records containing route metadata and error
 messages. A single method failure therefore does not erase evidence or cause a
 different algorithm to be substituted.
+For held-out aggregation, the immediate timestamped output directory defines a
+run. Only the newest run for each method, dataset suite, dataset, and metric is
+retained; rows from earlier reruns are not pooled. A cell is complete only when
+that run contains exactly one successful row for each prespecified validation
+seed and repeat identifier, and recall eligibility requires every such row to
+meet the target.
 
 The complete campaign is generated rather than hand-maintained. Its validator
 checks 261 independent launchers: 5 exact-reference jobs, 105 calibration jobs,
@@ -1237,7 +1245,8 @@ directly and tables will be regenerated from frozen intermediate results.
 
 The standalone entry point is \path{manuscript/jss/replication_article.R}.
 With \path{FAISSR_JSS_RESULTS_DIR} set to the frozen result root, it checks
-the compact CPU examples, verifies the required result schema, invokes the
+the compact CPU examples, verifies the required result schema, retains the raw
+rerun ledger while selecting the newest run per method cell, invokes the
 publication aggregator, and writes derived tables plus \code{sessionInfo()}.
 The frozen archive additionally records the Singularity image digest, compiler,
 FAISS, CUDA, cuVS, GPU, CPU, and package versions. A minimal CPU replication
@@ -1257,6 +1266,10 @@ The final frozen archive must also contain a package commit hash or immutable
 release tag, checksums for every result table, and a machine-readable dataset
 provenance manifest containing source URL, release identifier, redistribution
 terms, preprocessing, final dimensions, and source-file fingerprint.
+The strict freeze audit requires a 40-character hexadecimal package commit, a
+64-character container SHA-256 digest, matching dataset fingerprints, complete
+provenance, and \pkg{faissR} result rows whose recorded implementation version
+matches the package installed in the frozen image.
 
 \section{Limitations} \label{sec:limitations}
 

@@ -843,6 +843,7 @@ base_row <- function(config, status = "success", error = NA_character_) {
     n = as.integer(config$n), p = as.integer(config$p),
     shape_group = shape_group(config$n, config$p), backend = config$backend,
     method = config$method, metric = config$metric, k = as.integer(config$k),
+    faissR_version = as.character(utils::packageVersion("faissR")),
     candidate_id = candidate$candidate_id, candidate_kind = candidate$candidate_kind,
     n_threads = as.integer(candidate$n_threads), output = candidate$output,
     status = status, elapsed_sec = NA_real_, peak_rss_gb = NA_real_,

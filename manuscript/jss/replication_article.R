@@ -39,6 +39,28 @@ sha256_files <- function(paths) {
   rep(NA_character_, length(paths))
 }
 
+latest_method_runs <- function(x) {
+  suite <- if ("dataset_suite" %in% names(x)) {
+    value <- as.character(x$dataset_suite)
+    value[is.na(value) | !nzchar(value)] <- "real"
+    value
+  } else {
+    rep("real", nrow(x))
+  }
+  key <- paste(
+    x$backend, x$method_id, suite, x$dataset, x$metric,
+    sep = "\r"
+  )
+  selected <- unlist(lapply(split(seq_len(nrow(x)), key), function(ii) {
+    roots <- unique(x$run_root[ii])
+    root_time <- vapply(roots, function(root) {
+      max(x$source_mtime[ii][x$run_root[ii] == root])
+    }, numeric(1L))
+    ii[x$run_root[ii] == roots[[which.max(root_time)]]]
+  }), use.names = FALSE)
+  x[sort(selected), , drop = FALSE]
+}
+
 x <- scale(as.matrix(iris[, 1:4]))
 
 exact <- faissR::nn(
@@ -121,6 +143,8 @@ if (nzchar(results_root)) {
   tables <- Map(function(value, path) {
     for (name in setdiff(columns, names(value))) value[[name]] <- NA
     value$source_file <- normalizePath(path, mustWork = TRUE)
+    value$source_mtime <- as.numeric(file.info(path)$mtime)
+    value$run_root <- dirname(value$source_file)
     value
   }, tables, result_files)
   all_columns <- unique(unlist(lapply(tables, names), use.names = FALSE))
@@ -128,7 +152,8 @@ if (nzchar(results_root)) {
     for (name in setdiff(all_columns, names(value))) value[[name]] <- NA
     value[, all_columns, drop = FALSE]
   })
-  combined <- do.call(rbind, tables)
+  all_runs <- do.call(rbind, tables)
+  combined <- latest_method_runs(all_runs)
   if (any(is.na(combined$dataset_md5) | !nzchar(combined$dataset_md5))) {
     stop("Every publication result row must include a non-empty dataset_md5 fingerprint.")
   }
@@ -153,7 +178,7 @@ if (nzchar(results_root)) {
       file.path(out_dir, "duplicate_publication_result_keys.csv"),
       row.names = FALSE
     )
-    stop("Publication result files contain duplicate benchmark keys.")
+    stop("The selected newest publication runs contain duplicate benchmark keys.")
   }
 
   dataset_manifest <- Sys.getenv("FAISSR_JSS_DATASET_MANIFEST", unset = "")
@@ -179,6 +204,11 @@ if (nzchar(results_root)) {
       stop("Benchmark dataset fingerprints do not match the frozen dataset manifest.")
     }
   }
+  write.csv(
+    all_runs,
+    file.path(out_dir, "publication_results_all_runs.csv"),
+    row.names = FALSE
+  )
   write.csv(
     combined,
     file.path(out_dir, "publication_results_combined.csv"),
