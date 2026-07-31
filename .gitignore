@@ -21,5 +21,23 @@ tmp/
 faiss_hnsw_mnist70k_*.csv
 mnist70k_knn_predict_speed*.csv
 local_mnist70k_cpu_*/
-manuscript/
+# Track only the reproducible JSS source bundle. Keep older manuscript drafts,
+# generated reading copies, LaTeX intermediates, and internal reviews local.
+manuscript/*
+!manuscript/jss/
+manuscript/jss/*
+!manuscript/jss/README.md
+!manuscript/jss/README_DELIVERABLES.md
+!manuscript/jss/build_docx.py
+!manuscript/jss/build_supplement_docx.py
+!manuscript/jss/code.R
+!manuscript/jss/code.Rhtml
+!manuscript/jss/code.html
+!manuscript/jss/faissR_jss.bib
+!manuscript/jss/faissR_jss.tex
+!manuscript/jss/faissR_jss_supplement.tex
+!manuscript/jss/jss.bst
+!manuscript/jss/jss.cls
+!manuscript/jss/jsslogo.jpg
+!manuscript/jss/replication_article.R
 benchmark_scripts/jmlr_mloss_inner_product_shape_tuning_defaults_candidate_audit.csv

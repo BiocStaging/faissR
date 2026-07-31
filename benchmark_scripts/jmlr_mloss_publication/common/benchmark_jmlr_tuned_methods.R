@@ -357,14 +357,20 @@ run_faissr_method <- function(x, row, k, metric, threads, target_recall, output)
   )
 }
 
-annoy_knn <- function(x, k, n_trees = 50L, n_threads = 1L) {
+annoy_knn <- function(x, k, n_trees = 50L, n_threads = 1L, seed = 4L) {
   if (!available_pkg("RcppAnnoy")) stop("RcppAnnoy unavailable")
   p <- ncol(x)
   index <- new(RcppAnnoy::AnnoyEuclidean, p)
+  index$setSeed(as.integer(seed))
   for (i in seq_len(nrow(x))) index$addItem(i - 1L, x[i, ])
   index$build(as.integer(n_trees))
   query_one <- function(i) {
-    ans <- index$getNNsByVectorList(x[i, ], k + 1L, search_k = -1L, include_distances = TRUE)
+    ans <- index$getNNsByItemList(
+      i - 1L,
+      k + 1L,
+      -1L,
+      TRUE
+    )
     list(indices = as.integer(ans$item + 1L), distances = as.numeric(ans$distance))
   }
   rows <- seq_len(nrow(x))
@@ -381,7 +387,7 @@ annoy_knn <- function(x, k, n_trees = 50L, n_threads = 1L) {
   )
 }
 
-run_external_method <- function(x_input, method, k, metric, threads) {
+run_external_method <- function(x_input, method, k, metric, threads, seed) {
   if (!metric_supported_external(method, metric)) {
     stop("External method does not expose a validated `", metric, "` route in this benchmark.", call. = FALSE)
   }
@@ -417,7 +423,10 @@ run_external_method <- function(x_input, method, k, metric, threads) {
       if (!available_pkg("rnndescent")) stop("rnndescent unavailable")
       remove_self(rnndescent::brute_force_knn(x, k = k + 1L, n_threads = threads), k)
     },
-    RcppAnnoy_euclidean = remove_self(annoy_knn(x, k, n_threads = threads), k),
+    RcppAnnoy_euclidean = remove_self(
+      annoy_knn(x, k, n_threads = threads, seed = seed),
+      k
+    ),
     BiocNeighbors_exhaustive = {
       if (!available_pkg("BiocNeighbors")) stop("BiocNeighbors unavailable")
       dist <- if (metric == "cosine") "Cosine" else "Euclidean"
@@ -694,6 +703,84 @@ read_rows <- function(files) {
   do.call(rbind, rows)
 }
 
+target_aware_external_comparison <- function(aggregate,
+                                             target_recalls,
+                                             expected_runs) {
+  columns <- c(
+    "dataset", "backend", "metric", "k", "target_recall",
+    "faissr_method", "faissr_time_sec", "faissr_recall_at_k",
+    "external_method", "external_package", "external_time_sec",
+    "external_recall_at_k", "speedup_faissr_vs_external"
+  )
+  empty <- as.data.frame(
+    setNames(replicate(length(columns), logical(), simplify = FALSE), columns),
+    stringsAsFactors = FALSE
+  )
+  if (!nrow(aggregate)) return(empty)
+
+  faissr <- aggregate[aggregate$implementation == "faissR", , drop = FALSE]
+  external <- aggregate[aggregate$implementation != "faissR", , drop = FALSE]
+  if (!nrow(faissr) || !nrow(external)) return(empty)
+
+  target_recalls <- sort(unique(suppressWarnings(as.numeric(target_recalls))))
+  target_recalls <- target_recalls[is.finite(target_recalls)]
+  keys <- unique(aggregate[, c("dataset", "backend", "metric", "k"), drop = FALSE])
+  rows <- list()
+  for (target in target_recalls) {
+    for (i in seq_len(nrow(keys))) {
+      key <- keys[i, , drop = FALSE]
+      same_cell <- function(x) {
+        x$dataset == key$dataset &
+          x$backend == key$backend &
+          x$metric == key$metric &
+          x$k == key$k
+      }
+      f <- faissr[
+        same_cell(faissr) &
+          is.finite(faissr$target_recall) &
+          abs(faissr$target_recall - target) < 1e-12 &
+          faissr$n_runs >= expected_runs &
+          faissr$target_met_all_runs &
+          is.finite(faissr$median_time_sec),
+        ,
+        drop = FALSE
+      ]
+      e <- external[
+        same_cell(external) &
+          external$n_runs >= expected_runs &
+          is.finite(external$min_seed_recall_at_k) &
+          external$min_seed_recall_at_k >= target &
+          is.finite(external$median_time_sec),
+        ,
+        drop = FALSE
+      ]
+      if (!nrow(f) || !nrow(e)) next
+      f <- f[order(f$median_time_sec, f$method_id), , drop = FALSE][1L, , drop = FALSE]
+      e <- e[order(e$median_time_sec, e$method_id), , drop = FALSE][1L, , drop = FALSE]
+      rows[[length(rows) + 1L]] <- data.frame(
+        dataset = key$dataset,
+        backend = key$backend,
+        metric = key$metric,
+        k = key$k,
+        target_recall = target,
+        faissr_method = f$method_id,
+        faissr_time_sec = f$median_time_sec,
+        faissr_recall_at_k = f$min_seed_recall_at_k,
+        external_method = e$method_id,
+        external_package = e$implementation,
+        external_time_sec = e$median_time_sec,
+        external_recall_at_k = e$min_seed_recall_at_k,
+        speedup_faissr_vs_external = e$median_time_sec / f$median_time_sec,
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+  if (!length(rows)) return(empty)
+  out <- do.call(rbind, rows)
+  row.names(out) <- NULL
+  out
+}
+
 worker_main <- function(args) {
   configure_threads(scalar_positive_int(args$threads, "1", "threads"))
   if (!available_pkg("faissR")) stop("faissR is not available in this R library.", call. = FALSE)
@@ -732,6 +819,7 @@ worker_main <- function(args) {
     k = k,
     target_recall = target_recall,
     validation_seed = seed,
+    algorithm_seed = if (identical(method$method_id[[1L]], "RcppAnnoy_euclidean")) seed else NA_integer_,
     repeat_id = repeat_id,
     n_threads = threads,
     output = output,
@@ -797,7 +885,9 @@ worker_main <- function(args) {
     if (method$implementation == "faissR") {
       obj <- run_faissr_method(ds$data, method, k, metric, threads, target_recall, output)
     } else {
-      obj <- run_external_method(ds$data, method$method_id, k, metric, threads)
+      obj <- run_external_method(
+        ds$data, method$method_id, k, metric, threads, seed
+      )
     }
     base$time_sec <- proc.time()[["elapsed"]] - t0
 
@@ -888,37 +978,17 @@ summarize_results <- function(out_dir, methods, config) {
     best <- ranked[!duplicated(keys), , drop = FALSE]
     utils::write.csv(best, file.path(out_dir, "jmlr_best_by_dataset_backend_metric_k_target.csv"), row.names = FALSE)
 
-    faissr <- success[success$implementation == "faissR", , drop = FALSE]
-    external <- success[success$implementation != "faissR", , drop = FALSE]
-    comparisons <- list()
-    if (nrow(faissr) && nrow(external)) {
-      keys <- unique(faissr[, c("dataset", "backend", "metric", "k"), drop = FALSE])
-      for (i in seq_len(nrow(keys))) {
-        key <- keys[i, , drop = FALSE]
-        f <- faissr[faissr$dataset == key$dataset & faissr$backend == key$backend & faissr$metric == key$metric & faissr$k == key$k, , drop = FALSE]
-        e <- external[external$dataset == key$dataset & external$backend == key$backend & external$metric == key$metric & external$k == key$k, , drop = FALSE]
-        if (!nrow(f) || !nrow(e)) next
-        f <- f[order(f$time_sec), , drop = FALSE][1L, , drop = FALSE]
-        e <- e[order(e$time_sec), , drop = FALSE][1L, , drop = FALSE]
-        comparisons[[length(comparisons) + 1L]] <- data.frame(
-          dataset = key$dataset,
-          backend = key$backend,
-          metric = key$metric,
-          k = key$k,
-          faissr_method = f$method_id,
-          faissr_time_sec = f$time_sec,
-          faissr_recall_at_k = f$recall_at_k,
-          external_method = e$method_id,
-          external_package = e$implementation,
-          external_time_sec = e$time_sec,
-          external_recall_at_k = e$recall_at_k,
-          speedup_faissr_vs_external = e$time_sec / f$time_sec,
-          stringsAsFactors = FALSE
-        )
-      }
-    }
-    if (length(comparisons)) {
-      utils::write.csv(do.call(rbind, comparisons), file.path(out_dir, "jmlr_faissr_vs_external_speed.csv"), row.names = FALSE)
+    comparisons <- target_aware_external_comparison(
+      aggregate,
+      target_recalls = config$target_recalls,
+      expected_runs = config$expected_runs
+    )
+    if (nrow(comparisons)) {
+      utils::write.csv(
+        comparisons,
+        file.path(out_dir, "jmlr_faissr_vs_external_speed.csv"),
+        row.names = FALSE
+      )
     }
   }
 
@@ -952,7 +1022,7 @@ summarize_results <- function(out_dir, methods, config) {
     "- `jmlr_best_robust_by_dataset_backend_metric_k_target.csv`: fastest method only after the target is met in every measured run.",
     "- `jmlr_ranked_speed_recall.csv`: successful rows ranked by recall, rank correlation, distance error, speed, and memory.",
     "- `jmlr_best_by_dataset_backend_metric_k_target.csv`: best method per dataset/backend/metric/k/target recall block.",
-    "- `jmlr_faissr_vs_external_speed.csv`: fastest faissR row versus fastest external package row where both exist.",
+    "- `jmlr_faissr_vs_external_speed.csv`: fastest faissR row versus fastest external package row only where both complete all expected runs and reach the same recall tier.",
     "- `faissR_backend_info.csv`, `faissR_nn_capabilities_runtime.csv`, and `sessionInfo.txt`: reproducibility metadata.",
     "",
     "## Interpretation Rules",
@@ -1140,6 +1210,9 @@ main <- function() {
                 k = kk,
                 target_recall = target,
                 validation_seed = validation_seed,
+                algorithm_seed = if (identical(
+                  method$method_id[[1L]], "RcppAnnoy_euclidean"
+                )) validation_seed else NA_integer_,
                 repeat_id = repeat_id,
                 n_threads = threads,
                 output = output,
@@ -1176,7 +1249,9 @@ main <- function() {
     methods,
     list(
       backend = backend, manifest = manifest, metrics = metrics, k_values = k_values,
-      target_recalls = target_recalls, threads = threads, timeout = timeout
+      target_recalls = target_recalls,
+      expected_runs = length(validation_seeds) * repeats,
+      threads = threads, timeout = timeout
     )
   )
   cat("DONE: ", out_dir, "\n", sep = "")

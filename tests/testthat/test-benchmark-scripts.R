@@ -2747,6 +2747,57 @@ test_that("publication aggregator requires complete held-out recall", {
   expect_equal(newest$dataset_md5[newest$dataset == "TabulaMuris"], "tabula-v2")
 })
 
+test_that("publication external comparison enforces a common recall tier", {
+  path <- test_path(
+    "../../benchmark_scripts/jmlr_mloss_publication/common/benchmark_jmlr_tuned_methods.R"
+  )
+  if (!file.exists(path)) {
+    skip("Publication scripts are not available in this installed-package test context.")
+  }
+  old <- Sys.getenv("FAISSR_JMLR_SOURCE_ONLY", unset = NA_character_)
+  on.exit({
+    if (is.na(old)) Sys.unsetenv("FAISSR_JMLR_SOURCE_ONLY") else
+      Sys.setenv(FAISSR_JMLR_SOURCE_ONLY = old)
+  }, add = TRUE)
+  Sys.setenv(FAISSR_JMLR_SOURCE_ONLY = "true")
+  env <- new.env(parent = globalenv())
+  sys.source(path, envir = env)
+
+  aggregate <- data.frame(
+    dataset = "MNIST",
+    backend = "cpu",
+    metric = "euclidean",
+    k = 30L,
+    target_recall = c(0.99, 0.99, NA, NA),
+    implementation = c("faissR", "faissR", "RANN", "BiocNeighbors"),
+    method_id = c(
+      "faissR_cpu_hnsw", "faissR_cpu_flat",
+      "RANN_kd", "BiocNeighbors_hnsw"
+    ),
+    n_runs = 6L,
+    target_met_all_runs = c(FALSE, TRUE, NA, NA),
+    median_time_sec = c(1, 3, 0.5, 4),
+    min_seed_recall_at_k = c(0.95, 1, 0.8, 0.995),
+    stringsAsFactors = FALSE
+  )
+
+  out <- env$target_aware_external_comparison(
+    aggregate,
+    target_recalls = 0.99,
+    expected_runs = 6L
+  )
+  expect_equal(nrow(out), 1L)
+  expect_equal(out$faissr_method, "faissR_cpu_flat")
+  expect_equal(out$external_method, "BiocNeighbors_hnsw")
+  expect_equal(out$speedup_faissr_vs_external, 4 / 3)
+
+  source_text <- readLines(path, warn = FALSE)
+  expect_true(any(grepl("getNNsByItemList", source_text, fixed = TRUE)))
+  expect_false(any(grepl("getNNsByVectorList", source_text, fixed = TRUE)))
+  expect_true(any(grepl("index$setSeed(as.integer(seed))", source_text, fixed = TRUE)))
+  expect_true(any(grepl("algorithm_seed =", source_text, fixed = TRUE)))
+})
+
 test_that("publication systems-ablation scripts retain backend-specific headers", {
   root <- test_path("../../benchmark_scripts/jmlr_mloss_publication")
   if (!dir.exists(root)) {

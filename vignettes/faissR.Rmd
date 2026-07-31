@@ -421,7 +421,14 @@ if (cuda_available()) {
 
 `nn_gpu()` is for downstream CUDA consumers. It keeps result buffers resident on
 the GPU and copies them back to R only when `gpu_knn_to_host()` is called
-explicitly.
+explicitly. Its current public method set is intentionally limited to
+`"auto"`, `"exact"`, `"flat"`, and `"bruteforce"`. Euclidean and raw inner
+product use the FAISS GPU direct brute-force primitive when available; cosine
+and correlation use the native CUDA exact route after their documented row
+transformations. If ordinary `nn(method = "auto", backend = "cuda")` would
+prefer an approximate method, the GPU-resident object records that preference
+and the exact-family residency constraint instead of silently claiming that
+the approximate route executed.
 
 # Reproducibility and third-party software
 

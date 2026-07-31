@@ -9,10 +9,16 @@
 [API](docs/usage-api.md) |
 [NN Methods](docs/nn-methods.md) |
 [Backends](docs/backend-capabilities.md) |
-[References](docs/references.md)
+[References](docs/references.md) |
+[JSS Manuscript](manuscript/jss/README.md)
 
 Numbered citations in this README refer to the bibliography in
 [References](docs/references.md).
+
+The reproducible source bundle for the draft Journal of Statistical Software
+article is tracked under [`manuscript/jss`](manuscript/jss/README.md).
+Performance rankings remain deliberately absent from the draft until the
+independent held-out CPU/CUDA and external-package campaign is frozen.
 
 `faissR` provides native nearest-neighbour search, kNN models, and k-means for
 R workflows that need mandatory
@@ -178,7 +184,7 @@ method/backend/metric matrix is in the
 | `nn()` | General nearest-neighbour search over reference/query matrices. Supports `backend = "auto"`, `"cpu"`, or `"cuda"`; `method = "auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"ivfpq_fastscan"`, `"nndescent"`, `"nsg"`, `"vamana"`, or `"cagra"`; and `metric = "euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. `exclude_self = TRUE` removes self-neighbours in compiled code for self-KNN. | CPU, FAISS CPU/GPU, native CUDA, and direct RAPIDS cuVS where compiled. | A `faissR_nn` list with 1-based `indices`, `distances`, `index_base`, `distance_type`, `metric`, `backend_used`, and route/tuning metadata. `output = "float"` can return float32 distances when the optional `float` package is available. |
 | `nn_gpu()` | GPU-resident exact-family KNN for downstream CUDA packages. It is narrower than `nn()` and is intended when another package needs device pointers instead of R matrices. | CUDA exact-family routes for `method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. Euclidean and raw inner product use FAISS GPU direct `bfKnn` when available; cosine/correlation use native CUDA exact transforms. | A `faissR_gpu_knn` object with an owning `handle`, CUDA-device `indices_ptr` and `distances_ptr`, `result_residency = "cuda"`, `indices_type = "int32"`, `distance_type = "float32"`, `device_to_host_result_copies = 0`, plus exact-family `execution_tuning` and, for `method = "auto"`, the compiled-policy `auto_preferred_tuning` when applicable. |
 | `gpu_knn_to_host()` | Explicit diagnostic conversion of a GPU-resident KNN result to ordinary R matrices. It is never called automatically by `nn_gpu()`. | Uses the CUDA result handle returned by `nn_gpu()` or the C-callable GPU API. | A host-side `faissR_nn` list with copied integer indices and numeric distances. |
-| `candidate_knn()` | Exact top-k reranking inside a user-supplied candidate-neighbour matrix. This is useful when another algorithm proposes candidates and faissR should compute the final ordered neighbours. | CPU compiled scorer with the public metrics. | A `faissR_nn` list restricted to the supplied candidates. |
+| `candidate_knn()` | Exact top-k reranking inside a user-supplied candidate-neighbour matrix. This is useful when another algorithm proposes candidates and faissR should compute the final ordered neighbours. | CPU compiled scoring or the native CUDA row-candidate kernel for its documented self-query contract. | A `faissR_nn` list restricted to the supplied candidates. |
 | `fast_kmeans()` | Fast k-means-style clustering with CPU, FAISS, FAISS GPU, or cuVS routes. `tuning = "auto"` selects deterministic shape-aware defaults for iteration count, starts, and tolerances. | CPU/statistics, FAISS CPU/GPU, direct cuVS where compiled. | A `faissR_kmeans` object with cluster assignments, centers, within-cluster summaries, backend/tuning metadata, and convergence diagnostics. |
 | `knn()` | Fit a reusable kNN classifier/regressor, or fit and predict immediately with `knn(Xtrain, Ytrain, Xtest)`. It reuses `nn()` for neighbour search and can preserve float32 training/query data for supported routes. | Same device and method family as `nn()` for the selected training/prediction route. | Without `Xtest`, a `faissR_knn_model`; with `Xtest`, predictions or probabilities depending on `type`. |
 | `predict()` | S3 method for `faissR_knn_model` objects. It predicts labels, numeric responses, or class probabilities with `type = "response"` or `"prob"`. Prediction sends the full query matrix in one batched NN call. | Same fitted route where compatible; otherwise rebuilds the same requested route rather than silently switching algorithms. | A vector/data frame of predictions or a probability matrix, with the underlying `nn()` metadata attached. |
@@ -334,14 +340,14 @@ tarball:
 
 ```sh
 R CMD build .
-R CMD check faissR_0.99.15.tar.gz
+R CMD check faissR_0.99.16.tar.gz
 ```
 
 and then:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.15.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.16.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA and cuVS are

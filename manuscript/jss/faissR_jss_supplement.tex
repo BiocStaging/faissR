@@ -1,0 +1,612 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage{fancyhdr}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+\definecolor{faissblue}{HTML}{1F4D78}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\textit{faissR} supplementary material}
+\rhead{\thepage}
+\setlength{\headheight}{14pt}
+\setlength{\emergencystretch}{3em}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\pkg}[1]{\textsf{#1}}
+\newcommand{\method}[1]{\texttt{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\title{\textbf{Supplementary Material}\\[0.4em]
+\large \pkg{faissR}: Recall-Aware CPU and GPU Nearest-Neighbor Search in R}
+\author{Moussa Kassim$^{1,2,\dagger}$, Martin Ocharo$^{1,2,\dagger}$\\
+Dalia Ahmed$^{1}$, Dupe Ojo$^{1}$\\
+Alessia Vignoli$^{3,4}$, Leonardo Tenori$^{3,4,\ast}$\\
+Stefano Cacciatore$^{1,2,\ast}$}
+\date{Evidence freeze: 30 July 2026}
+
+\begin{document}
+\raggedbottom
+\maketitle
+
+\noindent
+$^{1}$ Bioinformatics Unit, International Centre for Genetic Engineering and
+Biotechnology (ICGEB), Cape Town 7925, South Africa.\\
+$^{2}$ Department of Integrative Biomedical Sciences, Institute of Infectious
+Disease \& Molecular Medicine (IDM), University of Cape Town, Cape Town 7925,
+South Africa.\\
+$^{3}$ Department of Chemistry ``Ugo Schiff'', University of Florence, Sesto
+Fiorentino, Italy.\\
+$^{4}$ Magnetic Resonance Center (CERM), University of Florence, Sesto
+Fiorentino, Italy.
+
+\vspace{0.8em}
+\noindent\textsuperscript{\(\dagger\)}Moussa Kassim and Martin Ocharo
+contributed equally and share first authorship.\\
+\textsuperscript{*}\textbf{Co-corresponding authors:}\\
+Leonardo Tenori, \href{mailto:TENORI@CERM.UNIFI.IT}{TENORI@CERM.UNIFI.IT}\\
+Stefano Cacciatore,
+\href{mailto:STEFANO.CACCIATORE@ICGEB.ORG}{STEFANO.CACCIATORE@ICGEB.ORG}\\
+\textbf{Author e-mails:}\\
+Moussa Kassim, \href{mailto:MOUSSA.KASSIM@ICGEB.ORG}{MOUSSA.KASSIM@ICGEB.ORG}\\
+Martin Ocharo, \href{mailto:MARTIN.OCHARO@ICGEB.ORG}{MARTIN.OCHARO@ICGEB.ORG}\\
+Dalia Ahmed, \href{mailto:DALIA.AHMED@ICGEB.ORG}{DALIA.AHMED@ICGEB.ORG}\\
+Dupe Ojo, \href{mailto:DUPE.OJO@ICGEB.ORG}{DUPE.OJO@ICGEB.ORG}\\
+Alessia Vignoli, \href{mailto:VIGNOLI@CERM.UNIFI.IT}{VIGNOLI@CERM.UNIFI.IT}\\
+Leonardo Tenori, \href{mailto:TENORI@CERM.UNIFI.IT}{TENORI@CERM.UNIFI.IT}\\
+Stefano Cacciatore,
+\href{mailto:STEFANO.CACCIATORE@ICGEB.ORG}{STEFANO.CACCIATORE@ICGEB.ORG}\\
+\href{https://orcid.org/0000-0001-7052-7156}{Stefano Cacciatore ORCID
+0000-0001-7052-7156}.
+
+\section{Purpose and evidence boundary}
+
+This supplement documents the software surface, benchmark design, metric
+contracts, completed conformance runs, and systems-ablation coverage supporting
+the accompanying Journal of Statistical Software manuscript. It deliberately
+separates three kinds of evidence:
+\begin{enumerate}
+\item \textbf{Metric conformance}: whether a requested route preserves the
+documented distance, ordering, shape, and backend contract.
+\item \textbf{Recall-target attainment}: whether an approximate route reaches
+a requested operating point on a specified fixture or dataset.
+\item \textbf{Comparative performance}: cold and warm elapsed time, memory, and
+completion on held-out query subsets.
+\end{enumerate}
+The first two are available for the deterministic conformance fixture. The
+systems-ablation measurement sets are complete. The independent held-out
+CPU/CUDA publication roots and auto-versus-oracle aggregate are not present in
+the synchronized archive, so this supplement does not report method rankings
+or general performance superiority.
+
+\section{Software and public interface}
+
+The evaluated development snapshot is \pkg{faissR} 0.99.16. FAISS is a
+mandatory system dependency. NVIDIA CUDA, FAISS GPU, and RAPIDS cuVS are
+optional for CPU-only builds and required when the corresponding GPU features
+are explicitly requested. The package uses compiled C++/CUDA interfaces and
+does not require Python. \pkg{faissR} is distributed under the MIT license;
+FAISS and NVIDIA libraries remain external dependencies under their own
+licenses. A minimal adaptation of the public DLPack C ABI is distributed under
+Apache License 2.0 with its copyright notice and full license installed in the
+package.
+
+\begin{table}[ht]
+\centering
+\caption{Public R functions in the evaluated snapshot.}
+\label{tab:supp-api}
+\begin{tabularx}{\linewidth}{P{0.30\linewidth}Y}
+\toprule
+Function & Role \\
+\midrule
+\code{nn()} & Host-returned nearest-neighbor search with explicit backend,
+method, metric, self-exclusion, tuning, and recall-target controls. \\
+\code{nn\_gpu()} & GPU-resident exact-family result for downstream compiled
+CUDA consumers. \\
+\code{gpu\_knn\_to\_host()} & Explicit materialization of a GPU-resident KNN
+result in R memory. \\
+\code{candidate\_knn()} & Refinement of a supplied candidate-neighbor set. \\
+\code{knn()} and \code{predict()} & Fitted or immediate supervised kNN
+classification/regression, including probability output. \\
+\code{fast\_kmeans()} & CPU or optional CUDA k-means. \\
+\code{backend\_info()} & Runtime availability and compiled-provider report. \\
+\code{nn\_capabilities()} & Method--backend--metric capability matrix. \\
+\code{print()} and \code{summary()} & Conventional inspection methods for
+neighbor results, GPU-resident objects, fitted kNN models, and k-means fits. \\
+\code{faiss\_available()}, \code{faiss\_gpu\_available()},
+\code{cuda\_available()}, \code{cuvs\_available()} & Focused availability
+checks. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Methods evaluated}
+
+\begin{longtable}{P{0.22\linewidth}P{0.31\linewidth}P{0.37\linewidth}}
+\caption{Canonical nearest-neighbor methods and principal implementations.}\\
+\label{tab:supp-methods}\\
+\toprule
+Method & CPU route & CUDA route \\
+\midrule
+\endfirsthead
+\toprule
+Method & CPU route & CUDA route \\
+\midrule
+\endhead
+\method{auto} & Compiled shape/metric/$k$/target policy & Compiled
+shape/metric/$k$/target policy \\
+\method{exact} & Exact compiled/FAISS route & Exact FAISS GPU or native CUDA
+route, depending on the resolved policy \\
+\method{flat} & FAISS Flat & FAISS GPU Flat \\
+\method{bruteforce} & Exhaustive CPU scoring & cuVS/CUDA brute force \\
+\method{grid} & Exact 2D/3D spatial grid self-search & Exact 2D/3D CUDA grid
+self-search \\
+\method{hnsw} & FAISS HNSW & cuVS HNSW wrapper constructed from a CAGRA graph \\
+\method{ivf} & FAISS IVF-Flat & FAISS GPU or cuVS IVF-Flat \\
+\method{ivfpq} & FAISS IVF-PQ & FAISS GPU or cuVS IVF-PQ \\
+\method{ivfpq\_fastscan} & FAISS IndexIVFPQFastScan & Direct cuVS 4-bit
+IVF-PQ route; not claimed to be Google ScaNN \\
+\method{nndescent} & Native compiled NN-descent-style route & Direct cuVS
+NN-descent for supported metrics \\
+\method{nsg} & Native NSG/MRNG-style refinement & Native CUDA
+candidate-refinement route \\
+\method{vamana} & Native Vamana-style robust pruning & Native CUDA
+candidate-refinement route \\
+\method{cagra} & Unsupported & FAISS GPU CAGRA or direct cuVS CAGRA \\
+\bottomrule
+\end{longtable}
+
+Canonical metric names are \method{euclidean}, \method{cosine},
+\method{correlation}, and \method{inner\_product}. Cosine uses row
+normalization; correlation uses row centering followed by normalization; and
+inner product ranks larger raw dot products while returning a
+smaller-is-better shifted value. CUDA NN-descent raw inner product is explicitly
+unsupported because the cuVS interface used by the package constructs a
+symmetric L2 graph and cannot apply the asymmetric MIPS transformation without
+changing the algorithmic contract.
+
+The inner-product shift is query specific: it preserves ranking within one
+query row but shifted values must not be interpreted as absolute distances
+across different query rows. For cosine, a zero-norm row follows the documented
+finite-result or explicit unsupported-path contract; for correlation, the same
+rule applies to constant rows after centering. CUDA routes are not allowed to
+repair either edge case by silently executing a CPU search.
+
+\section{Dataset manifest}
+
+\begin{table}[ht]
+\centering
+\caption{Real datasets in the publication benchmark.}
+\label{tab:supp-datasets}
+\begin{tabular}{lrr}
+\toprule
+Dataset & Rows & Columns \\
+\midrule
+COIL20 & 1,440 & 16,384 \\
+USPS & 11,000 & 256 \\
+FashionMNIST & 70,000 & 784 \\
+FlowRepository FR-FCM-ZYRM & 5,220,347 & 32 \\
+flow18 & 1,000,021 & 11 \\
+MNIST & 70,000 & 784 \\
+ImageNet features & 1,281,167 & 1,024 \\
+MetRef & 873 & 375 \\
+mass41 & 965,282 & 14 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Inputs are float32 matrices retaining the source-specific preprocessing
+documented in the provenance manifest. The benchmark itself applies no
+additional centering, scaling, normalization, PCA, or embedding before timing.
+Metric-defined row transformations for cosine and correlation occur inside
+\pkg{faissR} and are included in elapsed time. Dataset fingerprints are
+recorded in the frozen manifest and must match every exact-reference and result
+row.
+
+\begin{table}[ht]
+\centering
+\small
+\caption{Source representation and redistribution status recorded before the
+publication benchmark. \texttt{VERIFY} means that the converted matrix is not
+distributed until the underlying dataset terms have been confirmed.}
+\label{tab:supp-provenance}
+\begin{tabularx}{\linewidth}{P{0.19\linewidth}P{0.24\linewidth}Y
+P{0.13\linewidth}}
+\toprule
+Dataset & Source/release & Representation searched & Terms \\
+\midrule
+COIL20 & Columbia processed COIL-20 & Flattened grayscale pixels; no added
+scaling or reduction & VERIFY \\
+USPS & \pkg{Rdimtools} bundled data & Supplied 256-pixel vectors; no added
+scaling or reduction & VERIFY \\
+FashionMNIST & Official Zalando IDX files & Concatenated train/test pixels; no
+added scaling or reduction & MIT \\
+FlowRepository & FR-FCM-ZYRM & 32 markers transformed as
+\(\operatorname{asinh}(x/5)\) & VERIFY \\
+flow18 & Figshare 9927986 v1 & Supplied opt-SNE input table & CC BY 4.0 \\
+MNIST & Public IDX mirror & Concatenated train/test pixels; no added scaling or
+reduction & VERIFY \\
+ImageNet features & ILSVRC 2012 / DINOv2 archive & Supplied 1,024-dimensional
+DINOv2 features & VERIFY \\
+MetRef & \pkg{KODAMA} bundled data & Zero-sum columns removed; KODAMA
+normalization and scaling & VERIFY \\
+mass41 & Figshare 9927986 v1 & Supplied opt-SNE table; source values use
+\(\operatorname{asinh}(x/5)\) & CC BY 4.0 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Tuning and validation design}
+
+Method-specific tuning grids vary the parameters that control construction,
+candidate breadth, compression, and search effort. The most important
+families are:
+\begin{itemize}
+\item HNSW: graph degree $M$, construction effort, and query \code{efSearch};
+\item IVF: \code{nlist} and \code{nprobe};
+\item IVF-PQ/FastScan: \code{nlist}, \code{nprobe}, PQ dimensions/subquantizers,
+code width, FastScan block size, and optional refinement;
+\item CAGRA: provider, build algorithm, graph/intermediate degree, and search
+width;
+\item NN-descent: pool/candidate breadth, graph degree, random projections,
+and iteration controls;
+\item NSG/Vamana: seed-graph size, candidate pool, pruning degree, search
+breadth, and Vamana $\alpha$;
+\item exact/Flat/brute force: batch size, conversion/copy behavior, resource
+reuse, and fitted-index reuse.
+\end{itemize}
+
+For each backend, metric, shape group, $k\in\{15,30,50,100\}$, and desired
+recall in $\{0.90,0.95,0.99\}$, calibration selects the fastest successful
+candidate meeting the threshold. If no candidate reaches the threshold, the
+best available row is retained with explicit negative-evidence metadata rather
+than relabeled as successful. Exact-family methods record exactness by
+construction and tune only systems parameters.
+
+Calibration uses seed 4. Independent publication evaluation uses query subsets
+from seeds 20260706 and 20260807; validation timings cannot alter the compiled
+policy. Exact references are generated at $k=100$ for up to 1,024 queries and
+cropped for smaller $k$. A CUDA reference is saved only after an independent
+CPU FAISS Flat audit. Each successful validation timing is repeated three
+times, and each method--dataset job has a 2,000-second timeout.
+
+\begin{longtable}{P{0.18\linewidth}P{0.75\linewidth}}
+\caption{Wide calibration grids emitted by the publication benchmark. Values
+are crossed with the requested $k$, metric, target, output type, and backend
+thread/resource settings where applicable.}\\
+\label{tab:supp-grids}\\
+\toprule
+Method & Candidate settings \\
+\midrule
+\endfirsthead
+\toprule
+Method & Candidate settings \\
+\midrule
+\endhead
+Exact, Flat, brute force &
+CPU query batches 2,048, 8,192, 32,768, 65,536, and 131,072 with fitted-index
+cache off/on; CUDA batches 1,024, 4,096, 8,192, 16,384, 32,768, and 65,536
+with provider-resource reuse off/on. \\
+HNSW CPU &
+$M=(6,8,8,10,12,12,16,24,32,48,64)$ paired with
+\code{efConstruction} $(30,30,40,50,60,80,100,160,240,320,480)$ and
+\code{efSearch} $\max(k,(15,20,25,35,45,60,80,120,220,400,720))$.
+Inner product adds $M=(80,96,128,128)$,
+\code{efConstruction} $(640,800,960,1280)$, and
+\code{efSearch} $\max(k,(1024,2048,3072,4096))$. \\
+HNSW CUDA &
+CAGRA seed degrees 8, 12, 16, 24, 32, 48, 64, 96, and 128 are paired by
+position with intermediate degrees 16, 24, 32, 48, 64, 128, 192, 320, and
+512. The corresponding \code{efSearch} values are
+$\max(k,(24,32,48,64,96,128,256,480,768))$. Inner product adds paired
+seed/intermediate degrees $(160,640)$, $(192,768)$, and $(256,1024)$ with
+\code{efSearch} $\max(k,(1024,2048,4096))$. \\
+IVF family &
+For non-MIPS metrics, \code{nlist} multipliers
+$(0.5,0.5,1,1,2,2,4,6,8)$ are paired with \code{nprobe} multipliers
+$(0.25,0.5,0.5,1,1.5,2,3,4,1)$; the final candidate scans every list.
+For MIPS, \code{nlist} anchors 256, 512, 1,024, and 2,048 include fractional
+coverage $1/16,1/8,1/4,1/2,3/4$ and full-probe recovery points. CUDA
+\code{nprobe} is capped at 2,048. \\
+IVF-PQ &
+Eight-bit PQ with dimension-dividing \code{pq\_m} targets
+16, 32, 48, and 64 on CUDA and additionally 96 on CPU; MIPS extends both
+backends through targets 96, 128, 192, and 256. \\
+IVF-PQ FastScan &
+Four-bit codes; CPU tests block sizes 32 and 64 and shape-dependent
+\code{pq\_m}/\code{pq\_dim}. Refinement factors progress from
+1--48 for non-MIPS and 2--256 for MIPS, unless an explicit launcher grid is
+supplied. CUDA crosses byte-aligned \code{pq\_dim}, IVF coverage, and configured
+query-batch sizes (default 32,768). \\
+CAGRA &
+Build algorithms \code{auto}, \code{ivf\_pq}, \code{nn\_descent}, and
+\code{iterative\_cagra\_search}; graph degrees 8--128, intermediate degrees
+16--512, widths 1--16, and \code{itopk} 16--768 after enforcing
+\code{itopk} $\geq k$. MIPS adds degree/intermediate/width/\code{itopk}
+tuples $(160,640,24,1024)$, $(192,768,32,1536)$, and
+$(256,1024,48,2048)$. \\
+NN-descent CPU &
+Pool 16--220, iterations 4--32, candidate budget at least three times the
+pool, and 3--40 random projections. MIPS adds pools 256--768, iterations
+40--80, candidates 1,024--3,072, and projections 48--128. \\
+NN-descent CUDA &
+Shape- and $k$-dependent graph/intermediate degrees, including graph degrees
+from $\max(k,16)$ through 384, intermediate degrees through 768, and wider
+candidates in the wide grid. The exact emitted rows are retained in the
+candidate table because hardware-valid combinations depend on $n$, $p$, and
+$k$. \\
+NSG &
+Refinement degree 4--96 with seed-graph $k$ 12--256 after enforcing
+graph $k\geq k$. MIPS adds degrees 128, 192, 256, and 384 with seed-graph
+sizes 384, 512, 768, and 1,024. \\
+Vamana &
+Degree 4--96, search list 12--400, and $\alpha$ 1.0--1.5; MIPS adds
+degrees 128--384, lists 512--1,536, and $\alpha$ 1.1--1.4. \\
+\bottomrule
+\end{longtable}
+
+Before timing begins, every job writes the fully expanded candidate table,
+including derived values after divisibility, byte-alignment, device-limit, and
+$k$ constraints. This machine-readable table, rather than the compact ranges
+above, is the authoritative record of what was attempted.
+
+\section{Metric-conformance results}
+
+\begin{table}[ht]
+\centering
+\caption{Final deterministic metric-conformance results. Target attainment is
+diagnostic and is distinct from metric-contract conformance.}
+\label{tab:supp-conformance}
+\begin{tabular}{lrrrr}
+\toprule
+Backend & Contract pass & Unsupported & Target 0.99 pass & Edge-case pass \\
+\midrule
+CPU & 46/46 & 0 & 36/46 & 22/22 \\
+CUDA & 49/49 evaluated & 1 & 41/49 evaluated & 24/24 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The ordinary fixture has $n=1024$, $p=19$, and $k=15$. Checks cover result
+dimensions, finite values, ascending package-distance order, requested device,
+Euclidean translation invariance, cosine positive-scale invariance,
+correlation positive-affine invariance, and raw-inner-product ranking for
+exact-family methods. Degenerate tests separately cover zero-norm cosine and
+constant-row correlation behavior. CUDA passes either with finite
+device-computed results or the documented explicit no-CPU-repair error.
+
+\begin{longtable}{llr}
+\caption{Approximate method--metric cells that passed the metric contract but
+missed the 0.99 recall target on the deterministic fixture.}\\
+\label{tab:supp-target-misses}\\
+\toprule
+Backend/method & Metric & Recall at 15 \\
+\midrule
+\endfirsthead
+\toprule
+Backend/method & Metric & Recall at 15 \\
+\midrule
+\endhead
+CPU IVF & cosine & 0.9822 \\
+CPU IVF & correlation & 0.9866 \\
+CPU IVF-PQ & Euclidean & 0.9811 \\
+CPU IVF-PQ & cosine & 0.9706 \\
+CPU IVF-PQ & correlation & 0.9707 \\
+CPU IVF-PQ & inner product & 0.9732 \\
+CPU IVF-PQ FastScan & Euclidean & 0.8493 \\
+CPU IVF-PQ FastScan & cosine & 0.8421 \\
+CPU IVF-PQ FastScan & correlation & 0.8487 \\
+CPU IVF-PQ FastScan & inner product & 0.7978 \\
+CUDA IVF-PQ & Euclidean & 0.5315 \\
+CUDA IVF-PQ & cosine & 0.3478 \\
+CUDA IVF-PQ & correlation & 0.5942 \\
+CUDA IVF-PQ & inner product & 0.4406 \\
+CUDA IVF-PQ FastScan & Euclidean & 0.6911 \\
+CUDA IVF-PQ FastScan & cosine & 0.6859 \\
+CUDA IVF-PQ FastScan & correlation & 0.7014 \\
+CUDA IVF-PQ FastScan & inner product & 0.3281 \\
+\bottomrule
+\end{longtable}
+
+These misses show why \code{target\_recall} is an operating objective rather
+than a guarantee. They also prevent quantized routes from being promoted by
+automatic selection solely because their measured search time is small.
+
+\clearpage
+\section{Systems-ablation coverage}
+
+\begin{table}[ht]
+\centering
+\caption{Completed systems-ablation measurement sets. All listed rows have
+\code{status = success}.}
+\label{tab:supp-ablations}
+\begin{tabularx}{\linewidth}{lrrY}
+\toprule
+Backend & Rows & Datasets & Covered contrasts \\
+\midrule
+CPU & 92 & 2 & double/float32 input; cache disabled; cache-enabled cold and
+warm calls; compiled versus R self-removal; Flat, HNSW, and IVF routes \\
+CUDA & 124 & 2 & CPU contrasts plus device-resident exact output, explicit
+host-copy timing, GPU memory sampling, and CAGRA routes \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The datasets are COIL20 and MNIST at $k=30$ under Euclidean
+distance. CUDA timings synchronize provider/device work before returning.
+Sampled \code{nvidia-smi} process memory is labeled as an external
+high-water estimate rather than allocator-exact telemetry. The completed row
+counts establish that the intended arms executed. Numerical effect estimates
+must be produced by the frozen fingerprint-matched pairing step; medians pooled
+across different methods or shapes are not valid ablation effects.
+
+\section{External comparison plan}
+
+CPU comparison scripts include applicable public interfaces from
+\pkg{Rnanoflann}, \pkg{RANN}, \pkg{RcppAnnoy}, \pkg{rnndescent},
+\pkg{BiocNeighbors}, and \pkg{uwot}. CUDA comparison includes
+\pkg{cuda.ml} when available. A comparator is included only when its public
+interface can express the same metric, $k$, and self-exclusion convention.
+CPU and CUDA are reported separately. Effective threads, conversion, index
+build inclusion, result residency, and failure/timeout state accompany elapsed
+time. Exact/Flat/brute-force routes are not counted as three independent
+mathematical algorithms when they resolve to the same exhaustive provider;
+their user-visible wrappers may still be profiled to quantify interface and
+resource-reuse overhead.
+
+\begin{longtable}{P{0.20\linewidth}P{0.72\linewidth}}
+\caption{Frozen external-comparator call families. Exact argument values,
+package versions, and effective threads are written into each result row and
+the archived \code{sessionInfo()}.}\\
+\label{tab:supp-comparators}\\
+\toprule
+Package & Public interface and timing interpretation \\
+\midrule
+\endfirsthead
+\toprule
+Package & Public interface and timing interpretation \\
+\midrule
+\endhead
+\pkg{Rnanoflann} & \code{nn()} with sorted output, parallel execution enabled,
+and the allocated core count where supported; one-call cold timing. \\
+\pkg{RANN} & \code{nn2()} with \code{treetype = "kd"} and
+\code{treetype = "bd"}; one-call cold timing. \\
+\pkg{RcppAnnoy} & \code{AnnoyEuclidean} construction, item insertion,
+\code{build()}, and iterative \code{getNNsByItemList()} calls because no
+matrix-batch query is exposed; cold build-plus-query and
+separately labeled reusable-index query time. \\
+\pkg{rnndescent} & Public \code{rpf\_knn()}, \code{rnnd\_knn()},
+\code{nnd\_knn()}, and \code{brute\_force\_knn()} routes when their metric and
+self-exclusion contracts match. \\
+\pkg{BiocNeighbors} & \code{findKNN()} with exhaustive, HNSW, and Annoy
+parameter objects; \code{buildIndex()} plus \code{findKNN()} on the prebuilt
+index supplies a
+separately labeled warm comparison where the installed version exposes it. \\
+\pkg{uwot} & Exported nearest-neighbor interface only; embedding runtime is not
+misrepresented as a KNN benchmark. \\
+\pkg{cuda.ml} & A public nearest-neighbor export is included only when present
+and when the requested metric and $k$ are expressible; absence is recorded as
+unavailable rather than replaced by a CPU route. \\
+\bottomrule
+\end{longtable}
+
+\begin{table}[ht]
+\centering
+\caption{Provider-equivalence rules used by the publication aggregator.}
+\label{tab:supp-equivalence}
+\begin{tabularx}{\linewidth}{P{0.25\linewidth}Y}
+\toprule
+Requested names & Publication treatment \\
+\midrule
+\method{exact}, \method{flat}, \method{bruteforce} & Wrapper timings remain
+visible, but requests resolving to the same exhaustive provider/backend are one
+algorithmic route for rankings. \\
+\method{auto} & Retained as a selector outcome and compared with the empirical
+oracle; it is not counted as an additional search algorithm. \\
+\method{nsg}, \method{vamana} & Described as native style/refinement
+implementations, not as vendored copies of external libraries. \\
+CUDA \method{hnsw} & Provider-qualified as cuVS HNSW constructed from a CAGRA
+graph; not called a pure all-GPU HNSW search implementation. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Replication files and remaining gates}
+
+The package repository contains the JSS source, vignette, reference
+documentation, benchmark launchers, exact-reference builders, conformance
+suite, systems-ablation suite, publication aggregator, leave-one-dataset-out
+analysis, and figure builder. Every eligible result must carry the dataset
+fingerprint, requested and resolved route, metric, $k$, recall target, timing
+repeat, and error state.
+
+The compact entry point \path{manuscript/jss/replication_article.R} runs on a
+regular CPU computer with FAISS and \pkg{faissR} installed. It executes the
+article examples, checks dimensions and finite values, writes a compact summary,
+and records \code{sessionInfo()}. If \code{FAISSR\_JSS\_RESULTS\_DIR} identifies
+the frozen archive, the same script verifies every source file's schema,
+rejects duplicate benchmark keys, optionally matches dataset fingerprints to
+\code{FAISSR\_JSS\_DATASET\_MANIFEST}, optionally verifies the SHA-256 ledger
+in \code{FAISSR\_JSS\_RESULT\_CHECKSUMS}, and regenerates held-out tables
+without launching Slurm. Full
+computation is reproduced separately with
+\path{benchmark_scripts/jmlr_mloss_publication/final_campaign/}%
+\path{submission_commands.txt};
+the campaign contains 256 independent jobs so one failure cannot erase the
+other method/backend evidence.
+The directory retains its historical \path{jmlr_mloss_publication} name, but
+the protocol and artifacts described here are the JSS submission campaign; the
+path is not a claim of simultaneous submission to another journal.
+
+The 256 jobs comprise 5 exact-reference, 105 calibration, 126 held-out,
+7 reusable external-index, 2 systems-ablation, 2 installed-package route-QA,
+and 9 analysis/freeze jobs. The reusable-index diagnostic uses the same
+independent exact-reference query rows (up to 1,024), reports conversion,
+construction, first-query, and three repeated-query timings separately, and
+does not mix its sampled-query times with the primary full all-row cold
+comparison.
+Generated launcher and campaign-source manifests record both MD5 identity keys
+and SHA-256 integrity digests. The installed-package CPU/CUDA route jobs are
+smoke and contract checks; they do not replace platform-specific package
+installation, unit-test, and package-check reports.
+
+The final archive groups the reproducibility metadata into five tables:
+(i) dataset source, release, dimensions, preprocessing, redistribution terms,
+and fingerprint; (ii) package, compiler, FAISS, CUDA, cuVS, driver, and
+container versions; (iii) requested and resolved method/provider/backend;
+(iv) timing protocol, repeat, allocation, effective threads, residency, and
+copy counts; and (v) failures, timeouts, unsupported contracts, and recall
+target attainment. MD5 is retained only for local row identity, while SHA-256
+protects submitted and externally distributed artifacts.
+
+The installed \path{faissR\_api.h} header defines typed accessors for the
+three nearest-neighbor C-callables and an ABI-version query returning one.
+The external-pointer handle in a \code{faissR\_gpu\_knn} object owns its CUDA
+buffers and must remain protected while a downstream package accesses either
+device pointer.
+
+\begin{table}[ht]
+\centering
+\caption{Evidence status at the July 30, 2026 freeze.}
+\label{tab:supp-evidence}
+\begin{tabularx}{\linewidth}{P{0.32\linewidth}P{0.18\linewidth}Y}
+\toprule
+Evidence stream & Status & Required action \\
+\midrule
+CPU/CUDA metric conformance & Complete & Preserve final job outputs and
+checksums. \\
+CPU/CUDA systems-ablation measurement sets & Complete & Run and freeze paired
+contrast aggregation. \\
+Exact references for all nine real datasets & Complete & Preserve metric-matched
+files and fingerprints. \\
+Held-out explicit-method benchmark & Missing from synchronized archive & Run
+separate CPU and CUDA jobs for both validation seeds. \\
+Automatic selector versus oracle & Pending held-out aggregate & Run only after
+the explicit-method benchmark passes completeness checks. \\
+Leave-one-dataset-out sensitivity & Pending held-out aggregate & Freeze rules
+without each dataset and evaluate the omitted dataset without revision. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Interpretation}
+
+The completed evidence supports the package's metric and routing contracts on
+the deterministic CPU/CUDA fixtures and confirms successful execution of the
+planned systems-ablation arms. It does not yet establish that one method is
+fastest across the real-dataset collection or that \method{auto} approaches an
+empirical oracle. Those claims require the held-out benchmark, frozen aggregate,
+and selector sensitivity analysis. This boundary is maintained in both
+the manuscript and supplement so that calibration, correctness, and
+comparative performance are not conflated.
+
+\end{document}
