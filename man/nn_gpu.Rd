@@ -61,7 +61,11 @@ This is intentionally narrower than `nn()`: for Euclidean and raw
 inner-product
 `method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`, `nn_gpu()`
 uses a FAISS GPU direct `bfKnn` route and keeps the result buffers on the
-CUDA device when FAISS GPU is available. When FAISS was built with cuVS
+CUDA device when FAISS GPU is available. Euclidean inputs with two or three
+columns instead use the native direct-difference CUDA exact kernel. This
+avoids cancellation in the dot-product L2 identity for nearly coincident
+low-dimensional vectors while retaining GPU-resident results. When FAISS
+was built with cuVS
 support, FAISS may dispatch the brute-force GPU distance primitive through
 cuVS internally. Raw inner-product results are converted on the CUDA device
 from FAISS similarities to faissR's shifted smaller-is-better distance.

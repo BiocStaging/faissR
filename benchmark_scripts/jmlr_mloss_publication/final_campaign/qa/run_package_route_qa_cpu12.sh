@@ -15,7 +15,7 @@ set -euo pipefail
 BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
 SUITE_ROOT="${SUITE_ROOT:-${BASE_DIR}/benchmark_scripts/jmlr_mloss_publication}"
 SINGULARITY_IMAGE="${SINGULARITY_IMAGE:-${BASE_DIR}/singularity/fastembedr_cuda.sif}"
-export EXPECTED_FAISSR_VERSION='0.99.19'
+export EXPECTED_FAISSR_VERSION='0.99.20'
 mkdir -p "${BASE_DIR}/benchmark_logs"
 
 OUT_DIR="${BASE_DIR}/faissR_JMLR_MLOSS/final_campaign/qa/cpu_${SLURM_JOB_ID:-manual}_$(date +%Y%m%d_%H%M%S)"

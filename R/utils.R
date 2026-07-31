@@ -2,6 +2,21 @@
   if (is.null(x) || length(x) == 0L) y else x
 }
 
+nn_gpu_exact_provider <- function(metric, p, faiss_gpu = faiss_gpu_available()) {
+  metric <- normalize_nn_metric(metric)
+  p <- normalize_nn_positive_integer(
+    p,
+    "p",
+    "`p` must be a positive integer."
+  )
+  if (!isTRUE(faiss_gpu) || identical(metric, "cosine") ||
+      identical(metric, "correlation") ||
+      (identical(metric, "euclidean") && p <= 3L)) {
+    return("cuda_native_exact")
+  }
+  "faiss_gpu_bfknn"
+}
+
 set_rng_seed <- function(seed) {
   seed_fun <- get("set.seed", envir = asNamespace("base"))
   seed_fun(seed)

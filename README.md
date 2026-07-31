@@ -187,7 +187,7 @@ method/backend/metric matrix is in the
 | Function | Main use | Backends | Return |
 | --- | --- | --- | --- |
 | `nn()` | General nearest-neighbour search over reference/query matrices. Supports `backend = "auto"`, `"cpu"`, or `"cuda"`; `method = "auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"ivfpq_fastscan"`, `"nndescent"`, `"nsg"`, `"vamana"`, or `"cagra"`; and `metric = "euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. `exclude_self = TRUE` removes self-neighbours in compiled code for self-KNN. | CPU, FAISS CPU/GPU, native CUDA, and direct RAPIDS cuVS where compiled. | A `faissR_nn` list with 1-based `indices`, `distances`, `index_base`, `distance_type`, `metric`, `backend_used`, and route/tuning metadata. `output = "float"` can return float32 distances when the optional `float` package is available. |
-| `nn_gpu()` | GPU-resident exact-family KNN for downstream CUDA packages. It is narrower than `nn()` and is intended when another package needs device pointers instead of R matrices. | CUDA exact-family routes for `method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. Euclidean and raw inner product use FAISS GPU direct `bfKnn` when available; cosine/correlation use native CUDA exact transforms. | A `faissR_gpu_knn` object with an owning `handle`, CUDA-device `indices_ptr` and `distances_ptr`, `result_residency = "cuda"`, `indices_type = "int32"`, `distance_type = "float32"`, `device_to_host_result_copies = 0`, plus exact-family `execution_tuning` and, for `method = "auto"`, the compiled-policy `auto_preferred_tuning` when applicable. |
+| `nn_gpu()` | GPU-resident exact-family KNN for downstream CUDA packages. It is narrower than `nn()` and is intended when another package needs device pointers instead of R matrices. | CUDA exact-family routes for `method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. Euclidean inputs above three dimensions and raw inner product use FAISS GPU direct `bfKnn` when available; 2D/3D Euclidean, cosine, and correlation use native CUDA exact kernels. | A `faissR_gpu_knn` object with an owning `handle`, CUDA-device `indices_ptr` and `distances_ptr`, `result_residency = "cuda"`, `indices_type = "int32"`, `distance_type = "float32"`, `device_to_host_result_copies = 0`, plus exact-family `execution_tuning` and, for `method = "auto"`, the compiled-policy `auto_preferred_tuning` when applicable. |
 | `gpu_knn_to_host()` | Explicit diagnostic conversion of a GPU-resident KNN result to ordinary R matrices. It is never called automatically by `nn_gpu()`. | Uses the CUDA result handle returned by `nn_gpu()` or the C-callable GPU API. | A host-side `faissR_nn` list with copied integer indices and numeric distances. |
 | `candidate_knn()` | Exact top-k reranking inside a user-supplied candidate-neighbour matrix. This is useful when another algorithm proposes candidates and faissR should compute the final ordered neighbours. | CPU compiled scoring or the native CUDA row-candidate kernel for its documented self-query contract. | A `faissR_nn` list restricted to the supplied candidates. |
 | `fast_kmeans()` | Fast k-means-style clustering with CPU, FAISS, FAISS GPU, or cuVS routes. `tuning = "auto"` selects deterministic shape-aware defaults for iteration count, starts, and tolerances. | CPU/statistics, FAISS CPU/GPU, direct cuVS where compiled. | A `faissR_kmeans` object with cluster assignments, centers, within-cluster summaries, backend/tuning metadata, and convergence diagnostics. |
@@ -345,14 +345,14 @@ tarball:
 
 ```sh
 R CMD build .
-R CMD check faissR_0.99.19.tar.gz
+R CMD check faissR_0.99.20.tar.gz
 ```
 
 and then:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.19.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.20.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA and cuVS are
@@ -530,12 +530,14 @@ auto fn = reinterpret_cast<faissR_nn_cuda_tuned_gpu_fun>(
 ```
 
 The current GPU-resident route supports exact KNN for
-`method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. Euclidean and raw
-inner-product search use FAISS GPU direct `bfKnn` when available and request
+`method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. Euclidean inputs
+above three dimensions and raw inner-product search use FAISS GPU direct
+`bfKnn` when available and request
 FAISS/cuVS dispatch when faissR was built with cuVS; raw inner-product
 similarities are converted on the CUDA device to faissR's shifted
-smaller-is-better distance. Cosine and correlation use the native CUDA
-GPU-resident exact route with the same output contract.
+smaller-is-better distance. For 2D/3D Euclidean data, a direct-difference CUDA
+kernel avoids cancellation in the dot-product L2 identity. Cosine and
+correlation use native CUDA exact transforms with the same output contract.
 With `method = "auto"`, `nn_gpu()` records the same compiled auto-selection
 metadata as `nn()`. If that policy would prefer an approximate method such as
 IVF for ordinary `nn()` but that provider cannot yet expose persistent

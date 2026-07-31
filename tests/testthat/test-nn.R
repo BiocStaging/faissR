@@ -81,6 +81,17 @@ test_that("GPU-resident NN implementation enforces its public class contract", {
   expect_match(nn_body, "externalptr", fixed = TRUE)
 })
 
+test_that("GPU exact provider avoids low-dimensional L2 cancellation", {
+  provider <- faissR:::nn_gpu_exact_provider
+
+  expect_equal(provider("euclidean", 2L, faiss_gpu = TRUE), "cuda_native_exact")
+  expect_equal(provider("euclidean", 3L, faiss_gpu = TRUE), "cuda_native_exact")
+  expect_equal(provider("euclidean", 4L, faiss_gpu = TRUE), "faiss_gpu_bfknn")
+  expect_equal(provider("inner_product", 2L, faiss_gpu = TRUE), "faiss_gpu_bfknn")
+  expect_equal(provider("cosine", 784L, faiss_gpu = TRUE), "cuda_native_exact")
+  expect_equal(provider("euclidean", 784L, faiss_gpu = FALSE), "cuda_native_exact")
+})
+
 test_that("GPU-resident NN tuning metadata includes raw inner-product rows", {
   exact <- faissR:::nn_gpu_tuning_params_for_method(
     n = 70000L,
@@ -4948,6 +4959,37 @@ test_that("CUDA nn backend matches CPU euclidean results", {
   expect_true(attr(gpu, "backend") %in% c("cuda", "faiss_gpu_flat_l2"))
   expect_equal(gpu$indices, cpu$indices)
   expect_equal(gpu$distances, cpu$distances, tolerance = 1e-5)
+})
+
+test_that("GPU-resident 2D exact search is cancellation resistant", {
+  skip_if_not(cuda_available())
+
+  set.seed(20261713L)
+  x <- matrix(rnorm(1024L), ncol = 2L)
+  x <- x / sqrt(rowSums(x * x))
+  cpu <- nn(
+    x,
+    k = 15L,
+    exclude_self = TRUE,
+    backend = "cpu",
+    method = "flat",
+    metric = "euclidean",
+    n_threads = 2L
+  )
+  resident <- nn_gpu(
+    x,
+    k = 15L,
+    exclude_self = TRUE,
+    method = "exact",
+    metric = "euclidean"
+  )
+  gpu <- gpu_knn_to_host(resident)
+
+  expect_equal(resident$backend_used, "cuda_native_exact_gpu")
+  expect_equal(resident$result_residency, "cuda")
+  expect_equal(resident$device_to_host_result_copies, 0L)
+  expect_equal(gpu$indices, cpu$indices)
+  expect_equal(gpu$distances, cpu$distances, tolerance = 1e-6)
 })
 
 test_that("CUDA grid auto matches exact CPU grid results", {

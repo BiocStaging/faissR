@@ -10419,7 +10419,11 @@ nn <- function(data,
 #' inner-product
 #' `method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`, `nn_gpu()`
 #' uses a FAISS GPU direct `bfKnn` route and keeps the result buffers on the
-#' CUDA device when FAISS GPU is available. When FAISS was built with cuVS
+#' CUDA device when FAISS GPU is available. Euclidean inputs with two or three
+#' columns instead use the native direct-difference CUDA exact kernel. This
+#' avoids cancellation in the dot-product L2 identity for nearly coincident
+#' low-dimensional vectors while retaining GPU-resident results. When FAISS
+#' was built with cuVS
 #' support, FAISS may dispatch the brute-force GPU distance primitive through
 #' cuVS internally. Raw inner-product results are converted on the CUDA device
 #' from FAISS similarities to faissR's shifted smaller-is-better distance.
@@ -10589,8 +10593,11 @@ nn_gpu <- function(data,
     metric = metric,
     target_recall = target_recall
   )
-  use_faiss_gpu_bfknn <- metric %in% c("euclidean", "inner_product") &&
-    isTRUE(faiss_gpu_available())
+  use_faiss_gpu_bfknn <- nn_gpu_exact_provider(
+    metric,
+    data_dim[[2L]],
+    faiss_gpu = faiss_gpu_available()
+  ) == "faiss_gpu_bfknn"
   out <- if (isTRUE(use_faiss_gpu_bfknn)) {
     faiss_gpu_backend <- if (identical(metric, "inner_product")) {
       execution_tuning$result_backend %||%

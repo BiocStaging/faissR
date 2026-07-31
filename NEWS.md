@@ -1,3 +1,15 @@
+# faissR 0.99.20
+
+* Uses the direct-difference CUDA exact kernel for 2D/3D Euclidean
+  GPU-resident searches. This avoids float32 cancellation observed with the
+  norm/dot-product L2 identity for nearly coincident vectors while preserving
+  CUDA residency and the exact-family API contract.
+* Adds CPU/CUDA publication launchers for held-out comparisons against public
+  KNN interfaces from Rnanoflann, RANN, RcppAnnoy, RcppHNSW, rnndescent,
+  BiocNeighbors, FNN, and nabor.
+* Expands the JSS replication protocol, independent exact-reference audits,
+  metric conformance checks, and systems ablations.
+
 # faissR 0.99.15
 
 * Initial Bioconductor development release.

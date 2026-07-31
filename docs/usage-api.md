@@ -127,7 +127,7 @@ nn_gpu(data, points = data, k = NULL, exclude_self = FALSE,
 | `k` | Number of neighbours. If `NULL`, faissR chooses an automatic neighbourhood size. |
 | `exclude_self` | Logical; if `TRUE`, remove each query row from its own neighbour list in the CUDA kernel. This is valid only for self-query calls. |
 | `method` | GPU-resident method selector. `"auto"` consults the compiled shape/k/metric/target-recall selector, but currently returns exact-family GPU-resident buffers; `"exact"`, `"flat"`, and `"bruteforce"` force the same resident exact search family. |
-| `metric` | `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. Euclidean uses FAISS GPU direct `bfKnn` and requests FAISS/cuVS dispatch in cuVS builds; cosine/correlation are normalized in C++; raw inner product uses a MIPS-to-L2 transform and device-side shifted-distance conversion. |
+| `metric` | `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. Euclidean inputs above three dimensions use FAISS GPU direct `bfKnn` and request FAISS/cuVS dispatch in cuVS builds; 2D/3D Euclidean uses a cancellation-resistant direct-difference CUDA kernel; cosine/correlation are normalized in C++; raw inner product uses device-side shifted-distance conversion. |
 | `tuning` | Tuning label to record. The current GPU-resident route is exact, so this does not change approximation parameters. |
 | `target_recall` | Target-recall label to record for API symmetry; exact search has recall 1 by construction. |
 
@@ -139,8 +139,10 @@ distances. Keep `handle` alive for as long as another package uses either
 pointer.
 
 The current GPU-resident route is exact search for `method = "auto"`,
-`"exact"`, `"flat"`, or `"bruteforce"`. Euclidean and raw inner product use
-FAISS GPU direct `bfKnn` when available; raw inner-product similarities are
+`"exact"`, `"flat"`, or `"bruteforce"`. Euclidean inputs above three
+dimensions and raw inner product use FAISS GPU direct `bfKnn` when available;
+2D/3D Euclidean uses the native direct-difference CUDA kernel. Raw
+inner-product similarities are
 converted on the CUDA device to faissR's shifted smaller-is-better distance.
 Cosine and correlation use the native CUDA GPU-resident exact route.
 `target_recall` is recorded for API symmetry but exact search has recall 1 by

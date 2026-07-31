@@ -90,7 +90,7 @@ or general performance superiority.
 
 \section{Software and public interface}
 
-The evaluated development snapshot is \pkg{faissR} 0.99.19. FAISS is a
+The evaluated development snapshot is \pkg{faissR} 0.99.20. FAISS is a
 mandatory system dependency. NVIDIA CUDA, FAISS GPU, and RAPIDS cuVS are
 optional for CPU-only builds and required when the corresponding GPU features
 are explicitly requested. The package uses compiled C++/CUDA interfaces and
@@ -112,7 +112,8 @@ Function & Role \\
 \code{nn()} & Host-returned nearest-neighbor search with explicit backend,
 method, metric, self-exclusion, tuning, and recall-target controls. \\
 \code{nn\_gpu()} & GPU-resident exact-family result for downstream compiled
-CUDA consumers. \\
+CUDA consumers; 2D/3D Euclidean search uses direct coordinate differences to
+avoid float32 cancellation in the norm/dot-product L2 identity. \\
 \code{gpu\_knn\_to\_host()} & Explicit materialization of a GPU-resident KNN
 result in R memory. \\
 \code{candidate\_knn()} & Refinement of a supplied candidate-neighbor set. \\

@@ -335,6 +335,71 @@ main <- function() {
     }
     rm(gpu_answer, gpu_input)
     invisible(gc())
+
+    set.seed(20261713L)
+    lowdim <- matrix(rnorm(1024L), ncol = 2L)
+    lowdim <- lowdim / sqrt(rowSums(lowdim * lowdim))
+    lowdim <- float::fl(lowdim)
+    lowdim_cpu <- faissR::nn(
+      lowdim,
+      k = 15L,
+      exclude_self = TRUE,
+      backend = "cpu",
+      method = "flat",
+      metric = "euclidean",
+      n_threads = 2L
+    )
+    lowdim_gpu <- faissR::nn_gpu(
+      lowdim,
+      k = 15L,
+      exclude_self = TRUE,
+      method = "exact",
+      metric = "euclidean"
+    )
+    lowdim_host <- faissR::gpu_knn_to_host(lowdim_gpu)
+    per_query_recall <- vapply(seq_len(nrow(lowdim_cpu$indices)), function(i) {
+      mean(lowdim_host$indices[i, ] %in% lowdim_cpu$indices[i, ])
+    }, numeric(1))
+    lowdim_qa <- data.frame(
+      backend = backend,
+      method = "exact",
+      metric = "euclidean",
+      n = nrow(lowdim),
+      p = ncol(lowdim),
+      k = 15L,
+      backend_used = as.character(lowdim_gpu$backend_used %||% NA_character_),
+      result_residency = as.character(lowdim_gpu$result_residency %||% NA_character_),
+      device_to_host_result_copies_before_materialization = as.integer(
+        lowdim_gpu$device_to_host_result_copies %||% NA_integer_
+      ),
+      mean_recall = mean(per_query_recall),
+      min_recall = min(per_query_recall),
+      max_distance_error = max(abs(
+        as.numeric(lowdim_host$distances) - as.numeric(lowdim_cpu$distances)
+      )),
+      stringsAsFactors = FALSE
+    )
+    lowdim_qa$conformance_pass <- with(
+      lowdim_qa,
+      backend_used == "cuda_native_exact_gpu" &
+        result_residency == "cuda" &
+        device_to_host_result_copies_before_materialization == 0L &
+        mean_recall == 1 & min_recall == 1 & max_distance_error <= 1e-6
+    )
+    write.csv(
+      lowdim_qa,
+      file.path(out_dir, "jss_gpu_lowdim_exact_qa.csv"),
+      row.names = FALSE
+    )
+    if (!isTRUE(lowdim_qa$conformance_pass[[1L]])) {
+      stop(
+        "The cancellation-resistant 2D CUDA exact route failed QA; ",
+        "inspect jss_gpu_lowdim_exact_qa.csv.",
+        call. = FALSE
+      )
+    }
+    rm(lowdim, lowdim_cpu, lowdim_gpu, lowdim_host)
+    invisible(gc())
   }
 
   results <- list()

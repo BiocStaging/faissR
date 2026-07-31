@@ -45,6 +45,30 @@ List cuda_grid_self_knn_impl(NumericMatrix data,
                              int bins_per_dim,
                              bool include_self);
 
+namespace {
+
+int gpu_input_ncol(SEXP x) {
+  SEXP dim = Rf_getAttrib(x, R_DimSymbol);
+  if (Rf_isNull(dim) && Rf_isS4(x)) {
+    SEXP data_slot = R_do_slot(x, Rf_install("Data"));
+    dim = Rf_getAttrib(data_slot, R_DimSymbol);
+  }
+  if (Rf_isNull(dim) || Rf_length(dim) != 2) {
+    Rcpp::stop("x must be a two-dimensional numeric or float32 matrix");
+  }
+  const int ncol = INTEGER(dim)[1];
+  if (ncol < 1) Rcpp::stop("x must have at least one column");
+  return ncol;
+}
+
+bool use_faiss_gpu_bfknn(const std::string& metric, const int ncol) {
+  if (!faiss_gpu_bfknn_float32_gpu_available_impl()) return false;
+  if (metric == "inner_product") return true;
+  return metric == "euclidean" && ncol > 3;
+}
+
+} // namespace
+
 // [[Rcpp::export]]
 bool cuda_available_cpp() {
   return cuda_is_available_impl();
@@ -120,8 +144,7 @@ extern "C" SEXP faissR_nn_cuda_tuned_gpu_call(SEXP x,
   const std::string resolved_method =
     method_value == "auto" ? "exact" : method_value;
   Rcpp::List out;
-  if ((metric_value == "euclidean" || metric_value == "inner_product") &&
-      faiss_gpu_bfknn_float32_gpu_available_impl()) {
+  if (use_faiss_gpu_bfknn(metric_value, gpu_input_ncol(x))) {
     const std::string backend_used = metric_value == "inner_product" ?
       "faiss_gpu_flat_ip" : "faiss_gpu_bfknn_l2";
     out = faiss_gpu_bfknn_float32_gpu_impl(

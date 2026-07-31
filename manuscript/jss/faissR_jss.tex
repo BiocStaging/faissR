@@ -395,7 +395,11 @@ reports \code{result\_residency = "cuda"} and
 
 The current GPU-resident ABI covers \method{auto}, \method{exact},
 \method{flat}, and \method{bruteforce}, all resolving to exact-family device
-buffers. The installed header \path{faissR\_api.h} declares typed callable
+buffers. Higher-dimensional Euclidean and raw-inner-product searches use
+FAISS GPU brute force when available. For 2D/3D Euclidean data, direct CUDA
+coordinate differences avoid float32 cancellation in the algebraically
+equivalent norm/dot-product L2 identity. The installed header
+\path{faissR\_api.h} declares typed callable
 getters and an ABI-version query. Downstream packages list \pkg{faissR} in
 \code{LinkingTo}, verify that \code{faissR\_c\_api\_version()} returns one, and
 retrieve the registered entry point
@@ -956,7 +960,7 @@ supplement.
 The MIT-licensed package has no Python dependency; FAISS, CUDA, and cuVS remain
 external system libraries under their respective licenses. The repository
 contains unit tests, API documentation, a vignette, feature-detecting build
-scripts, and CPU/CUDA route tests. Version 0.99.19 is the development snapshot
+scripts, and CPU/CUDA route tests. Version 0.99.20 is the development snapshot
 described here.
 
 Benchmark jobs are generated from a manifest and test one method, backend, and

@@ -773,15 +773,19 @@ that copies those buffers back to R matrices; it is never called automatically
 by `nn_gpu()`.
 
 The first GPU-resident implementation covers exact method labels
-`method = "auto"`, `"exact"`, `"flat"`, and `"bruteforce"`. Euclidean and raw
-inner-product search use FAISS GPU direct `bfKnn` when available and write
+`method = "auto"`, `"exact"`, `"flat"`, and `"bruteforce"`. Euclidean inputs
+with more than three columns and raw inner-product search use FAISS GPU direct
+`bfKnn` when available and write
 FAISS row-major, zero-based results into transient device buffers; a small CUDA
 post-processing kernel removes the self-neighbour when requested, converts
 indices to faissR's 1-based int32 format, takes the square root of L2 distances,
 or converts inner-product similarities to row-best shifted distances, and
 stores the final result in the existing column-major `faissR_gpu_knn` layout.
 When faissR is built with cuVS, the FAISS direct distance call requests
-FAISS/cuVS dispatch. Cosine and correlation keep using the native CUDA
+FAISS/cuVS dispatch. Two- and three-dimensional Euclidean inputs use the
+native direct-difference CUDA kernel instead. This avoids float32 cancellation
+in the algebraically equivalent `||x||^2 + ||q||^2 - 2 x^T q` formulation for
+nearly coincident vectors. Cosine and correlation also use the native CUDA
 GPU-resident exact route: they are prepared in C++ by row normalization or
 row-centering plus normalization and then stored as squared L2 divided by two
 (`1 - similarity`). Zero-normalized cosine rows and constant correlation rows
@@ -806,7 +810,7 @@ faissR also registers the C-callable
 self-KNN oriented and accepts `(x, k, method, metric, include_self,
 target_recall)`. The current implementation keeps output on the GPU only for
 exact CUDA method labels (`"auto"`, `"exact"`, `"flat"`, and `"bruteforce"`),
-using the same Euclidean FAISS GPU `bfKnn` route as `nn_gpu()`.
+using the same dimension-aware exact-provider rule as `nn_gpu()`.
 The `target_recall` value is recorded for API symmetry with the tuned NN
 interface, but recall is exact by construction. Provider-specific GPU-resident
 outputs for FAISS GPU IVF/CAGRA and direct cuVS IVF/CAGRA/NN-descent require
