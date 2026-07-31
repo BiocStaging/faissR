@@ -593,11 +593,14 @@ analysis, and figure builder. Every eligible result must carry the dataset
 fingerprint, requested and resolved route, metric, $k$, recall target, timing
 repeat, and error state.
 
-The compact entry point \path{manuscript/jss/replication_article.R} runs on a
-regular CPU computer with FAISS and \pkg{faissR} installed. It executes the
-article examples, checks dimensions and finite values, writes a compact summary,
-and records \code{sessionInfo()}. If \code{FAISSR\_JSS\_RESULTS\_DIR} identifies
-the frozen archive, the same script verifies every source file's schema,
+The compact entry point \path{manuscript/jss/code.R} runs on a regular CPU
+computer with FAISS and \pkg{faissR} installed and delegates to the
+authoritative validator \path{replication_article.R}. It executes the article
+examples, checks dimensions and finite values, writes a compact summary, and
+records \code{sessionInfo()}; the executed \path{code.html} exposes those
+outputs for direct comparison by reviewers. If
+\code{FAISSR\_JSS\_RESULTS\_DIR} identifies the frozen archive, the same entry
+point verifies every source file's schema,
 retains and checksums every raw rerun, selects the newest timestamped run per
 method cell, rejects duplicate benchmark keys within that selected evidence,
 optionally matches dataset fingerprints to

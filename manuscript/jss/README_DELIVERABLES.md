@@ -6,8 +6,8 @@ Package snapshot: faissR 0.99.20
 
 - `faissR_jss.tex` and `faissR_jss.bib`: authoritative article source.
 - `faissR_jss_supplement.tex`: authoritative supplementary source.
-- `code.R`, `code.Rhtml`, and `code.html`: compact JSS replication entry
-  points.
+- `code.R` and `code.html`: compact JSS replication entry point and its
+  executed rendered output.
 - `replication_article.R`: frozen-result validator and table/figure collation.
 - `build_docx.py` and `build_supplement_docx.py`: Word reading-copy builders.
 - `jss.cls`, `jss.bst`, and `jsslogo.jpg`: JSS template files.

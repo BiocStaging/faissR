@@ -47,7 +47,8 @@ Deterministic compiled policies select parameters from dataset shape, neighbor
 count, metric, backend, and a desired recall of 0.90, 0.95, or 0.99. This target
 is an auditable calibration objective rather than a guarantee for a new
 dataset. We describe the statistical contract, implementation, user interface,
-calibration procedure, and reproducible CPU/CUDA evaluation of \pkg{faissR}.
+calibration procedure, and a reproducible CPU/CUDA evaluation framework for
+\pkg{faissR}.
 }
 
 \Keywords{nearest neighbors, approximate search, FAISS, CUDA, float32, \proglang{R}}
@@ -970,8 +971,10 @@ version, route metadata, seed, repetition, and environment record. CUDA QA also
 checks that GPU-resident results own device pointers and report zero
 device-to-host result copies.
 
-The replication entry point, \path{manuscript/jss/replication_article.R}, runs
-small CPU examples on a regular computer. Given the frozen result directory, it
+The compact replication entry point, \path{manuscript/jss/code.R}, delegates to
+\path{replication_article.R} and runs small CPU examples on a regular computer.
+Its executed \path{code.html} records the example summary and
+\code{sessionInfo()}. Given the frozen result directory, the same entry point
 also verifies schemas and fingerprints and regenerates article tables without
 rerunning the HPC campaign. SHA-256 digests identify the package source,
 container, distributed data, and frozen result archive. Detailed launcher,
@@ -1034,11 +1037,12 @@ benchmarks.
 
 The principal methodological software contribution is recall-aware automatic
 tuning. Parameters are selected by constrained optimization on calibration
-data and evaluated on independent query subsamples. Shape, $k$, metric,
-backend, and desired recall enter compiled selectors, while below-target and
-proxy-derived rules remain visible in metadata. The desired recall is not a
-guarantee, and selector performance is assessed against the fastest qualifying
-explicit method rather than inferred from calibration. This makes automatic
+data. The frozen evaluation protocol then assesses them on independent query
+subsamples without revising the policy. Shape, $k$, metric, backend, and
+desired recall enter compiled selectors, while below-target and proxy-derived
+rules remain visible in metadata. The desired recall is not a guarantee, and
+selector performance must be assessed against the fastest qualifying explicit
+method rather than inferred from calibration. This design makes automatic
 selection auditable and exposes regimes, particularly difficult
 maximum-inner-product searches, where exact search or additional calibration
 is preferable.

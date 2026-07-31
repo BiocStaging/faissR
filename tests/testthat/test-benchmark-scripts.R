@@ -3244,6 +3244,21 @@ test_that("final JSS campaign rejects a stale faissR Singularity image", {
   )))
 })
 
+test_that("JSS compact replication report is executed and error-free", {
+  jss <- test_path("../../manuscript/jss")
+  code_path <- file.path(jss, "code.R")
+  html_path <- file.path(jss, "code.html")
+  skip_if_not(file.exists(code_path) && file.exists(html_path))
+
+  code <- readLines(code_path, warn = FALSE)
+  html <- readLines(html_path, warn = FALSE)
+  expect_true(any(grepl('candidates <- c("code.R"', code, fixed = TRUE)))
+  expect_true(any(grepl("exact_cpu", html, fixed = TRUE)))
+  expect_true(any(grepl("sessionInfo()", html, fixed = TRUE)))
+  expect_false(any(grepl("## Error", html, fixed = TRUE)))
+  expect_false(any(grepl("begin.rcode", html, fixed = TRUE)))
+})
+
 test_that("publication rnndescent routes use their current public APIs", {
   skip_if_not_installed("rnndescent")
   script <- test_path(

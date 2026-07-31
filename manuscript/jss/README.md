@@ -28,6 +28,14 @@ python3 build_docx.py
 python3 build_supplement_docx.py
 ```
 
+Run the compact CPU replication and regenerate its executed HTML report from
+this directory with:
+
+```sh
+Rscript code.R
+Rscript -e 'knitr::spin("code.R", knit = TRUE)'
+```
+
 Generated PDFs, DOCX files, LaTeX intermediates, and internal review-cycle
 reports are intentionally excluded from version control. The LaTeX, BibTeX,
 replication, and document-builder sources are tracked. The package
@@ -44,3 +52,9 @@ frozen with checksums.
 The current JSS instructions require a PDF in JSS style, software source, and
 replication materials for every reported result:
 <https://www.jstatsoft.org/guides/submission>.
+
+The publication campaign must use a container containing the exact package
+version and commit named by the route-QA launchers. After any executable
+package change, rebuild the image and run both route-QA jobs before submitting
+timed work; earlier containers are not valid substitutes even when their CUDA
+libraries are unchanged.
