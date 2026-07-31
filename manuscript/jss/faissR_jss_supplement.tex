@@ -385,38 +385,40 @@ exact-family methods. Degenerate tests separately cover zero-norm cosine and
 constant-row correlation behavior. CUDA passes either with finite
 device-computed results or the documented explicit no-CPU-repair error.
 
-\begin{longtable}{llr}
+\begin{table}[htbp]
+\centering
 \caption{Approximate method--metric cells that passed the metric contract but
-missed the 0.99 recall target on the deterministic fixture.}\\
-\label{tab:supp-target-misses}\\
+missed the 0.99 recall target on the deterministic fixture.}
+\label{tab:supp-target-misses}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{0.92}
+\begin{tabular}{llr@{\hspace{1em}}llr}
 \toprule
-Backend/method & Metric & Recall at 15 \\
+Backend/method & Metric & Recall &
+Backend/method & Metric & Recall \\
 \midrule
-\endfirsthead
-\toprule
-Backend/method & Metric & Recall at 15 \\
-\midrule
-\endhead
-CPU IVF & cosine & 0.9822 \\
-CPU IVF & correlation & 0.9866 \\
-CPU IVF-PQ & Euclidean & 0.9811 \\
-CPU IVF-PQ & cosine & 0.9706 \\
-CPU IVF-PQ & correlation & 0.9707 \\
-CPU IVF-PQ & inner product & 0.9732 \\
-CPU IVF-PQ FastScan & Euclidean & 0.8493 \\
-CPU IVF-PQ FastScan & cosine & 0.8421 \\
-CPU IVF-PQ FastScan & correlation & 0.8487 \\
+CPU IVF & cosine & 0.9822 &
 CPU IVF-PQ FastScan & inner product & 0.7978 \\
+CPU IVF & correlation & 0.9866 &
 CUDA IVF-PQ & Euclidean & 0.5315 \\
+CPU IVF-PQ & Euclidean & 0.9811 &
 CUDA IVF-PQ & cosine & 0.3478 \\
+CPU IVF-PQ & cosine & 0.9706 &
 CUDA IVF-PQ & correlation & 0.5942 \\
+CPU IVF-PQ & correlation & 0.9707 &
 CUDA IVF-PQ & inner product & 0.4406 \\
+CPU IVF-PQ & inner product & 0.9732 &
 CUDA IVF-PQ FastScan & Euclidean & 0.6911 \\
+CPU IVF-PQ FastScan & Euclidean & 0.8493 &
 CUDA IVF-PQ FastScan & cosine & 0.6859 \\
+CPU IVF-PQ FastScan & cosine & 0.8421 &
 CUDA IVF-PQ FastScan & correlation & 0.7014 \\
+CPU IVF-PQ FastScan & correlation & 0.8487 &
 CUDA IVF-PQ FastScan & inner product & 0.3281 \\
 \bottomrule
-\end{longtable}
+\end{tabular}
+\end{table}
 
 These misses show why \code{target\_recall} is an operating objective rather
 than a guarantee. They also prevent quantized routes from being promoted by
@@ -578,9 +580,23 @@ publication-eligible cell must contain exactly one successful observation for
 every prespecified validation-seed/repeat pair. Every observation must meet the
 requested recall target.
 Generated launcher and campaign-source manifests record both MD5 identity keys
-and SHA-256 integrity digests. The installed-package CPU/CUDA route jobs are
-smoke and contract checks; they do not replace platform-specific package
-installation, unit-test, and package-check reports.
+and SHA-256 integrity digests. The installed-package CPU/CUDA route jobs check
+the exact \pkg{faissR} version and inventory \pkg{float},
+\pkg{Rnanoflann}, \pkg{RANN}, \pkg{RcppAnnoy}, \pkg{RcppHNSW},
+\pkg{rnndescent}, \pkg{BiocNeighbors}, \pkg{FNN}, \pkg{nabor}, and
+\pkg{uwot} with their installed versions. Both jobs retain the container
+SHA-256 digest. The CUDA job additionally requires CUDA, FAISS-GPU, and cuVS
+and passes a \pkg{float} matrix to \code{nn\_gpu()}; it rejects a result that
+is not represented by owning CUDA buffers, reports any device-to-host result
+copy, or reports compatibility double-to-float conversion. Grid, NN-descent,
+NSG, and Vamana are checked
+with self-query fixtures, while methods that accept independent queries use a
+separate-query fixture; all fixtures use \pkg{float} reference/query matrices.
+Every capability-declared unsupported method--metric cell is retained as an
+explicit unsupported row rather than an execution failure. These are campaign
+smoke and contract checks;
+they do not replace platform-specific package installation, unit-test, and
+package-check reports.
 The strict freeze audit additionally rejects held-out \pkg{faissR} rows from an
 unknown or different package version and requires canonical 40-character
 package-commit and 64-character container SHA-256 identifiers.

@@ -3103,6 +3103,69 @@ test_that("final JSS campaign rejects a stale faissR Singularity image", {
     "Frozen campaign requires faissR",
     calibration, fixed = TRUE
   )))
+  route_qa <- readLines(
+    file.path(root, "common", "benchmark_package_route_qa.R"),
+    warn = FALSE
+  )
+  expect_true(any(grepl(
+    'Sys.getenv("EXPECTED_FAISSR_VERSION"',
+    route_qa, fixed = TRUE
+  )))
+  expect_true(any(grepl('"RcppHNSW"', route_qa, fixed = TRUE)))
+  expect_true(any(grepl('"rnndescent"', route_qa, fixed = TRUE)))
+  expect_true(any(grepl('"nabor"', route_qa, fixed = TRUE)))
+  expect_true(any(grepl(
+    "jss_environment_packages.csv",
+    route_qa, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "faissR::faiss_gpu_available()",
+    route_qa, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "faissR::cuvs_available()",
+    route_qa, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "jss_gpu_residency_qa.csv",
+    route_qa, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "device_to_host_result_copies == 0L",
+    route_qa, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "gpu_input <- float::fl(x)",
+    route_qa, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    'input_type == "float32" & !float32_compatibility_conversion',
+    route_qa, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    'self_query_methods <- c("grid", "nndescent", "nsg", "vamana")',
+    route_qa, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    'query_mode <- if (self_query) "self" else "separate"',
+    route_qa, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "route_x <- float::fl(route_source)",
+    route_qa, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "capability_contract(",
+    route_qa, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    'status = "unsupported"',
+    route_qa, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    'status == "unsupported" |',
+    route_qa, fixed = TRUE
+  )))
 
   generated <- readLines(
     file.path(
@@ -3115,6 +3178,22 @@ test_that("final JSS campaign rejects a stale faissR Singularity image", {
   expect_true(any(grepl(
     sprintf("export EXPECTED_FAISSR_VERSION='%s'", expected),
     generated, fixed = TRUE
+  )))
+  generated_qa_cpu <- readLines(
+    file.path(campaign, "qa", "run_package_route_qa_cpu12.sh"),
+    warn = FALSE
+  )
+  expect_true(any(grepl(
+    'sha256sum "${SINGULARITY_IMAGE}"',
+    generated_qa_cpu, fixed = TRUE
+  )))
+  generated_cuda <- readLines(
+    file.path(campaign, "qa", "run_package_route_qa_cuda.sh"),
+    warn = FALSE
+  )
+  expect_true(any(grepl(
+    'nvidia-smi -L > "${OUT_DIR}/nvidia_smi_devices.txt"',
+    generated_cuda, fixed = TRUE
   )))
 
   rcpphnsw_held_out <- file.path(

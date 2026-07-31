@@ -439,6 +439,21 @@ benchmark_scripts/run_benchmark1_compare_cuda_euclidean.sh
 
 These external packages belong to the benchmark environment only. They are not
 faissR package dependencies and are never used as hidden runtime fallbacks.
+The final publication image is checked before timing: route QA records the
+installed version of `faissR` and every comparator package (`float`,
+`Rnanoflann`, `RANN`, `RcppAnnoy`, `RcppHNSW`, `rnndescent`,
+`BiocNeighbors`, `FNN`, `nabor`, and `uwot`). The CUDA check requires all
+three publication providers, CUDA, FAISS-GPU, and cuVS. It also calls
+`nn_gpu()` with a `float::fl()` matrix and rejects the image unless the result
+owns CUDA device pointers, reports `result_residency = "cuda"`, reports zero
+device-to-host result copies, and confirms that no compatibility
+double-to-float conversion occurred. Route QA uses self-query fixtures for
+grid, NN-descent, NSG, and
+Vamana, separate-query fixtures for methods that support them, exercises every
+supported metric contract with `float::fl()` reference/query matrices, and
+records capability-declared unsupported combinations explicitly rather than
+treating them as execution failures. The route-QA output retains the container
+SHA-256 digest.
 
 On SLURM/HPC systems, submit the separated Euclidean comparison jobs with:
 

@@ -20,6 +20,18 @@ CPU or CUDA header.
 - The frozen image must contain `Rnanoflann`, `RANN`, `RcppAnnoy`, `RcppHNSW`,
   `rnndescent`, `BiocNeighbors`, `FNN`, `nabor`, and `uwot`; each external
   CPU launcher fails during preflight when its required package is absent.
+- Before timed jobs are accepted, CPU/CUDA route QA inventories comparator
+  versions and checks the exact installed `faissR` version. CUDA QA also
+  requires CUDA, FAISS-GPU, and cuVS and proves that `nn_gpu()` accepts a
+  direct `float::fl()` input and returns device pointers with
+  `result_residency = "cuda"`, zero host copies, and no compatibility
+  double-to-float conversion.
+- Route QA uses self-query calls for grid, NN-descent, NSG, and Vamana,
+  separate-query calls elsewhere, and `float::fl()` inputs throughout. It
+  records capability-declared unsupported method/metric cells without
+  misclassifying them as runtime failures.
+- Route-QA archives retain the Singularity SHA-256 digest and file metadata;
+  CUDA QA also records the visible NVIDIA devices.
 - `cuda.ml` is an API-audit row, not a timed self-KNN comparator, because
   its public interface returns supervised prediction models.
 
@@ -33,11 +45,12 @@ CPU or CUDA header.
    cells and negative evidence.
 4. Update and freeze the compiled C++ tuning policies from calibration only,
    commit faissR, and rebuild the Singularity image.
-5. Submit each launcher under `held_out/cpu/` and `held_out/cuda/`.
-6. Submit the reusable external-index jobs, low-dimensional ablations,
-   metric-conformance jobs, and CPU/CUDA package route-QA jobs.
-7. Submit the held-out, reusable-index, and ablation analysis jobs.
-8. Run the strict freeze audits with `FAISSR_PACKAGE_COMMIT` set to the
+5. Submit both CPU/CUDA package route-QA jobs and continue only if they pass.
+6. Submit each launcher under `held_out/cpu/` and `held_out/cuda/`.
+7. Submit the reusable external-index jobs, low-dimensional ablations, and
+   metric-conformance jobs.
+8. Submit the held-out, reusable-index, and ablation analysis jobs.
+9. Run the strict freeze audits with `FAISSR_PACKAGE_COMMIT` set to the
    immutable commit embedded in the rebuilt image.
 
 Held-out validation must never be reused to alter tuning policies.

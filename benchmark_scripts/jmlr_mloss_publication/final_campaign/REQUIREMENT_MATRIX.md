@@ -19,5 +19,5 @@ and an expected archive location. TabulaMuris is intentionally excluded.
 | Leave-one-dataset-out sensitivity | `analysis/analyze_leave_one_dataset_out.R` | `analysis/run_held_out_analysis_*.sh` | `leave_one_dataset_out/` within held-out analysis |
 | Calibration completeness and negative evidence | `analysis/aggregate_calibration_results.R` | `analysis/run_calibration_audit_cpu12.sh` | calibration analysis archive |
 | Reusable-index completeness and summaries | `analysis/aggregate_reusable_external_indexes.R` | `analysis/run_reusable_external_audit_cpu12.sh` | reusable-index analysis archive |
-| Package route contract on installed CPU/CUDA builds | `common/benchmark_package_route_qa.R` | `qa/` | `final_campaign/qa/` |
+| Installed-version, external-comparator inventory, query-mode-aware CPU/CUDA route, unsupported-contract, provider, GPU-residency, and container identity checks | `common/benchmark_package_route_qa.R` | `qa/` | `final_campaign/qa/` |
 | Immutable dataset, result, software, container, and provenance freeze | `analysis/audit_publication_freeze.R` | `analysis/run_freeze_audit_*.sh` | freeze audit archives |

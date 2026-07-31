@@ -20,6 +20,8 @@ mkdir -p "${BASE_DIR}/benchmark_logs"
 
 OUT_DIR="${BASE_DIR}/faissR_JMLR_MLOSS/final_campaign/qa/cpu_${SLURM_JOB_ID:-manual}_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "${OUT_DIR}"
+sha256sum "${SINGULARITY_IMAGE}" > "${OUT_DIR}/singularity_image.sha256"
+stat "${SINGULARITY_IMAGE}" > "${OUT_DIR}/singularity_image.stat.txt"
 singularity exec  --bind "${BASE_DIR}:${BASE_DIR}" "${SINGULARITY_IMAGE}" Rscript \
   "${SUITE_ROOT}/common/benchmark_package_route_qa.R" \
   --backend=cpu --out_dir="${OUT_DIR}"

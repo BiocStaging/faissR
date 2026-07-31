@@ -1229,9 +1229,20 @@ checks 265 independent launchers: 5 exact-reference jobs, 105 calibration jobs,
 requirement-to-script matrix maps each computational claim to its R program,
 Slurm launcher set, and expected archive location.
 The generated launcher and campaign-source manifests retain MD5 row-identity
-keys and SHA-256 integrity digests. Installed-package route QA complements but
-does not replace the platform package checks and unit tests required for the
-software release.
+keys and SHA-256 integrity digests. Before timed jobs are accepted,
+installed-package route QA verifies the frozen \pkg{faissR} version, inventories
+the versions of every external comparator, and records the container SHA-256
+digest. CUDA QA additionally requires CUDA, FAISS-GPU, and cuVS and verifies
+that a \pkg{float} input passed to \code{nn\_gpu()} returns owning device
+pointers with \code{result\_residency = "cuda"}, zero device-to-host result
+copies, and no compatibility double-to-float conversion.
+The route suite uses self-query fixtures for grid, NN-descent, NSG, and
+Vamana and separate-query fixtures for methods that expose that contract;
+all reference/query fixtures use \pkg{float} matrices. Capability-declared
+unsupported method--metric cells are retained explicitly rather than counted
+as execution failures.
+This campaign-specific QA complements but does not replace the platform
+package checks and unit tests required for the software release.
 
 Every dataset manifest, exact-reference object, calibration row, validation
 row, and ablation row carries an MD5 fingerprint of the source dataset file.
