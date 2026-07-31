@@ -3166,6 +3166,32 @@ test_that("final JSS campaign rejects a stale faissR Singularity image", {
     'status == "unsupported" |',
     route_qa, fixed = TRUE
   )))
+  expect_true(any(grepl(
+    "external_comparator_route_qa <- function",
+    route_qa, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "jss_external_comparator_route_qa.csv",
+    route_qa, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    'status = "not_public_api"',
+    route_qa, fixed = TRUE
+  )))
+
+  tuned_methods <- readLines(
+    file.path(root, "common", "benchmark_jmlr_tuned_methods.R"),
+    warn = FALSE
+  )
+  expect_false(any(grepl(
+    "rnndescent::.*progress=none", tuned_methods
+  )))
+  expect_true(any(grepl(
+    "rnndescent::rpf_knn(", tuned_methods, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "include_self = TRUE, verbose = FALSE", tuned_methods, fixed = TRUE
+  )))
 
   generated <- readLines(
     file.path(
@@ -3216,4 +3242,52 @@ test_that("final JSS campaign rejects a stale faissR Singularity image", {
     readLines(rcpphnsw_reusable, warn = FALSE),
     fixed = TRUE
   )))
+})
+
+test_that("publication rnndescent routes use their current public APIs", {
+  skip_if_not_installed("rnndescent")
+  script <- test_path(
+    "../../benchmark_scripts/jmlr_mloss_publication/common/benchmark_jmlr_tuned_methods.R"
+  )
+  if (!file.exists(script)) {
+    skip("Publication benchmark scripts are unavailable after installation.")
+  }
+  previous <- Sys.getenv("FAISSR_JMLR_SOURCE_ONLY", unset = NA_character_)
+  on.exit({
+    if (is.na(previous)) {
+      Sys.unsetenv("FAISSR_JMLR_SOURCE_ONLY")
+    } else {
+      Sys.setenv(FAISSR_JMLR_SOURCE_ONLY = previous)
+    }
+  }, add = TRUE)
+  Sys.setenv(FAISSR_JMLR_SOURCE_ONLY = "true")
+  env <- new.env(parent = globalenv())
+  sys.source(script, envir = env)
+
+  expect_identical(env$algorithm_seed_for("rnndescent_rpf", 17L), 17L)
+  expect_identical(env$algorithm_seed_for("RcppHNSW_hnsw", 17L), 17L)
+  expect_true(is.na(env$algorithm_seed_for("rnndescent_bruteforce", 17L)))
+
+  set.seed(20260730)
+  x <- matrix(stats::rnorm(64L * 8L), nrow = 64L, ncol = 8L)
+  for (method in c(
+    "rnndescent_rpf", "rnndescent_rnnd", "rnndescent_nnd"
+  )) {
+    answer <- env$run_external_method(
+      x, method, 5L, "euclidean", 2L, 20260730L
+    )
+    expect_identical(dim(answer$indices), c(64L, 5L), info = method)
+    expect_identical(dim(answer$distances), c(64L, 5L), info = method)
+    expect_true(all(is.finite(answer$distances)), info = method)
+  }
+
+  set.seed(1L)
+  first <- env$run_external_method(
+    x, "rnndescent_rpf", 5L, "euclidean", 2L, 20260730L
+  )
+  set.seed(999L)
+  second <- env$run_external_method(
+    x, "rnndescent_rpf", 5L, "euclidean", 2L, 20260730L
+  )
+  expect_identical(first$indices, second$indices)
 })

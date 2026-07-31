@@ -453,7 +453,11 @@ Vamana, separate-query fixtures for methods that support them, exercises every
 supported metric contract with `float::fl()` reference/query matrices, and
 records capability-declared unsupported combinations explicitly rather than
 treating them as execution failures. The route-QA output retains the container
-SHA-256 digest.
+SHA-256 digest. CPU route QA also executes each eligible external comparator
+through its exported public API on a small deterministic fixture and verifies
+output dimensions, finite sorted distances, and self-neighbor exclusion.
+Packages that do not export a standalone KNN result API are recorded as
+`not_public_api`; unexported namespace internals are not benchmarked.
 
 On SLURM/HPC systems, submit the separated Euclidean comparison jobs with:
 
@@ -837,6 +841,13 @@ launchers. Calibration, reference, held-out, and reusable-index routes stop
 before loading benchmark data when the Singularity image contains another
 version, preventing a stale image from producing evidence for the wrong
 package snapshot.
+Stochastic external routes initialize R's RNG with the prespecified run seed,
+pass explicit package seed arguments where the public API provides them, and
+record `algorithm_seed` in every applicable raw row. Repeated runs are still
+required because multithreaded graph construction may not be bitwise
+deterministic. `uwot` and `cuda.ml` remain API-audit entries but receive no
+held-out timing launcher when their public interfaces do not return standalone
+self-KNN indices and distances.
 
 After all one-method jobs finish,
 `analysis/aggregate_publication_results.R` selects the newest run for each

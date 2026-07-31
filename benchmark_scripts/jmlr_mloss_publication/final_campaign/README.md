@@ -30,10 +30,15 @@ CPU or CUDA header.
   separate-query calls elsewhere, and `float::fl()` inputs throughout. It
   records capability-declared unsupported method/metric cells without
   misclassifying them as runtime failures.
+- CPU route QA executes a small public-API contract fixture for every eligible
+  external comparator and checks dimensions, finite sorted distances, and
+  self-neighbor exclusion. A package without an exported standalone KNN API
+  is recorded as `not_public_api` rather than timed through package internals.
 - Route-QA archives retain the Singularity SHA-256 digest and file metadata;
   CUDA QA also records the visible NVIDIA devices.
-- `cuda.ml` is an API-audit row, not a timed self-KNN comparator, because
-  its public interface returns supervised prediction models.
+- `uwot` and `cuda.ml` are API-audit rows, not timed self-KNN comparators:
+  the installed `uwot` API exposes no standalone KNN result, while
+  `cuda.ml` returns supervised prediction models.
 
 ## Required order
 

@@ -276,8 +276,9 @@ and reusable-index interfaces. \\
 Graph-construction alternatives. \\
 \pkg{BiocNeighbors} & Exhaustive, HNSW, Annoy, and other indexes &
 Euclidean, cosine & Reusable Bioconductor index abstraction. \\
-\pkg{uwot} & Embedding-oriented neighbor interface & Euclidean &
-Neighbor machinery supporting UMAP workflows. \\
+\pkg{uwot} & Embedding-oriented neighbor machinery & API audit only &
+No exported standalone KNN-result interface in the frozen benchmark build;
+namespace internals are not timed. \\
 \pkg{cuda.ml} & Supervised cuML KNN models & Not timed as self-KNN &
 Public API returns fitted prediction models rather than neighbor matrices
 \citep{cudaML}. \\
@@ -286,10 +287,11 @@ correlation, inner product & Reusable indexes and exact-family GPU-resident
 output. \\
 \bottomrule
 \end{tabularx}
-\caption{Functional comparison with the \proglang{R} packages included in the
-publication benchmark. ``Metrics used'' describes the prespecified comparative
-study rather than every metric accepted by each upstream package. Build and
-query timing are reported separately when a package exposes a reusable index.}
+\caption{Functional comparison and API-audit set for the publication
+benchmark. ``Study metrics'' describes the prespecified comparative study
+rather than every metric accepted by each upstream package. Build and query
+timing are reported separately when a package exposes a reusable index; API
+audits are not entered into timing rankings.}
 \label{tab:related-software}
 \end{table}
 
@@ -985,8 +987,10 @@ individually, including \method{auto}. CPU comparisons include
 \pkg{RcppHNSW}, four \pkg{rnndescent} routes, and exhaustive, HNSW, and Annoy routes available
 through \pkg{BiocNeighbors}. \pkg{FNN} kd-tree, cover-tree, and brute-force
 routes and \pkg{nabor} automatic and brute-force routes are also included.
-The public nearest-neighbor route in \pkg{uwot} is included where its metric
-contract is comparable. We audited \pkg{cuda.ml}, but its current public
+The frozen \pkg{uwot} build is retained in the API audit, but it does not
+export a standalone nearest-neighbor result interface; namespace internals and
+embedding runtime are therefore not timed as KNN search. We also audited
+\pkg{cuda.ml}, but its current public
 \fct{cuda\_ml\_knn} interface requires supervised outcomes and returns a
 prediction model rather than self-KNN index and distance matrices
 \citep{cudaML}; the campaign therefore records it as non-standalone instead of
@@ -1022,7 +1026,11 @@ only a cold result. A warm fitted-index time is never compared with another
 package's cold one-call time. For \pkg{RcppAnnoy}, the public item-query method
 is called iteratively because the package does not expose a matrix-batch query;
 this is recorded as interface behavior rather than described as batched
-execution. For \pkg{RcppHNSW}, the campaign records both the complete
+execution. Before a stochastic external route is called, the worker initializes
+R's RNG from the prespecified run seed; explicit package seed arguments are
+also supplied where available. The resulting algorithm seed is retained in
+the raw row. Repetition remains necessary because parallel graph construction
+may not be bitwise deterministic under a fixed seed. For \pkg{RcppHNSW}, the campaign records both the complete
 \fct{hnsw\_knn} call and a separate \fct{hnsw\_build}/\fct{hnsw\_search}
 experiment, using the same $M$, construction effort, query effort, random seed,
 and requested thread count in the recorded parameter string. If multiple
@@ -1223,8 +1231,8 @@ seed and repeat identifier, and recall eligibility requires every such row to
 meet the target.
 
 The complete campaign is generated rather than hand-maintained. Its validator
-checks 265 independent launchers: 5 exact-reference jobs, 105 calibration jobs,
-133 held-out jobs, 9 reusable external-index jobs, 2 systems-ablation jobs,
+checks 263 independent launchers: 5 exact-reference jobs, 105 calibration jobs,
+131 held-out jobs, 9 reusable external-index jobs, 2 systems-ablation jobs,
 2 installed-package route-QA jobs, and 9 analysis or freeze jobs. The
 requirement-to-script matrix maps each computational claim to its R program,
 Slurm launcher set, and expected archive location.
@@ -1240,7 +1248,12 @@ The route suite uses self-query fixtures for grid, NN-descent, NSG, and
 Vamana and separate-query fixtures for methods that expose that contract;
 all reference/query fixtures use \pkg{float} matrices. Capability-declared
 unsupported method--metric cells are retained explicitly rather than counted
-as execution failures.
+as execution failures. CPU QA additionally executes every eligible external
+comparator through its exported public API on a small deterministic fixture,
+checking dimensions, finite sorted distances, and self-neighbor exclusion.
+An installed package without an exported standalone KNN-result API is recorded
+as unavailable for that comparison rather than timed through namespace
+internals.
 This campaign-specific QA complements but does not replace the platform
 package checks and unit tests required for the software release.
 

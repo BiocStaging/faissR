@@ -184,7 +184,7 @@ cpu_specs <- data.frame(
     "Rnanoflann_standard",
     "FNN_kd", "FNN_cover", "FNN_brute", "nabor_auto", "nabor_brute",
     "rnndescent_bruteforce", "rnndescent_nnd", "rnndescent_rnnd",
-    "rnndescent_rpf", "uwot_nearest_neighbors"
+    "rnndescent_rpf"
   ),
   label = c(
     paste0("faissR_", c("auto", cpu_tuning_methods, "grid")),
@@ -193,7 +193,7 @@ cpu_specs <- data.frame(
     "Rnanoflann_standard",
     "FNN_kd", "FNN_cover", "FNN_brute", "nabor_auto", "nabor_brute",
     "rnndescent_bruteforce", "rnndescent_nnd", "rnndescent_rnnd",
-    "rnndescent_rpf", "uwot_nearest_neighbors"
+    "rnndescent_rpf"
   ),
   metrics = I(c(
     rep(list(metrics), 1L + length(cpu_tuning_methods)),
@@ -201,16 +201,16 @@ cpu_specs <- data.frame(
     rep(list(c("euclidean", "cosine")), 3L),
     rep(list("euclidean"), 3L),
     list(c("euclidean", "cosine")),
-    rep(list("euclidean"), 11L)
+    rep(list("euclidean"), 10L)
   )),
   external = c(
     rep(FALSE, 2L + length(cpu_tuning_methods)),
-    rep(TRUE, 18L)
+    rep(TRUE, 17L)
   ),
   spatial = c(
     rep(FALSE, 1L + length(cpu_tuning_methods)),
     TRUE,
-    rep(FALSE, 18L)
+    rep(FALSE, 17L)
   ),
   stringsAsFactors = FALSE
 )
@@ -222,7 +222,7 @@ cuda_specs <- data.frame(
       "faissR_cuda_gpu_resident_",
       c("auto", "bruteforce", "exact", "flat")
     ),
-    "faissR_cuda_grid", "cuda_ml_knn"
+    "faissR_cuda_grid"
   ),
   label = c(
     paste0("faissR_", c("auto", cuda_tuning_methods)),
@@ -230,19 +230,18 @@ cuda_specs <- data.frame(
       "faissR_gpu_resident_",
       c("auto", "bruteforce", "exact", "flat")
     ),
-    "faissR_grid", "cuda_ml_knn"
+    "faissR_grid"
   ),
   metrics = I(c(
     rep(list(metrics), 1L + length(cuda_tuning_methods) + 4L),
-    list("euclidean"), list("euclidean")
+    list("euclidean")
   )),
   external = c(
-    rep(FALSE, 1L + length(cuda_tuning_methods) + 4L + 1L),
-    TRUE
+    rep(FALSE, 1L + length(cuda_tuning_methods) + 4L + 1L)
   ),
   spatial = c(
     rep(FALSE, 1L + length(cuda_tuning_methods) + 4L),
-    TRUE, FALSE
+    TRUE
   ),
   stringsAsFactors = FALSE
 )
@@ -715,10 +714,15 @@ readme <- c(
   "  separate-query calls elsewhere, and `float::fl()` inputs throughout. It",
   "  records capability-declared unsupported method/metric cells without",
   "  misclassifying them as runtime failures.",
+  "- CPU route QA executes a small public-API contract fixture for every eligible",
+  "  external comparator and checks dimensions, finite sorted distances, and",
+  "  self-neighbor exclusion. A package without an exported standalone KNN API",
+  "  is recorded as `not_public_api` rather than timed through package internals.",
   "- Route-QA archives retain the Singularity SHA-256 digest and file metadata;",
   "  CUDA QA also records the visible NVIDIA devices.",
-  "- `cuda.ml` is an API-audit row, not a timed self-KNN comparator, because",
-  "  its public interface returns supervised prediction models.",
+  "- `uwot` and `cuda.ml` are API-audit rows, not timed self-KNN comparators:",
+  "  the installed `uwot` API exposes no standalone KNN result, while",
+  "  `cuda.ml` returns supervised prediction models.",
   "",
   "## Required order",
   "",

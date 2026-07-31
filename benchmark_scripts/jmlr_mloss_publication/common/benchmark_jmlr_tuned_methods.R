@@ -266,6 +266,22 @@ metric_supported_external <- function(method, metric) {
   FALSE
 }
 
+stochastic_external_methods <- function() {
+  c(
+    "rnndescent_rpf", "rnndescent_rnnd", "rnndescent_nnd",
+    "RcppAnnoy_euclidean", "RcppHNSW_hnsw",
+    "BiocNeighbors_hnsw", "BiocNeighbors_annoy"
+  )
+}
+
+algorithm_seed_for <- function(method_id, seed) {
+  if (method_id %in% stochastic_external_methods()) {
+    as.integer(seed)
+  } else {
+    NA_integer_
+  }
+}
+
 external_methods <- function(backend) {
   if (backend == "cuda") {
     return(data.frame(
@@ -302,7 +318,10 @@ external_methods <- function(backend) {
     ),
     backend = "cpu",
     public_method = NA_character_,
-    kind = c(rep("knn_search", 18), "not_standalone", "embedding_consumer"),
+    kind = c(
+      rep("knn_search", 17),
+      "not_standalone", "not_standalone", "embedding_consumer"
+    ),
     detail = c(
       "Rnanoflann standard KNN", "RANN kd tree", "RANN bd tree",
       "rnndescent random projection forest", "rnndescent random-pair NN-descent",
@@ -312,7 +331,8 @@ external_methods <- function(backend) {
       "BiocNeighbors exhaustive", "BiocNeighbors HNSW", "BiocNeighbors Annoy",
       "FNN kd tree", "FNN cover tree", "FNN brute force",
       "nabor automatic search", "nabor brute-force search",
-      "uwot nearest_neighbors if exported", "Rtsne consumes precomputed neighbours",
+      "uwot does not export a standalone nearest-neighbor result API",
+      "Rtsne consumes precomputed neighbours",
       "umap package embedding, not standalone KNN"
     ),
     stringsAsFactors = FALSE
@@ -414,6 +434,8 @@ run_external_method <- function(x_input, method, k, metric, threads, seed) {
   if (!metric_supported_external(method, metric)) {
     stop("External method does not expose a validated `", metric, "` route in this benchmark.", call. = FALSE)
   }
+  algorithm_seed <- algorithm_seed_for(method, seed)
+  if (!is.na(algorithm_seed)) set.seed(algorithm_seed)
   x <- as_double_matrix(x_input)
   switch(
     method,
@@ -432,15 +454,22 @@ run_external_method <- function(x_input, method, k, metric, threads, seed) {
     },
     rnndescent_rpf = {
       if (!available_pkg("rnndescent")) stop("rnndescent unavailable")
-      remove_self(rnndescent::rpf_knn(x, k = k + 1L, n_threads = threads, include_self = TRUE, progress = "none"), k)
+      remove_self(rnndescent::rpf_knn(
+        x, k = k + 1L, n_threads = threads,
+        include_self = TRUE, verbose = FALSE
+      ), k)
     },
     rnndescent_rnnd = {
       if (!available_pkg("rnndescent")) stop("rnndescent unavailable")
-      remove_self(rnndescent::rnnd_knn(x, k = k + 1L, n_threads = threads, progress = "none"), k)
+      remove_self(rnndescent::rnnd_knn(
+        x, k = k + 1L, n_threads = threads, verbose = FALSE
+      ), k)
     },
     rnndescent_nnd = {
       if (!available_pkg("rnndescent")) stop("rnndescent unavailable")
-      remove_self(rnndescent::nnd_knn(x, k = k + 1L, n_threads = threads, progress = "none"), k)
+      remove_self(rnndescent::nnd_knn(
+        x, k = k + 1L, n_threads = threads, verbose = FALSE
+      ), k)
     },
     rnndescent_bruteforce = {
       if (!available_pkg("rnndescent")) stop("rnndescent unavailable")
@@ -782,15 +811,15 @@ method_parameter_string <- function(method, k, metric, target_recall, threads,
       "RANN::nn2(data,query=data,k=%d,treetype=bd);remove_self", k + 1L
     ),
     rnndescent_rpf = sprintf(
-      "rnndescent::rpf_knn(k=%d,n_threads=%d,include_self=TRUE,progress=none);remove_self",
+      "rnndescent::rpf_knn(k=%d,n_threads=%d,include_self=TRUE,verbose=FALSE);remove_self",
       k + 1L, threads
     ),
     rnndescent_rnnd = sprintf(
-      "rnndescent::rnnd_knn(k=%d,n_threads=%d,progress=none);remove_self",
+      "rnndescent::rnnd_knn(k=%d,n_threads=%d,verbose=FALSE);remove_self",
       k + 1L, threads
     ),
     rnndescent_nnd = sprintf(
-      "rnndescent::nnd_knn(k=%d,n_threads=%d,progress=none);remove_self",
+      "rnndescent::nnd_knn(k=%d,n_threads=%d,verbose=FALSE);remove_self",
       k + 1L, threads
     ),
     rnndescent_bruteforce = sprintf(
@@ -1020,7 +1049,7 @@ worker_main <- function(args) {
     k = k,
     target_recall = target_recall,
     validation_seed = seed,
-    algorithm_seed = if (identical(method$method_id[[1L]], "RcppAnnoy_euclidean")) seed else NA_integer_,
+    algorithm_seed = algorithm_seed_for(method$method_id[[1L]], seed),
     repeat_id = repeat_id,
     n_threads = threads,
     threads_allocated = threads,
@@ -1437,9 +1466,9 @@ main <- function() {
                 k = kk,
                 target_recall = target,
                 validation_seed = validation_seed,
-                algorithm_seed = if (identical(
-                  method$method_id[[1L]], "RcppAnnoy_euclidean"
-                )) validation_seed else NA_integer_,
+                algorithm_seed = algorithm_seed_for(
+                  method$method_id[[1L]], validation_seed
+                ),
                 repeat_id = repeat_id,
                 n_threads = threads,
                 threads_allocated = threads,

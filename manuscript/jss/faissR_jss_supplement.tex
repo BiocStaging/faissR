@@ -504,12 +504,16 @@ query time with $M=16$, construction effort 200, query effort
 $\max(50,3k)$, the recorded random seed, and the allocated CPU thread count. \\
 \pkg{rnndescent} & Public \code{rpf\_knn()}, \code{rnnd\_knn()},
 \code{nnd\_knn()}, and \code{brute\_force\_knn()} routes when their metric and
-self-exclusion contracts match. \\
+self-exclusion contracts match. The worker initializes the recorded run seed
+before stochastic routes and disables progress output through the supported
+\code{verbose = FALSE} argument. \\
 \pkg{BiocNeighbors} & \code{findKNN()} with exhaustive, HNSW, and Annoy
 parameter objects; \code{buildIndex()} plus \code{findKNN()} on the prebuilt
 index supplies a
 separately labeled warm comparison where the installed version exposes it. \\
-\pkg{uwot} & Exported nearest-neighbor interface only; embedding runtime is not
+\pkg{uwot} & Its installed public API is audited. If no exported standalone
+nearest-neighbor result interface is present, the route is recorded as
+\code{not\_public\_api}; embedding runtime and namespace internals are not
 misrepresented as a KNN benchmark. \\
 \pkg{cuda.ml} & \code{cuda\_ml\_knn()} is recorded as non-standalone because
 its public return value is a supervised prediction model, not neighbor index
@@ -561,13 +565,13 @@ without launching Slurm. Full
 computation is reproduced separately with
 \path{benchmark_scripts/jmlr_mloss_publication/final_campaign/}%
 \path{submission_commands.txt};
-the campaign contains 265 independent jobs so one failure cannot erase the
+the campaign contains 263 independent jobs so one failure cannot erase the
 other method/backend evidence.
 The directory retains its historical \path{jmlr_mloss_publication} name, but
 the protocol and artifacts described here are the JSS submission campaign; the
 path is not a claim of simultaneous submission to another journal.
 
-The 265 jobs comprise 5 exact-reference, 105 calibration, 133 held-out,
+The 263 jobs comprise 5 exact-reference, 105 calibration, 131 held-out,
 9 reusable external-index, 2 systems-ablation, 2 installed-package route-QA,
 and 9 analysis/freeze jobs. The reusable-index diagnostic uses the same
 independent exact-reference query rows (up to 1,024), reports conversion,
@@ -594,8 +598,12 @@ with self-query fixtures, while methods that accept independent queries use a
 separate-query fixture; all fixtures use \pkg{float} reference/query matrices.
 Every capability-declared unsupported method--metric cell is retained as an
 explicit unsupported row rather than an execution failure. These are campaign
-smoke and contract checks;
-they do not replace platform-specific package installation, unit-test, and
+smoke and contract checks. CPU QA also invokes each eligible external method
+through its exported public API on a small deterministic fixture and checks
+dimensions, finite sorted distances, and self-neighbor exclusion. If an
+installed package exposes no public standalone KNN-result API, the cell is
+recorded as \code{not\_public\_api}; namespace internals are not timed.
+These checks do not replace platform-specific package installation, unit-test, and
 package-check reports.
 The strict freeze audit additionally rejects held-out \pkg{faissR} rows from an
 unknown or different package version and requires canonical 40-character

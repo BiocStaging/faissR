@@ -67,6 +67,129 @@ capability_contract <- function(capabilities, backend, method, metric) {
   rows[1L, , drop = FALSE]
 }
 
+load_external_benchmark_helpers <- function() {
+  file_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)
+  candidate <- if (length(file_arg)) {
+    sub("^--file=", "", file_arg[[1L]])
+  } else {
+    ""
+  }
+  script <- if (nzchar(candidate) && file.exists(candidate)) {
+    normalizePath(candidate, mustWork = TRUE)
+  } else {
+    normalizePath(
+      "benchmark_scripts/jmlr_mloss_publication/common/benchmark_package_route_qa.R",
+      mustWork = TRUE
+    )
+  }
+  helper_path <- file.path(dirname(script), "benchmark_jmlr_tuned_methods.R")
+  if (!file.exists(helper_path)) {
+    stop("External benchmark helper is missing: ", helper_path, call. = FALSE)
+  }
+  previous <- Sys.getenv("FAISSR_JMLR_SOURCE_ONLY", unset = NA_character_)
+  on.exit({
+    if (is.na(previous)) {
+      Sys.unsetenv("FAISSR_JMLR_SOURCE_ONLY")
+    } else {
+      Sys.setenv(FAISSR_JMLR_SOURCE_ONLY = previous)
+    }
+  }, add = TRUE)
+  Sys.setenv(FAISSR_JMLR_SOURCE_ONLY = "true")
+  helpers <- new.env(parent = globalenv())
+  sys.source(helper_path, envir = helpers)
+  helpers
+}
+
+external_comparator_route_qa <- function(x, out_dir, n_threads = 12L) {
+  helpers <- load_external_benchmark_helpers()
+  methods <- helpers$external_methods("cpu")
+  methods <- methods[
+    methods$kind == "knn_search" |
+      methods$method_id == "uwot_nearest_neighbors",
+    , drop = FALSE
+  ]
+  k <- 5L
+  rows <- list()
+  for (method in methods$method_id) {
+    metrics <- "euclidean"
+    if (isTRUE(helpers$metric_supported_external(method, "cosine"))) {
+      metrics <- c(metrics, "cosine")
+    }
+    for (metric in metrics) {
+      public_api_exposed <- !identical(method, "uwot_nearest_neighbors") ||
+        "nearest_neighbors" %in% getNamespaceExports("uwot")
+      if (!public_api_exposed) {
+        rows[[length(rows) + 1L]] <- data.frame(
+          method = method, metric = metric, status = "not_public_api",
+          public_api_exposed = FALSE, dimensions_pass = NA,
+          finite_distance_pass = NA, sorted_distance_pass = NA,
+          self_exclusion_pass = NA, conformance_pass = TRUE,
+          error = "uwot::nearest_neighbors is not exported by this build.",
+          stringsAsFactors = FALSE
+        )
+        next
+      }
+      answer <- tryCatch(
+        helpers$run_external_method(
+          x, method, k, metric, as.integer(n_threads), 20260730L
+        ),
+        error = function(e) e
+      )
+      if (inherits(answer, "error")) {
+        row <- data.frame(
+          method = method, metric = metric, status = "failed",
+          public_api_exposed = TRUE, dimensions_pass = FALSE,
+          finite_distance_pass = FALSE, sorted_distance_pass = FALSE,
+          self_exclusion_pass = FALSE, conformance_pass = FALSE,
+          error = conditionMessage(answer), stringsAsFactors = FALSE
+        )
+      } else {
+        indices <- as.matrix(answer$indices)
+        distances <- as.matrix(answer$distances)
+        dimensions_pass <- identical(dim(indices), c(nrow(x), k)) &&
+          identical(dim(distances), c(nrow(x), k))
+        self_exclusion_pass <- dimensions_pass && all(vapply(
+          seq_len(nrow(indices)),
+          function(i) !i %in% indices[i, ],
+          logical(1L)
+        ))
+        sorted_distance_pass <- dimensions_pass && all(apply(
+          distances, 1L,
+          function(z) all(diff(z[is.finite(z)]) >= -1e-7)
+        ))
+        row <- data.frame(
+          method = method, metric = metric, status = "success",
+          public_api_exposed = TRUE,
+          dimensions_pass = dimensions_pass,
+          finite_distance_pass = all(is.finite(distances)),
+          sorted_distance_pass = sorted_distance_pass,
+          self_exclusion_pass = self_exclusion_pass,
+          conformance_pass = dimensions_pass &&
+            all(is.finite(distances)) && sorted_distance_pass &&
+            self_exclusion_pass,
+          error = "", stringsAsFactors = FALSE
+        )
+      }
+      rows[[length(rows) + 1L]] <- row
+    }
+  }
+  table <- do.call(rbind, rows)
+  write.csv(
+    table,
+    file.path(out_dir, "jss_external_comparator_route_qa.csv"),
+    row.names = FALSE
+  )
+  if (any(!table$conformance_pass)) {
+    stop(
+      sum(!table$conformance_pass),
+      " external comparator route-QA cells failed; inspect ",
+      "jss_external_comparator_route_qa.csv.",
+      call. = FALSE
+    )
+  }
+  invisible(table)
+}
+
 main <- function() {
   args <- parse_args()
   backend <- tolower(args$backend %||% "cpu")
@@ -141,6 +264,14 @@ main <- function() {
   rows <- seq_len(64L)
   capabilities <- faissR::nn_capabilities(runtime = FALSE)
   self_query_methods <- c("grid", "nndescent", "nsg", "vamana")
+
+  if (backend == "cpu") {
+    external_comparator_route_qa(
+      x[seq_len(128L), seq_len(12L), drop = FALSE],
+      out_dir,
+      n_threads = 12L
+    )
+  }
 
   if (backend == "cuda") {
     gpu_input <- float::fl(x)
@@ -334,4 +465,6 @@ main <- function() {
   }
 }
 
-main()
+if (!identical(Sys.getenv("FAISSR_JMLR_SOURCE_ONLY", unset = ""), "true")) {
+  main()
+}
