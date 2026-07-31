@@ -45,6 +45,9 @@ result with zero device-to-host result copies.
 
 ```bash
 cd /scratch/firenze/NN
+# First run the preflight block at the top of
+# benchmark_scripts/jmlr_mloss_publication/final_campaign/submission_commands.txt.
+# It validates the image and exports FAISSR_PACKAGE_COMMIT.
 sbatch benchmark_scripts/jmlr_mloss_publication/final_campaign/qa/run_package_route_qa_cpu12.sh
 sbatch benchmark_scripts/jmlr_mloss_publication/final_campaign/qa/run_package_route_qa_cuda.sh
 ```
@@ -55,18 +58,21 @@ artifact; this plan does not rebuild it.
 
 ## Gate 2: reference and calibration audit
 
-Audit existing exact references and calibration outputs before resubmitting
-anything. A reference is reusable only when dataset fingerprint, metric, seed,
-query rows, and k=100 agree. A compiled policy is usable only when its candidate
-completed every dataset assigned to the shape group; below-target policies must
-retain negative-evidence metadata.
+After route QA passes, audit existing exact references and calibration outputs
+before resubmitting expensive computation. A reference is reusable only when
+dataset fingerprint, metric, seed, query rows, k=100, package version, package
+commit, and embedded image commit agree. A compiled policy is usable only when
+its candidate completed every dataset assigned to the shape group; below-target
+policies must retain negative-evidence metadata.
 
 ```bash
 sbatch benchmark_scripts/jmlr_mloss_publication/final_campaign/analysis/run_calibration_audit_cpu12.sh
 ```
 
 Rerun only the reference or calibration launchers named as missing by that
-audit. Held-out rows must never be used to revise the policy in this study.
+audit. If this changes compiled policy code, regenerate the campaign, rebuild
+and revalidate the image, and discard any held-out timings from the superseded
+image. Held-out rows must never be used to revise the policy in this study.
 
 ## Experiment 1: held-out faissR methods
 

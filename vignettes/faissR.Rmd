@@ -437,6 +437,19 @@ prefer an approximate method, the GPU-resident object records that preference
 and the exact-family residency constraint instead of silently claiming that
 the approximate route executed.
 
+## Compiled inter-package API
+
+CUDA-enabled downstream R packages can consume the same device-resident result
+without calling an R wrapper or copying through host matrices. They should add
+`faissR` to `LinkingTo`, include the installed `<faissR_api.h>` header, check
+that `faissR_c_api_version()` returns the ABI version they support, and obtain
+the typed function pointer with `faissR_get_nn_cuda_tuned_gpu()`. The callable
+returns the same owning `faissR_gpu_knn` external-pointer object as `nn_gpu()`.
+The R object must remain protected while downstream C++ or CUDA code uses its
+non-owning device pointers; only `gpu_knn_to_host()` performs an explicit host
+copy. The header also provides typed accessors for the host-returned float32
+nearest-neighbour callables.
+
 # Reproducibility and third-party software
 
 Every nearest-neighbour result records the requested and resolved route,

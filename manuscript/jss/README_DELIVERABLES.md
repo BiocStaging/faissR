@@ -25,17 +25,20 @@ version control:
 
 ## Evidence boundary
 
-The manuscript and supplement report completed deterministic CPU/CUDA
-metric-conformance checks and systems-ablation measurement coverage. They do
-not claim a cross-dataset speed winner or automatic-selector optimality
-because the frozen, fingerprint-matched held-out explicit-method,
-external-package, reusable-index, and auto-versus-oracle aggregates are not yet
-available. The evaluation set contains nine real datasets with complete
-metric-matched exact references.
+The manuscript and supplement report deterministic CPU/CUDA
+metric-conformance checks and systems-ablation measurement coverage from the
+pre-freeze development archive. They do not claim a cross-dataset speed winner
+or automatic-selector optimality because the commit-locked,
+fingerprint-matched held-out explicit-method, external-package,
+reusable-index, and auto-versus-oracle aggregates are not yet available. The
+evaluation set contains nine real datasets with historical metric-matched
+exact references; the final campaign accepts only references regenerated or
+validated with matching package version, package commit, image commit, dataset
+fingerprint, metric, seed, and query rows.
 
 The current PDF and Word reading copies have been rendered and visually
 inspected. The JSS-layout article is currently 21 pages, the supplement is 11
-pages, the vignette is 10 pages, and the reference manual is 21 pages. These
+pages, the vignette is 12 pages, and the reference manual is 21 pages. These
 are not the final submission freeze: all deliverables must be regenerated
 after the pending aggregates have been validated and inserted.
 

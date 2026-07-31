@@ -903,7 +903,7 @@ automatic selection.
 
 \subsection{Correctness and recall-target compliance}
 
-The deterministic conformance suite used a non-degenerate
+The pre-freeze deterministic conformance suite used a non-degenerate
 $1024\times19$ float32 fixture with $k=15$ and desired recall 0.99. On CPU,
 all 46 supported method--metric cells passed dimensions, finite-distance,
 ascending-distance, resolved-route, and metric-invariance checks. All 22
@@ -951,10 +951,11 @@ self-neighbor handling, and host-returned versus GPU-resident exact output on
 COIL20 and MNIST at $k=30$. These contrasts separate provider search from
 conversion, construction, post-processing, and transfer overhead.
 
-The completed archive contains 92 eligible CPU and 124 eligible CUDA
-measurements. Effect estimates are produced only after fingerprint-matched
-pairing; the full contrast definitions and eligibility rules are in the
-supplement.
+The development archive contains 92 eligible CPU and 124 eligible CUDA
+measurements. These counts establish execution coverage but are not final
+effect estimates. The commit-locked campaign must reproduce or validate the
+rows before fingerprint-matched pairing; the full contrast definitions and
+eligibility rules are in the supplement.
 
 \section{Software quality and reproducibility} \label{sec:quality}
 

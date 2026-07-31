@@ -32,7 +32,7 @@
 Dalia Ahmed$^{1}$, Dupe Ojo$^{1}$\\
 Alessia Vignoli$^{3,4}$, Leonardo Tenori$^{3,4,\ast}$\\
 Stefano Cacciatore$^{1,2,\ast}$}
-\date{Evidence freeze: 31 July 2026}
+\date{Pre-freeze evidence snapshot: 1 August 2026}
 
 \begin{document}
 \raggedbottom
@@ -71,7 +71,7 @@ Stefano Cacciatore,
 \section{Purpose and evidence boundary}
 
 This supplement documents the software surface, benchmark design, metric
-contracts, completed conformance runs, and systems-ablation coverage supporting
+contracts, pre-freeze conformance runs, and systems-ablation coverage supporting
 the accompanying Journal of Statistical Software manuscript. It deliberately
 separates three kinds of evidence:
 \begin{enumerate}
@@ -83,7 +83,8 @@ a requested operating point on a specified fixture or dataset.
 completion on held-out query subsets.
 \end{enumerate}
 The first two are available for the deterministic conformance fixture. The
-systems-ablation measurement sets are complete. The independent held-out
+pre-freeze systems-ablation measurement sets completed, but final eligibility
+requires reproduction under the commit-locked image. The independent held-out
 CPU/CUDA publication roots and auto-versus-oracle aggregate are not present in
 the synchronized archive, so this supplement does not report method rankings
 or general performance superiority.
@@ -406,8 +407,9 @@ above, is the authoritative record of what was attempted.
 
 \begin{table}[ht]
 \centering
-\caption{Final deterministic metric-conformance results. Target attainment is
-diagnostic and is distinct from metric-contract conformance.}
+\caption{Pre-freeze deterministic metric-conformance results. Target
+attainment is diagnostic and is distinct from metric-contract conformance;
+final inclusion requires reproduction under the commit-locked image.}
 \label{tab:supp-conformance}
 \begin{tabular}{lrrrr}
 \toprule
@@ -471,8 +473,9 @@ automatic selection solely because their measured search time is small.
 
 \begin{table}[ht]
 \centering
-\caption{Completed systems-ablation measurement sets. All listed rows have
-\code{status = success}.}
+\caption{Pre-freeze systems-ablation measurement sets. All listed rows have
+\code{status = success}; final eligibility additionally requires matching
+package, image-commit, and dataset identities.}
 \label{tab:supp-ablations}
 \begin{tabularx}{\linewidth}{lrrY}
 \toprule
@@ -677,18 +680,19 @@ device pointer.
 
 \begin{table}[ht]
 \centering
-\caption{Evidence status at the July 31, 2026 freeze.}
+\caption{Evidence status before the commit-locked final campaign.}
 \label{tab:supp-evidence}
 \begin{tabularx}{\linewidth}{P{0.32\linewidth}P{0.18\linewidth}Y}
 \toprule
 Evidence stream & Status & Required action \\
 \midrule
-CPU/CUDA metric conformance & Complete & Preserve final job outputs and
-checksums. \\
-CPU/CUDA systems-ablation measurement sets & Complete & Run and freeze paired
-contrast aggregation. \\
-Exact references for all nine real datasets & Complete & Preserve metric-matched
-files and fingerprints. \\
+CPU/CUDA metric conformance & Pre-freeze complete & Re-run in the validated
+image and preserve outputs and checksums. \\
+CPU/CUDA systems-ablation measurement sets & Pre-freeze complete & Re-run or
+identity-validate rows, then freeze paired contrast aggregation. \\
+Exact references for all nine real datasets & Historical set complete &
+Regenerate or identity-validate metric-matched files under the final package
+and image commit. \\
 Held-out explicit-method benchmark & Missing from synchronized archive & Run
 separate CPU and CUDA jobs for both validation seeds. \\
 Automatic selector versus oracle & Pending held-out aggregate & Run only after
@@ -703,7 +707,7 @@ without each dataset and evaluate the omitted dataset without revision. \\
 
 \section{Interpretation}
 
-The completed fixtures support the package's metric and routing contracts and
+The pre-freeze fixtures support the package's metric and routing contracts and
 confirm execution of the planned systems-ablation arms. They do not establish
 a real-dataset speed winner or that \method{auto} approaches an empirical
 oracle; those claims require the held-out benchmark, frozen aggregate, and
