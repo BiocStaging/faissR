@@ -867,6 +867,15 @@ and requested thread count in the recorded parameter string. If multiple
 exhaustive provider route, the aggregate retains their wrapper timings but
 counts the provider once when ranking distinct algorithms.
 
+Distance-error diagnostics use the public \pkg{faissR} scale rather than each
+provider's incidental output units. In particular, \pkg{BiocNeighbors}
+cosine routes return Euclidean distances between normalized vectors; the
+benchmark converts them inside the timed adapter as
+$d_{\mathrm{cos}}=d_{\mathrm{normalized\mbox{-}L2}^2}/2$. This conversion
+does not affect neighbor order or recall, but makes distance error comparable
+with the documented $1-\mathrm{cosine}$ contract. The exact call and
+conversion are retained in the raw parameter string.
+
 Reported outcomes are cold end-to-end time, warm/repeated-query time, index
 build time where separable, query time, process peak resident memory, recall at $k$,
 minimum query recall, rank agreement, distance error, provider/route metadata,

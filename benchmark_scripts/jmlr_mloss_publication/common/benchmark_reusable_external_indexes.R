@@ -134,6 +134,11 @@ standardize <- function(x) {
   list(indices = as.matrix(indices), distances = as.matrix(distances))
 }
 
+canonicalize_biocneighbors_distances <- function(distances, metric) {
+  distances <- as.matrix(distances)
+  if (identical(metric, "cosine")) pmax(distances, 0)^2 / 2 else distances
+}
+
 remove_annoy_self <- function(index, rows, k) {
   out_i <- matrix(NA_integer_, nrow = length(rows), ncol = k)
   out_d <- matrix(NA_real_, nrow = length(rows), ncol = k)
@@ -169,7 +174,7 @@ remove_query_self <- function(result, rows, k) {
   list(indices = out_i, distances = out_d)
 }
 
-query_index <- function(index, route, x, rows, k, threads) {
+query_index <- function(index, route, x, rows, k, threads, metric) {
   if (identical(route, "RcppAnnoy_euclidean")) {
     return(remove_annoy_self(index, rows, k))
   }
@@ -190,7 +195,7 @@ query_index <- function(index, route, x, rows, k, threads) {
       k
     ))
   }
-  standardize(BiocNeighbors::findKNN(
+  result <- standardize(BiocNeighbors::findKNN(
     index,
     k = k,
     subset = rows,
@@ -198,6 +203,12 @@ query_index <- function(index, route, x, rows, k, threads) {
     get.index = TRUE,
     get.distance = TRUE
   ))
+  if (identical(metric, "cosine")) {
+    result$distances <- canonicalize_biocneighbors_distances(
+      result$distances, metric
+    )
+  }
+  result
 }
 
 build_index <- function(x, route, metric, k, threads, index_seed) {
@@ -291,6 +302,11 @@ reusable_thread_metadata <- function(route, threads) {
 
 reusable_parameter_string <- function(route, metric, k, threads, index_seed) {
   distance <- if (identical(metric, "cosine")) "Cosine" else "Euclidean"
+  distance_conversion <- if (identical(metric, "cosine")) {
+    ";distance=(normalized_L2^2)/2"
+  } else {
+    ""
+  }
   switch(
     route,
     RcppAnnoy_euclidean = sprintf(
@@ -302,16 +318,16 @@ reusable_parameter_string <- function(route, metric, k, threads, index_seed) {
       metric, threads, index_seed, k + 1L, max(50L, 3L * k), threads
     ),
     BiocNeighbors_exhaustive = sprintf(
-      "buildIndex(ExhaustiveParam(distance=%s),num.threads=%d);findKNN(k=%d)",
-      distance, threads, k
+      "buildIndex(ExhaustiveParam(distance=%s),num.threads=%d);findKNN(k=%d)%s",
+      distance, threads, k, distance_conversion
     ),
     BiocNeighbors_hnsw = sprintf(
-      "buildIndex(HnswParam(distance=%s,nlinks=16,ef.construction=200,ef.search=%d),num.threads=%d);findKNN(k=%d)",
-      distance, max(50L, 3L * k), threads, k
+      "buildIndex(HnswParam(distance=%s,nlinks=16,ef.construction=200,ef.search=%d),num.threads=%d);findKNN(k=%d)%s",
+      distance, max(50L, 3L * k), threads, k, distance_conversion
     ),
     BiocNeighbors_annoy = sprintf(
-      "buildIndex(AnnoyParam(distance=%s,ntrees=50,search.mult=50),num.threads=%d);findKNN(k=%d)",
-      distance, threads, k
+      "buildIndex(AnnoyParam(distance=%s,ntrees=50,search.mult=50),num.threads=%d);findKNN(k=%d)%s",
+      distance, threads, k, distance_conversion
     ),
     "unrecorded"
   )
@@ -430,7 +446,8 @@ run_worker <- function(config) {
       measured <- tryCatch({
         started <- proc.time()[["elapsed"]]
         answer <- query_index(
-          index, config$route, x, query_rows, config$k, config$threads
+          index, config$route, x, query_rows, config$k, config$threads,
+          config$metric
         )
         query_sec <- proc.time()[["elapsed"]] - started
         list(answer = answer, query_sec = query_sec)

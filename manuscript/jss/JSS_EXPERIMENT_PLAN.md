@@ -103,6 +103,11 @@ BiocNeighbors. `uwot` and `cuda.ml` remain API-audit rows because the frozen
 public APIs do not return an equivalent standalone self-KNN result. Do not time
 namespace internals or supervised prediction as a substitute.
 
+Distance diagnostics use the `faissR` public metric scale. The adapter
+converts `BiocNeighbors` cosine output from normalized Euclidean distance
+to `1 - cosine` with `distance^2 / 2` inside the timed call and records the
+conversion in `method_parameters`.
+
 Use the external-package launchers in the same `held_out/cpu/` directory.
 Euclidean is the common comparison metric; cosine is additionally evaluated
 for RcppHNSW and eligible BiocNeighbors routes. Correlation and raw inner

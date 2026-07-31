@@ -555,7 +555,10 @@ before stochastic routes and disables progress output through the supported
 \pkg{BiocNeighbors} & \code{findKNN()} with exhaustive, HNSW, and Annoy
 parameter objects; \code{buildIndex()} plus \code{findKNN()} on the prebuilt
 index supplies a
-separately labeled warm comparison where the installed version exposes it. \\
+separately labeled warm comparison where the installed version exposes it.
+For cosine, its normalized-Euclidean distance is converted inside the timed
+adapter to the canonical $1-\mathrm{cosine}$ scale as $d^2/2$; the operation
+and its exact expression are retained in the raw call record. \\
 \pkg{uwot} & Its installed public API is audited. If no exported standalone
 nearest-neighbor result interface is present, the route is recorded as
 \code{not\_public\_api}; embedding runtime and namespace internals are not

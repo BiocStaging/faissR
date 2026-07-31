@@ -2876,6 +2876,20 @@ test_that("publication external comparison enforces a common recall tier", {
   expect_true(any(grepl("FNN::get.knn(", source_text, fixed = TRUE)))
   expect_true(any(grepl("nabor::knn(", source_text, fixed = TRUE)))
   expect_true(any(grepl("RcppHNSW::hnsw_knn(", source_text, fixed = TRUE)))
+  expect_equal(
+    env$canonicalize_biocneighbors_distances(
+      matrix(c(0, sqrt(0.5), sqrt(2)), nrow = 1L), "cosine"
+    ),
+    matrix(c(0, 0.25, 1), nrow = 1L),
+    tolerance = 1e-12
+  )
+  euclidean_distances <- matrix(c(0, 0.5, 2), nrow = 1L)
+  expect_identical(
+    env$canonicalize_biocneighbors_distances(
+      euclidean_distances, "euclidean"
+    ),
+    euclidean_distances
+  )
 })
 
 test_that("reusable external benchmark records its actual index seed", {
@@ -2927,6 +2941,20 @@ test_that("reusable external benchmark records its actual index seed", {
     source_text,
     fixed = TRUE
   )))
+  expect_match(
+    env$reusable_parameter_string(
+      "BiocNeighbors_exhaustive", "cosine", 5L, 2L, 4L
+    ),
+    "distance=\\(normalized_L2\\^2\\)/2"
+  )
+
+  expect_equal(
+    env$canonicalize_biocneighbors_distances(
+      matrix(c(0, sqrt(0.5), sqrt(2)), nrow = 1L), "cosine"
+    ),
+    matrix(c(0, 0.25, 1), nrow = 1L),
+    tolerance = 1e-12
+  )
 })
 
 test_that("publication systems-ablation scripts retain backend-specific headers", {

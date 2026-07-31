@@ -266,6 +266,11 @@ metric_supported_external <- function(method, metric) {
   FALSE
 }
 
+canonicalize_biocneighbors_distances <- function(distances, metric) {
+  distances <- as.matrix(distances)
+  if (identical(metric, "cosine")) pmax(distances, 0)^2 / 2 else distances
+}
+
 stochastic_external_methods <- function() {
   c(
     "rnndescent_rpf", "rnndescent_rnnd", "rnndescent_nnd",
@@ -437,7 +442,7 @@ run_external_method <- function(x_input, method, k, metric, threads, seed) {
   algorithm_seed <- algorithm_seed_for(method, seed)
   if (!is.na(algorithm_seed)) set.seed(algorithm_seed)
   x <- as_double_matrix(x_input)
-  switch(
+  out <- switch(
     method,
     Rnanoflann_standard = {
       if (!available_pkg("Rnanoflann")) stop("Rnanoflann unavailable")
@@ -550,6 +555,12 @@ run_external_method <- function(x_input, method, k, metric, threads, seed) {
     umap_umap = stop("umap::umap is an embedding consumer, not a standalone NN search returning indices/distances.", call. = FALSE),
     stop("Unknown external method: ", method, call. = FALSE)
   )
+  if (startsWith(method, "BiocNeighbors_") && identical(metric, "cosine")) {
+    out$distances <- canonicalize_biocneighbors_distances(
+      out$distances, metric
+    )
+  }
+  out
 }
 
 compute_reference <- function(x, rows, k, metric, threads) {
@@ -835,17 +846,20 @@ method_parameter_string <- function(method, k, metric, target_recall, threads,
       k + 1L, metric, max(50L, 3L * k), threads, seed
     ),
     BiocNeighbors_exhaustive = sprintf(
-      "BiocNeighbors::findKNN(k=%d,ExhaustiveParam(distance=%s),num.threads=%d);remove_self",
-      k + 1L, if (metric == "cosine") "Cosine" else "Euclidean", threads
+      "BiocNeighbors::findKNN(k=%d,ExhaustiveParam(distance=%s),num.threads=%d);remove_self%s",
+      k + 1L, if (metric == "cosine") "Cosine" else "Euclidean", threads,
+      if (metric == "cosine") ";distance=(normalized_L2^2)/2" else ""
     ),
     BiocNeighbors_hnsw = sprintf(
-      "BiocNeighbors::findKNN(k=%d,HnswParam(nlinks=16,ef.construction=200,ef.search=%d,distance=%s),num.threads=%d);remove_self",
+      "BiocNeighbors::findKNN(k=%d,HnswParam(nlinks=16,ef.construction=200,ef.search=%d,distance=%s),num.threads=%d);remove_self%s",
       k + 1L, max(50L, 3L * k),
-      if (metric == "cosine") "Cosine" else "Euclidean", threads
+      if (metric == "cosine") "Cosine" else "Euclidean", threads,
+      if (metric == "cosine") ";distance=(normalized_L2^2)/2" else ""
     ),
     BiocNeighbors_annoy = sprintf(
-      "BiocNeighbors::findKNN(k=%d,AnnoyParam(ntrees=50,distance=%s),num.threads=%d);remove_self",
-      k + 1L, if (metric == "cosine") "Cosine" else "Euclidean", threads
+      "BiocNeighbors::findKNN(k=%d,AnnoyParam(ntrees=50,distance=%s),num.threads=%d);remove_self%s",
+      k + 1L, if (metric == "cosine") "Cosine" else "Euclidean", threads,
+      if (metric == "cosine") ";distance=(normalized_L2^2)/2" else ""
     ),
     FNN_kd = sprintf(
       "FNN::get.knn(k=%d,algorithm=kd_tree);remove_self", k + 1L
