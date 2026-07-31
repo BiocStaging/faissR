@@ -3220,7 +3220,7 @@ List faiss_gpu_ivfpq_knn_impl(NumericMatrix data,
   faiss::gpu::StandardGpuResources& resources = reusable_faiss_gpu_resources();
   faiss::gpu::GpuIndexIVFPQConfig config;
   config.device = 0;
-  // Full-precision lookup tables are safer for raw, unscaled benchmark data.
+  // Full-precision lookup tables avoid additional quantization of raw scores.
   config.useFloat16LookupTables = false;
   faiss::gpu::GpuIndexIVFPQ index(
     &resources,

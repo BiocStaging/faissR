@@ -13,12 +13,14 @@
 
 These notes summarize empirical `nn()` tuning probes and how they inform the
 current shape-aware defaults. The original tuning pass used k = 50,
-Euclidean/L2 search, raw unscaled data, and the package benchmark datasets. The
-broad NN metric benchmark extends that work to all four public metrics and the
-k grid 5, 10, 15, 50, and 100. The dedicated HPC method-tuning sweeps are more
-focused: they use explicit CPU or CUDA backends, float32 datasets, one canonical
-metric per launcher, target recall tiers of 0.90, 0.95, and 0.99, and the k
-grid 15, 30, 50, and 100. Important benchmark artifacts include:
+Euclidean/L2 search and the package benchmark datasets in their documented
+source representation. The benchmark added no centering, scaling,
+normalization, PCA, or embedding before the timed call. The broad NN metric
+benchmark extends that work to all four public metrics and the k grid 5, 10,
+15, 50, and 100. The dedicated HPC method-tuning sweeps are more focused: they
+use explicit CPU or CUDA backends, float32 datasets, one canonical metric per
+launcher, target recall tiers of 0.90, 0.95, and 0.99, and the k grid 15, 30,
+50, and 100. Important benchmark artifacts include:
 
 - `autotune_results.csv`: one row per dataset and resolved implementation
   label.
