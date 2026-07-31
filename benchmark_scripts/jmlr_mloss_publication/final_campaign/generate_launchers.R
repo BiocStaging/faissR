@@ -180,7 +180,8 @@ cpu_specs <- data.frame(
   method_id = c(
     paste0("faissR_cpu_", c("auto", cpu_tuning_methods, "grid")),
     "BiocNeighbors_annoy", "BiocNeighbors_exhaustive", "BiocNeighbors_hnsw",
-    "RANN_bd", "RANN_kd", "RcppAnnoy_euclidean", "Rnanoflann_standard",
+    "RANN_bd", "RANN_kd", "RcppAnnoy_euclidean", "RcppHNSW_hnsw",
+    "Rnanoflann_standard",
     "FNN_kd", "FNN_cover", "FNN_brute", "nabor_auto", "nabor_brute",
     "rnndescent_bruteforce", "rnndescent_nnd", "rnndescent_rnnd",
     "rnndescent_rpf", "uwot_nearest_neighbors"
@@ -188,7 +189,8 @@ cpu_specs <- data.frame(
   label = c(
     paste0("faissR_", c("auto", cpu_tuning_methods, "grid")),
     "BiocNeighbors_annoy", "BiocNeighbors_exhaustive", "BiocNeighbors_hnsw",
-    "RANN_bd", "RANN_kd", "RcppAnnoy_euclidean", "Rnanoflann_standard",
+    "RANN_bd", "RANN_kd", "RcppAnnoy_euclidean", "RcppHNSW_hnsw",
+    "Rnanoflann_standard",
     "FNN_kd", "FNN_cover", "FNN_brute", "nabor_auto", "nabor_brute",
     "rnndescent_bruteforce", "rnndescent_nnd", "rnndescent_rnnd",
     "rnndescent_rpf", "uwot_nearest_neighbors"
@@ -197,16 +199,18 @@ cpu_specs <- data.frame(
     rep(list(metrics), 1L + length(cpu_tuning_methods)),
     list("euclidean"),
     rep(list(c("euclidean", "cosine")), 3L),
-    rep(list("euclidean"), 14L)
+    rep(list("euclidean"), 3L),
+    list(c("euclidean", "cosine")),
+    rep(list("euclidean"), 11L)
   )),
   external = c(
     rep(FALSE, 2L + length(cpu_tuning_methods)),
-    rep(TRUE, 17L)
+    rep(TRUE, 18L)
   ),
   spatial = c(
     rep(FALSE, 1L + length(cpu_tuning_methods)),
     TRUE,
-    rep(FALSE, 17L)
+    rep(FALSE, 18L)
   ),
   stringsAsFactors = FALSE
 )
@@ -248,6 +252,7 @@ external_package_for <- function(method_id) {
     BiocNeighbors = "BiocNeighbors",
     RANN = "RANN",
     RcppAnnoy = "RcppAnnoy",
+    RcppHNSW = "RcppHNSW",
     Rnanoflann = "Rnanoflann",
     FNN = "FNN",
     nabor = "nabor",
@@ -414,6 +419,7 @@ write_executable(
 reusable_specs <- data.frame(
   route = c(
     "RcppAnnoy_euclidean",
+    "RcppHNSW_hnsw", "RcppHNSW_hnsw",
     rep(
       c(
         "BiocNeighbors_exhaustive",
@@ -423,7 +429,11 @@ reusable_specs <- data.frame(
       each = 2L
     )
   ),
-  metric = c("euclidean", rep(c("euclidean", "cosine"), 3L)),
+  metric = c(
+    "euclidean",
+    "euclidean", "cosine",
+    rep(c("euclidean", "cosine"), 3L)
+  ),
   stringsAsFactors = FALSE
 )
 
@@ -444,11 +454,12 @@ for (i in seq_len(nrow(reusable_specs))) {
       common_environment,
       'MANIFEST="${BASE_DIR}/Data/float32_dataset_manifest_jmlr.csv"',
       sprintf('ROUTE=%s', shell_quote(route)),
+      sprintf('export REQUIRED_EXTERNAL_PACKAGE=%s', shell_quote(sub("_.*$", "", route))),
       sprintf('METRIC=%s', shell_quote(metric)),
       sprintf('DATASETS=%s', shell_quote(real_datasets)),
       'OUT_DIR="${BASE_DIR}/faissR_JMLR_MLOSS/final_campaign/reusable_external/${ROUTE}_${METRIC}_${SLURM_JOB_ID:-manual}_$(date +%Y%m%d_%H%M%S)"',
       'mkdir -p "${OUT_DIR}"',
-      'singularity exec --bind "${BASE_DIR}:${BASE_DIR}" "${SINGULARITY_IMAGE}" Rscript -e \'expected <- Sys.getenv("EXPECTED_FAISSR_VERSION"); installed <- as.character(utils::packageVersion("faissR")); if (!identical(installed, expected)) stop("Frozen campaign requires faissR ", expected, ", but the Singularity image contains ", installed); cat("faissR reusable-index preflight OK: ", installed, "\\n", sep = "")\'',
+      'singularity exec --bind "${BASE_DIR}:${BASE_DIR}" "${SINGULARITY_IMAGE}" Rscript -e \'expected <- Sys.getenv("EXPECTED_FAISSR_VERSION"); installed <- as.character(utils::packageVersion("faissR")); if (!identical(installed, expected)) stop("Frozen campaign requires faissR ", expected, ", but the Singularity image contains ", installed); package <- Sys.getenv("REQUIRED_EXTERNAL_PACKAGE"); if (!requireNamespace(package, quietly = TRUE)) stop("Frozen reusable-index campaign requires R package ", package); cat("faissR reusable-index preflight OK: ", installed, "; ", package, " ", as.character(utils::packageVersion(package)), "\\n", sep = "")\'',
       'singularity exec --bind "${BASE_DIR}:${BASE_DIR}" "${SINGULARITY_IMAGE}" Rscript \\',
       '  "${SUITE_ROOT}/common/benchmark_reusable_external_indexes.R" \\',
       '  --manifest="${MANIFEST}" --out_dir="${OUT_DIR}" \\',
@@ -686,7 +697,7 @@ readme <- c(
   "- Generated calibration, reference, held-out, and reusable-index computation",
   "  launchers require the exact faissR version read from `DESCRIPTION` and stop",
   "  before loading data if the Singularity image contains another version.",
-  "- The frozen image must contain `Rnanoflann`, `RANN`, `RcppAnnoy`,",
+  "- The frozen image must contain `Rnanoflann`, `RANN`, `RcppAnnoy`, `RcppHNSW`,",
   "  `rnndescent`, `BiocNeighbors`, `FNN`, `nabor`, and `uwot`; each external",
   "  CPU launcher fails during preflight when its required package is absent.",
   "- `cuda.ml` is an API-audit row, not a timed self-KNN comparator, because",

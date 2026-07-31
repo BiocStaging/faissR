@@ -453,7 +453,7 @@ across different methods or shapes are not valid ablation effects.
 \section{External comparison plan}
 
 CPU comparison scripts include applicable public interfaces from
-\pkg{Rnanoflann}, \pkg{RANN}, \pkg{RcppAnnoy}, \pkg{rnndescent},
+\pkg{Rnanoflann}, \pkg{RANN}, \pkg{RcppAnnoy}, \pkg{RcppHNSW}, \pkg{rnndescent},
 \pkg{BiocNeighbors}, \pkg{FNN}, \pkg{nabor}, and \pkg{uwot}. The CUDA audit
 also records \pkg{cuda.ml}, but its current public KNN interface fits
 supervised prediction models and does not return self-KNN index and distance
@@ -466,6 +466,8 @@ accompany elapsed time. Exact/Flat/brute-force routes are not counted as three i
 mathematical algorithms when they resolve to the same exhaustive provider;
 their user-visible wrappers may still be profiled to quantify interface and
 resource-reuse overhead.
+These comparator packages are dependencies of the frozen benchmark image only;
+they are not runtime, compilation, or fallback dependencies of \pkg{faissR}.
 
 \begin{longtable}{P{0.20\linewidth}P{0.72\linewidth}}
 \caption{Frozen external-comparator call families. Exact argument values,
@@ -493,6 +495,11 @@ and the allocated core count where supported; one-call cold timing. \\
 \code{build()}, and iterative \code{getNNsByItemList()} calls because no
 matrix-batch query is exposed; cold build-plus-query and
 separately labeled reusable-index query time. \\
+\pkg{RcppHNSW} & \code{hnsw\_knn()} supplies the all-row cold comparison for
+Euclidean and cosine. A separate \code{hnsw\_build()} plus
+\code{hnsw\_search()} experiment reports construction and repeated sampled
+query time with $M=16$, construction effort 200, query effort
+$\max(50,3k)$, the recorded random seed, and the allocated CPU thread count. \\
 \pkg{rnndescent} & Public \code{rpf\_knn()}, \code{rnnd\_knn()},
 \code{nnd\_knn()}, and \code{brute\_force\_knn()} routes when their metric and
 self-exclusion contracts match. \\
@@ -552,14 +559,14 @@ without launching Slurm. Full
 computation is reproduced separately with
 \path{benchmark_scripts/jmlr_mloss_publication/final_campaign/}%
 \path{submission_commands.txt};
-the campaign contains 261 independent jobs so one failure cannot erase the
+the campaign contains 265 independent jobs so one failure cannot erase the
 other method/backend evidence.
 The directory retains its historical \path{jmlr_mloss_publication} name, but
 the protocol and artifacts described here are the JSS submission campaign; the
 path is not a claim of simultaneous submission to another journal.
 
-The 261 jobs comprise 5 exact-reference, 105 calibration, 131 held-out,
-7 reusable external-index, 2 systems-ablation, 2 installed-package route-QA,
+The 265 jobs comprise 5 exact-reference, 105 calibration, 133 held-out,
+9 reusable external-index, 2 systems-ablation, 2 installed-package route-QA,
 and 9 analysis/freeze jobs. The reusable-index diagnostic uses the same
 independent exact-reference query rows (up to 1,024), reports conversion,
 construction, first-query, and three repeated-query timings separately, and

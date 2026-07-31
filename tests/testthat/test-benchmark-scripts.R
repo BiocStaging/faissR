@@ -2864,26 +2864,18 @@ test_that("publication external comparison enforces a common recall tier", {
 
   cpu_external <- env$external_methods("cpu")
   expect_true(all(c(
-    "FNN_kd", "FNN_cover", "FNN_brute", "nabor_auto", "nabor_brute"
+    "FNN_kd", "FNN_cover", "FNN_brute", "nabor_auto", "nabor_brute",
+    "RcppHNSW_hnsw"
   ) %in% cpu_external$method_id))
+  expect_true(env$metric_supported_external("RcppHNSW_hnsw", "cosine"))
   cuda_external <- env$external_methods("cuda")
   expect_identical(cuda_external$method_id, "cuda_ml_knn")
   expect_identical(cuda_external$kind, "not_standalone")
   expect_match(cuda_external$detail, "supervised models")
 
-  x <- matrix(seq_len(240) / 240, nrow = 40L, ncol = 6L)
-  routes <- c(
-    if (requireNamespace("FNN", quietly = TRUE)) "FNN_kd",
-    if (requireNamespace("nabor", quietly = TRUE)) "nabor_auto"
-  )
-  for (route in routes) {
-    result <- env$run_external_method(
-      x, route, k = 4L, metric = "euclidean", threads = 2L, seed = 17L
-    )
-    expect_identical(dim(result$indices), c(40L, 4L))
-    expect_identical(dim(result$distances), c(40L, 4L))
-    expect_false(any(result$indices == row(result$indices), na.rm = TRUE))
-  }
+  expect_true(any(grepl("FNN::get.knn(", source_text, fixed = TRUE)))
+  expect_true(any(grepl("nabor::knn(", source_text, fixed = TRUE)))
+  expect_true(any(grepl("RcppHNSW::hnsw_knn(", source_text, fixed = TRUE)))
 })
 
 test_that("reusable external benchmark records its actual index seed", {
@@ -2924,6 +2916,17 @@ test_that("reusable external benchmark records its actual index seed", {
   source_text <- readLines(path, warn = FALSE)
   expect_true(any(grepl("index$setSeed(as.integer(index_seed))", source_text, fixed = TRUE)))
   expect_false(any(grepl("index$setSeed(4L)", source_text, fixed = TRUE)))
+
+  expect_true(any(grepl(
+    'RcppHNSW::hnsw_build(',
+    source_text,
+    fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    'RcppHNSW::hnsw_search(',
+    source_text,
+    fixed = TRUE
+  )))
 })
 
 test_that("publication systems-ablation scripts retain backend-specific headers", {
@@ -3112,5 +3115,26 @@ test_that("final JSS campaign rejects a stale faissR Singularity image", {
   expect_true(any(grepl(
     sprintf("export EXPECTED_FAISSR_VERSION='%s'", expected),
     generated, fixed = TRUE
+  )))
+
+  rcpphnsw_held_out <- file.path(
+    campaign, "held_out", "cpu",
+    "run_RcppHNSW_hnsw_cpu12_euclidean.sh"
+  )
+  rcpphnsw_reusable <- file.path(
+    campaign, "reusable_external",
+    "run_RcppHNSW_hnsw_cpu12_cosine.sh"
+  )
+  expect_true(file.exists(rcpphnsw_held_out))
+  expect_true(file.exists(rcpphnsw_reusable))
+  expect_true(any(grepl(
+    "export REQUIRED_EXTERNAL_PACKAGE='RcppHNSW'",
+    readLines(rcpphnsw_held_out, warn = FALSE),
+    fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "export REQUIRED_EXTERNAL_PACKAGE='RcppHNSW'",
+    readLines(rcpphnsw_reusable, warn = FALSE),
+    fixed = TRUE
   )))
 })

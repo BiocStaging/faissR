@@ -5,10 +5,10 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=12
 #SBATCH --time=48:00:00
-#SBATCH --job-name="frJ_w_BiocNei_cosi"
+#SBATCH --job-name="frJ_w_RcppHNS_eucl"
 #SBATCH --chdir=/scratch/firenze/NN
-#SBATCH --output=/scratch/firenze/NN/benchmark_logs/frJ_reusable_BiocNeighbors_exhaustive_cpu12_cosine_%j.out
-#SBATCH --error=/scratch/firenze/NN/benchmark_logs/frJ_reusable_BiocNeighbors_exhaustive_cpu12_cosine_%j.err
+#SBATCH --output=/scratch/firenze/NN/benchmark_logs/frJ_reusable_RcppHNSW_hnsw_cpu12_euclidean_%j.out
+#SBATCH --error=/scratch/firenze/NN/benchmark_logs/frJ_reusable_RcppHNSW_hnsw_cpu12_euclidean_%j.err
 
 set -euo pipefail
 
@@ -19,9 +19,9 @@ export EXPECTED_FAISSR_VERSION='0.99.19'
 mkdir -p "${BASE_DIR}/benchmark_logs"
 
 MANIFEST="${BASE_DIR}/Data/float32_dataset_manifest_jmlr.csv"
-ROUTE='BiocNeighbors_exhaustive'
-export REQUIRED_EXTERNAL_PACKAGE='BiocNeighbors'
-METRIC='cosine'
+ROUTE='RcppHNSW_hnsw'
+export REQUIRED_EXTERNAL_PACKAGE='RcppHNSW'
+METRIC='euclidean'
 DATASETS='COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41'
 OUT_DIR="${BASE_DIR}/faissR_JMLR_MLOSS/final_campaign/reusable_external/${ROUTE}_${METRIC}_${SLURM_JOB_ID:-manual}_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "${OUT_DIR}"

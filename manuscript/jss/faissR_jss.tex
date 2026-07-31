@@ -228,8 +228,10 @@ benchmark records exactness separately from observed set overlap.
 The \proglang{R} ecosystem offers complementary nearest-neighbor interfaces.
 \pkg{RANN} wraps ANN tree search \citep{RANN}; \pkg{Rnanoflann} exposes
 nanoflann-based search \citep{Rnanoflann}; \pkg{RcppAnnoy} provides Annoy
-indexes \citep{RcppAnnoy}; and \pkg{rnndescent} implements NN-descent-related
-methods \citep{rnndescent,DongMosesLi2011}. \pkg{BiocNeighbors} provides a
+indexes \citep{RcppAnnoy}; \pkg{RcppHNSW} exposes hnswlib HNSW indexes
+\citep{RcppHNSW,MalkovYashunin2020}; and \pkg{rnndescent} implements
+NN-descent-related methods \citep{rnndescent,DongMosesLi2011}.
+\pkg{BiocNeighbors} provides a
 common interface to multiple neighbor-search implementations used throughout
 Bioconductor \citep{BiocNeighbors,Bioconductor}. \pkg{FNN} exposes kd-tree,
 cover-tree, and exhaustive routes \citep{FNN}, while \pkg{nabor} wraps
@@ -268,6 +270,8 @@ search families behind one direct KNN interface. \\
 Low-dimensional exact/approximate search interface. \\
 \pkg{RcppAnnoy} & Annoy projection forests & Euclidean & Reusable,
 disk-backed indexes. \\
+\pkg{RcppHNSW} & hnswlib HNSW & Euclidean, cosine & Multithreaded one-call
+and reusable-index interfaces. \\
 \pkg{rnndescent} & Projection and NN-descent routes & Euclidean &
 Graph-construction alternatives. \\
 \pkg{BiocNeighbors} & Exhaustive, HNSW, Annoy, and other indexes &
@@ -977,8 +981,8 @@ query level within the same datasets, not at the dataset-collection level.}
 
 All applicable \pkg{faissR} methods in Table~\ref{tab:methods} are tested
 individually, including \method{auto}. CPU comparisons include
-\pkg{Rnanoflann}, \pkg{RANN} kd- and bd-tree routes, \pkg{RcppAnnoy}, four
-\pkg{rnndescent} routes, and exhaustive, HNSW, and Annoy routes available
+\pkg{Rnanoflann}, \pkg{RANN} kd- and bd-tree routes, \pkg{RcppAnnoy},
+\pkg{RcppHNSW}, four \pkg{rnndescent} routes, and exhaustive, HNSW, and Annoy routes available
 through \pkg{BiocNeighbors}. \pkg{FNN} kd-tree, cover-tree, and brute-force
 routes and \pkg{nabor} automatic and brute-force routes are also included.
 The public nearest-neighbor route in \pkg{uwot} is included where its metric
@@ -1018,7 +1022,11 @@ only a cold result. A warm fitted-index time is never compared with another
 package's cold one-call time. For \pkg{RcppAnnoy}, the public item-query method
 is called iteratively because the package does not expose a matrix-batch query;
 this is recorded as interface behavior rather than described as batched
-execution. If multiple \pkg{faissR} names resolve to the same
+execution. For \pkg{RcppHNSW}, the campaign records both the complete
+\fct{hnsw\_knn} call and a separate \fct{hnsw\_build}/\fct{hnsw\_search}
+experiment, using the same $M$, construction effort, query effort, random seed,
+and requested thread count in the recorded parameter string. If multiple
+\pkg{faissR} names resolve to the same
 exhaustive provider route, the aggregate retains their wrapper timings but
 counts the provider once when ranking distinct algorithms.
 
@@ -1215,8 +1223,8 @@ seed and repeat identifier, and recall eligibility requires every such row to
 meet the target.
 
 The complete campaign is generated rather than hand-maintained. Its validator
-checks 261 independent launchers: 5 exact-reference jobs, 105 calibration jobs,
-131 held-out jobs, 7 reusable external-index jobs, 2 systems-ablation jobs,
+checks 265 independent launchers: 5 exact-reference jobs, 105 calibration jobs,
+133 held-out jobs, 9 reusable external-index jobs, 2 systems-ablation jobs,
 2 installed-package route-QA jobs, and 9 analysis or freeze jobs. The
 requirement-to-script matrix maps each computational claim to its R program,
 Slurm launcher set, and expected archive location.

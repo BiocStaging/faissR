@@ -164,7 +164,8 @@ headers and libraries discovered by `configure`.
 - Benchmark #1 comparison launchers for Euclidean speed tests are split into
   CPU and CUDA runs:
   `benchmark_scripts/run_benchmark1_compare_cpu_euclidean.sh` compares faissR
-  CPU methods with CPU external R KNN packages, including `FNN` and `nabor`,
+  CPU methods with CPU external R KNN packages, including `RcppHNSW`, `FNN`,
+  `nabor`, and `rnndescent`,
   while
   `benchmark_scripts/run_benchmark1_compare_cuda_euclidean.sh` compares faissR
   CUDA/FAISS-GPU/cuVS methods. `cuda.ml` is recorded as non-standalone because
@@ -173,6 +174,8 @@ headers and libraries discovered by `configure`.
   `benchmark_scripts/run_hpc_benchmark1_compare_cpu12_euclidean.sh` and
   `benchmark_scripts/run_hpc_benchmark1_compare_cuda_euclidean.sh`; both force
   Euclidean distance and write `benchmark1_faissr_vs_external_speed.csv`.
+  External comparator packages are required by the benchmark image only; they
+  are not faissR runtime dependencies or fallback providers.
 
 ## Available Functions
 

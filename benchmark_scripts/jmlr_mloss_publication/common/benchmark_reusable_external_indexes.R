@@ -151,9 +151,44 @@ remove_annoy_self <- function(index, rows, k) {
   list(indices = out_i, distances = out_d)
 }
 
-query_index <- function(index, route, rows, k, threads) {
+remove_query_self <- function(result, rows, k) {
+  result <- standardize(result)
+  out_i <- matrix(NA_integer_, nrow = length(rows), ncol = k)
+  out_d <- matrix(NA_real_, nrow = length(rows), ncol = k)
+  for (i in seq_along(rows)) {
+    keep <- which(
+      !is.na(result$indices[i, ]) &
+        result$indices[i, ] != rows[[i]]
+    )
+    take <- head(keep, k)
+    if (length(take)) {
+      out_i[i, seq_along(take)] <- result$indices[i, take]
+      out_d[i, seq_along(take)] <- result$distances[i, take]
+    }
+  }
+  list(indices = out_i, distances = out_d)
+}
+
+query_index <- function(index, route, x, rows, k, threads) {
   if (identical(route, "RcppAnnoy_euclidean")) {
     return(remove_annoy_self(index, rows, k))
+  }
+  if (identical(route, "RcppHNSW_hnsw")) {
+    return(remove_query_self(
+      RcppHNSW::hnsw_search(
+        x[rows, , drop = FALSE],
+        index,
+        k = k + 1L,
+        ef = max(50L, 3L * k),
+        verbose = FALSE,
+        progress = "none",
+        n_threads = threads,
+        grain_size = 1L,
+        byrow = TRUE
+      ),
+      rows,
+      k
+    ))
   }
   standardize(BiocNeighbors::findKNN(
     index,
@@ -180,6 +215,28 @@ build_index <- function(x, route, metric, k, threads, index_seed) {
     for (i in seq_len(nrow(x))) index$addItem(i - 1L, x[i, ])
     index$build(50L)
     return(index)
+  }
+
+  if (identical(route, "RcppHNSW_hnsw")) {
+    if (!metric %in% c("euclidean", "cosine")) {
+      stop("RcppHNSW_hnsw supports only Euclidean and cosine in this campaign.",
+           call. = FALSE)
+    }
+    if (!requireNamespace("RcppHNSW", quietly = TRUE)) {
+      stop("RcppHNSW is unavailable.", call. = FALSE)
+    }
+    return(RcppHNSW::hnsw_build(
+      x,
+      distance = metric,
+      M = 16L,
+      ef = 200L,
+      verbose = FALSE,
+      progress = "none",
+      n_threads = threads,
+      grain_size = 1L,
+      byrow = TRUE,
+      random_seed = as.integer(index_seed)
+    ))
   }
 
   if (!requireNamespace("BiocNeighbors", quietly = TRUE)) {
@@ -220,6 +277,12 @@ reusable_thread_metadata <- function(route, threads) {
       scope = "serial public build and item-query API"
     ))
   }
+  if (identical(route, "RcppHNSW_hnsw")) {
+    return(list(
+      requested = as.integer(threads),
+      scope = "RcppHNSW hnsw_build/hnsw_search n_threads argument"
+    ))
+  }
   list(
     requested = as.integer(threads),
     scope = "BiocNeighbors buildIndex/findKNN num.threads argument"
@@ -233,6 +296,10 @@ reusable_parameter_string <- function(route, metric, k, threads, index_seed) {
     RcppAnnoy_euclidean = sprintf(
       "AnnoyEuclidean(build_trees=50,index_seed=%d,getNNsByItemList(k=%d))",
       index_seed, k + 1L
+    ),
+    RcppHNSW_hnsw = sprintf(
+      "RcppHNSW::hnsw_build(distance=%s,M=16,ef=200,n_threads=%d,random_seed=%d);hnsw_search(k=%d,ef=%d,n_threads=%d)",
+      metric, threads, index_seed, k + 1L, max(50L, 3L * k), threads
     ),
     BiocNeighbors_exhaustive = sprintf(
       "buildIndex(ExhaustiveParam(distance=%s),num.threads=%d);findKNN(k=%d)",
@@ -360,7 +427,7 @@ run_worker <- function(config) {
       measured <- tryCatch({
         started <- proc.time()[["elapsed"]]
         answer <- query_index(
-          index, config$route, query_rows, config$k, config$threads
+          index, config$route, x, query_rows, config$k, config$threads
         )
         query_sec <- proc.time()[["elapsed"]] - started
         list(answer = answer, query_sec = query_sec)

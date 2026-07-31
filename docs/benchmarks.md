@@ -422,8 +422,9 @@ cuVS internally from direct RAPIDS cuVS API calls.
 
 For Euclidean speed comparisons against external R packages, run CPU and CUDA
 separately. The CPU launcher selects CPU faissR methods plus CPU external KNN
-packages, including `FNN` kd-tree/cover-tree/brute-force and `nabor`
-automatic/brute-force routes. The CUDA launcher selects CUDA
+packages, including `RcppHNSW` HNSW, `FNN`
+kd-tree/cover-tree/brute-force, `nabor` automatic/brute-force, and
+`rnndescent` routes. The CUDA launcher selects CUDA
 faissR/FAISS-GPU/cuVS methods. `cuda.ml` is retained as an explicit
 non-standalone audit row because its current public KNN interface fits
 supervised prediction models and does not return self-KNN index and distance
@@ -435,6 +436,9 @@ functions:
 benchmark_scripts/run_benchmark1_compare_cpu_euclidean.sh
 benchmark_scripts/run_benchmark1_compare_cuda_euclidean.sh
 ```
+
+These external packages belong to the benchmark environment only. They are not
+faissR package dependencies and are never used as hidden runtime fallbacks.
 
 On SLURM/HPC systems, submit the separated Euclidean comparison jobs with:
 

@@ -257,7 +257,11 @@ shape_group <- function(n, p) {
 
 metric_supported_external <- function(method, metric) {
   if (metric == "euclidean") return(TRUE)
-  if (method %in% c("BiocNeighbors_exhaustive", "BiocNeighbors_hnsw", "BiocNeighbors_annoy") &&
+  if (method %in% c(
+        "RcppHNSW_hnsw",
+        "BiocNeighbors_exhaustive", "BiocNeighbors_hnsw",
+        "BiocNeighbors_annoy"
+      ) &&
       metric == "cosine") return(TRUE)
   FALSE
 }
@@ -281,7 +285,7 @@ external_methods <- function(backend) {
     method_id = c(
       "Rnanoflann_standard", "RANN_kd", "RANN_bd",
       "rnndescent_rpf", "rnndescent_rnnd", "rnndescent_nnd", "rnndescent_bruteforce",
-      "RcppAnnoy_euclidean",
+      "RcppAnnoy_euclidean", "RcppHNSW_hnsw",
       "BiocNeighbors_exhaustive", "BiocNeighbors_hnsw", "BiocNeighbors_annoy",
       "FNN_kd", "FNN_cover", "FNN_brute",
       "nabor_auto", "nabor_brute",
@@ -290,7 +294,7 @@ external_methods <- function(backend) {
     implementation = c(
       "Rnanoflann", "RANN", "RANN",
       "rnndescent", "rnndescent", "rnndescent", "rnndescent",
-      "RcppAnnoy",
+      "RcppAnnoy", "RcppHNSW",
       "BiocNeighbors", "BiocNeighbors", "BiocNeighbors",
       "FNN", "FNN", "FNN",
       "nabor", "nabor",
@@ -298,12 +302,13 @@ external_methods <- function(backend) {
     ),
     backend = "cpu",
     public_method = NA_character_,
-    kind = c(rep("knn_search", 17), "not_standalone", "embedding_consumer"),
+    kind = c(rep("knn_search", 18), "not_standalone", "embedding_consumer"),
     detail = c(
       "Rnanoflann standard KNN", "RANN kd tree", "RANN bd tree",
       "rnndescent random projection forest", "rnndescent random-pair NN-descent",
       "rnndescent NN-descent", "rnndescent brute force",
       "RcppAnnoy Euclidean Annoy",
+      "RcppHNSW hnswlib HNSW",
       "BiocNeighbors exhaustive", "BiocNeighbors HNSW", "BiocNeighbors Annoy",
       "FNN kd tree", "FNN cover tree", "FNN brute force",
       "nabor automatic search", "nabor brute-force search",
@@ -445,6 +450,26 @@ run_external_method <- function(x_input, method, k, metric, threads, seed) {
       annoy_knn(x, k, n_threads = threads, seed = seed),
       k
     ),
+    RcppHNSW_hnsw = {
+      if (!available_pkg("RcppHNSW")) stop("RcppHNSW unavailable")
+      remove_self(
+        RcppHNSW::hnsw_knn(
+          x,
+          k = k + 1L,
+          distance = metric,
+          M = 16L,
+          ef_construction = 200L,
+          ef = max(50L, 3L * k),
+          verbose = FALSE,
+          progress = "none",
+          n_threads = threads,
+          grain_size = 1L,
+          byrow = TRUE,
+          random_seed = as.integer(seed)
+        ),
+        k
+      )
+    },
     BiocNeighbors_exhaustive = {
       if (!available_pkg("BiocNeighbors")) stop("BiocNeighbors unavailable")
       dist <- if (metric == "cosine") "Cosine" else "Euclidean"
@@ -711,6 +736,7 @@ method_thread_metadata <- function(method, threads) {
   }
   if (id %in% c("Rnanoflann_standard", "rnndescent_rpf", "rnndescent_rnnd",
                 "rnndescent_nnd", "rnndescent_bruteforce",
+                "RcppHNSW_hnsw",
                 "BiocNeighbors_exhaustive", "BiocNeighbors_hnsw",
                 "BiocNeighbors_annoy", "uwot_nearest_neighbors")) {
     return(list(
@@ -774,6 +800,10 @@ method_parameter_string <- function(method, k, metric, target_recall, threads,
     RcppAnnoy_euclidean = sprintf(
       "AnnoyEuclidean(build_trees=50,seed=%d,getNNsByItemList(k=%d));remove_self",
       seed, k + 1L
+    ),
+    RcppHNSW_hnsw = sprintf(
+      "RcppHNSW::hnsw_knn(k=%d,distance=%s,M=16,ef_construction=200,ef=%d,n_threads=%d,random_seed=%d);remove_self",
+      k + 1L, metric, max(50L, 3L * k), threads, seed
     ),
     BiocNeighbors_exhaustive = sprintf(
       "BiocNeighbors::findKNN(k=%d,ExhaustiveParam(distance=%s),num.threads=%d);remove_self",
