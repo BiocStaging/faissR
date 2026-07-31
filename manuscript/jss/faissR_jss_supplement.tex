@@ -642,6 +642,10 @@ reference, calibration, or aggregation gates cannot be bypassed accidentally.
 The ledger is updated after every submission, including a failure record when
 Slurm rejects a later launcher, so accepted jobs remain identifiable and are
 not blindly duplicated on retry.
+Before submission, the companion \path{sync_publication_suite.sh} deployment
+utility can copy the suite to a user-supplied HPC mirror and verifies the
+277-launcher count, submitter checksum, and shell syntax without deleting
+target files.
 The directory retains its historical \path{jmlr_mloss_publication} name, but
 the protocol and artifacts described here are the JSS submission campaign; the
 path is not a claim of simultaneous submission to another journal.

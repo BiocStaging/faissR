@@ -3704,6 +3704,22 @@ test_that("final JSS campaign submitter preserves a partial submission ledger", 
   expect_match(ledger$submission_output[[2L]], "simulated sbatch rejection")
 })
 
+test_that("publication-suite sync utility is portable and non-destructive", {
+  sync_script <- test_path(
+    "../../benchmark_scripts/jmlr_mloss_publication/sync_publication_suite.sh"
+  )
+  if (!file.exists(sync_script)) {
+    skip("Publication-suite synchronization utility is unavailable.")
+  }
+  text <- paste(readLines(sync_script, warn = FALSE), collapse = "\n")
+  expect_match(text, "rsync -a", fixed = TRUE)
+  expect_false(grepl("--delete", text, fixed = TRUE))
+  expect_false(grepl("/Users/stefano", text, fixed = TRUE))
+  expect_match(text, "source_count.*277", perl = TRUE)
+  expect_match(text, "target_count.*277", perl = TRUE)
+  expect_match(text, "submit_campaign.R", fixed = TRUE)
+})
+
 test_that("JSS compact replication report is executed and error-free", {
   jss <- test_path("../../manuscript/jss")
   code_path <- file.path(jss, "code.R")

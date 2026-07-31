@@ -885,6 +885,13 @@ can be reconciled without blindly resubmitting successful jobs. It deliberately
 requires the user to advance between phases after inspecting the preceding
 reports.
 
+Before HPC submission, `jmlr_mloss_publication/sync_publication_suite.sh`
+copies the complete suite to a user-supplied mirror without deleting target
+files. It accepts success only when the mirror contains exactly 277 launchers,
+the submitter checksum matches, and every copied shell program parses. This
+prevents an older partially synchronized launcher tree from being mistaken for
+the frozen campaign.
+
 The CPU and CUDA systems-ablation jobs compare double and float32 input,
 disabled and warm fitted-index/transformation caches, compiled and R-side
 self-neighbour removal, and GPU-resident exact output with explicit host-copy

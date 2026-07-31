@@ -28,6 +28,12 @@ never advances to a later phase without an explicit command. The ledger is
 updated after each `sbatch` call, so partial submission is visible and can be
 reconciled without duplicating jobs that Slurm already accepted.
 
+The optional `sync_publication_suite.sh` deployment utility copies this entire
+suite to a user-supplied HPC mirror and checks the 277-launcher count,
+`submit_campaign.R` checksum, and shell syntax. It does not delete target
+files; an obsolete extra launcher therefore causes an explicit count failure
+rather than being removed silently.
+
 ## Frozen design
 
 - Datasets: COIL20, USPS, FashionMNIST, FlowRepository FR-FCM-ZYRM, flow18,
