@@ -41,6 +41,6 @@ The submission driver first creates the exact CPU inner-product references and
 then submits every CPU and CUDA method with an `afterok` dependency. Do not run
 it with `sbatch`; it calls `sbatch` itself.
 
-For publication, use these rows only for calibration. The JMLR benchmark uses
+For publication, use these rows only for calibration. The JSS benchmark uses
 different validation seeds and repeated timings to test the final
 `tuning = "auto"` policy without selecting parameters on the validation rows.

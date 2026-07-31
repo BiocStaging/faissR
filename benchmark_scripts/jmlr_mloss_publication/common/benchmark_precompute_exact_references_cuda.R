@@ -227,6 +227,26 @@ compute_one <- function(config) {
     tuning = "auto",
     target_recall = 0.99
   )
+  if (!inherits(gpu_raw, "faissR_gpu_knn")) {
+    gpu_contract_fields <- c(
+      "handle", "indices_ptr", "distances_ptr", "n_query", "k",
+      "result_residency"
+    )
+    has_gpu_contract <- is.list(gpu_raw) &&
+      all(gpu_contract_fields %in% names(gpu_raw)) &&
+      identical(gpu_raw$result_residency, "cuda") &&
+      typeof(gpu_raw$handle) == "externalptr" &&
+      typeof(gpu_raw$indices_ptr) == "externalptr" &&
+      typeof(gpu_raw$distances_ptr) == "externalptr"
+    if (!isTRUE(has_gpu_contract)) {
+      stop(
+        "CUDA exact reference route returned neither a `faissR_gpu_knn` ",
+        "object nor a structurally valid GPU-resident KNN result.",
+        call. = FALSE
+      )
+    }
+    class(gpu_raw) <- unique(c("faissR_gpu_knn", class(gpu_raw)))
+  }
   gpu_backend_used <- gpu_raw$backend_used %||% attr(gpu_raw, "backend") %||% NA_character_
   gpu_residency <- gpu_raw$result_residency %||% attr(gpu_raw, "result_residency") %||% "cuda"
   host_started <- proc.time()[["elapsed"]]
@@ -337,11 +357,19 @@ run_task <- function(config, timeout, script) {
   result <- tempfile("faissR_cuda_ref_result_", fileext = ".rds")
   saveRDS(config, cfg)
   on.exit(unlink(c(cfg, result)), add = TRUE)
-  r_bin <- Sys.getenv("R_BIN", unset = "Rscript")
+  r_bin <- Sys.getenv("R_BIN", unset = "")
+  if (nzchar(r_bin)) {
+    resolved_r_bin <- unname(Sys.which(r_bin))
+    if (nzchar(resolved_r_bin)) r_bin <- resolved_r_bin
+  } else {
+    r_bin <- file.path(R.home("bin"), "Rscript")
+  }
+  if (!file.exists(r_bin)) stop("Cannot find the child Rscript binary: ", r_bin, call. = FALSE)
   command <- c(r_bin, "--vanilla", script, "--child=TRUE", paste0("--config=", cfg), paste0("--result=", result))
   timeout_bin <- Sys.which("timeout")
   if (nzchar(timeout_bin)) command <- c(timeout_bin, as.character(timeout), command)
-  status <- system2(command[[1L]], command[-1L])
+  worker_env <- paste0("R_LIBS=", paste(.libPaths(), collapse = .Platform$path.sep))
+  status <- system2(command[[1L]], command[-1L], env = worker_env)
   if (file.exists(result)) return(readRDS(result))
   data.frame(
     dataset = config$dataset,

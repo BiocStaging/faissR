@@ -67,9 +67,6 @@ Compiled backends are reached through Rcpp/C++ bridge files:
   optional at build time [3].
 - CUDA-native helper kernels, such as the low-dimensional grid and candidate
   kernels, are isolated behind the CUDA bridge.
-- Apple Metal helper kernels are isolated in Objective-C++ translation units.
-  The spatial KNN route performs exact 2D/3D shell expansion and top-k ranking
-  in float32 on Metal and does not call Python.
 
 The package does not vendor FAISS, cuVS, CUDA, or cuDNN. Those
 projects remain system dependencies with their own release cadence and
@@ -102,17 +99,6 @@ Supported CUDA routes include:
 - native CUDA 2D/3D grid search for low-dimensional Euclidean, cosine, and
   correlation self-KNN;
 - native CUDA candidate-refinement routes used by Vamana and NSG.
-
-The explicit Metal nearest-neighbour route is intentionally narrow:
-`backend = "metal", method = "grid"` supports exact two- or
-three-dimensional self-KNN for Euclidean, cosine, and correlation distance.
-Coordinates, grid cells, candidate distances, and top-k buffers remain float32
-on the Apple GPU after a single input upload; only the final KNN matrices are
-returned to R. Cosine uses row normalization and correlation uses row centering
-plus normalization before the same Euclidean grid search. Separate query
-matrices, raw inner product, dimensions other than two or three, and `k > 128`
-fail explicitly. No CPU nearest-neighbour fallback is hidden behind a Metal
-label.
 
 The validated high-performance metric is Euclidean/L2. Cosine and correlation
 are exposed for exact CPU, FAISS CPU/GPU Flat, FAISS CPU/GPU IVF-Flat,
@@ -261,7 +247,6 @@ as the fallback exact CUDA route when FAISS GPU Flat is unavailable.
 
 Explicit methods map to the selected backend. For example,
 `method = "grid", backend = "cpu"` resolves to the CPU grid implementation,
-`backend = "metal"` resolves to the Metal grid implementation, and
 `backend = "cuda"` resolves to the CUDA grid implementation. All grid routes
 return the final include-self matrix layout
 from compiled code, avoiding R-side self-column reshaping. Invalid combinations fail before computation; for example,
@@ -810,6 +795,11 @@ backend for ordinary `nn()` output, `nn_gpu()` also records
 row, including validation-pending raw inner-product CAGRA/IVF/graph settings,
 while still receiving device-resident exact-family buffers.
 
+faissR installs `<faissR_api.h>` and registers the zero-argument
+`faissR_c_api_version` callable, which returns ABI version `1`. Downstream
+packages should list faissR in `LinkingTo`, include this header, verify the ABI,
+and use its typed getters rather than duplicating callable signatures.
+
 faissR also registers the C-callable
 `faissR_nn_cuda_tuned_gpu_call`. Downstream packages can retrieve it with
 `R_GetCCallable("faissR", "faissR_nn_cuda_tuned_gpu_call")`. Its current ABI is
@@ -822,6 +812,8 @@ interface, but recall is exact by construction. Provider-specific GPU-resident
 outputs for FAISS GPU IVF/CAGRA and direct cuVS IVF/CAGRA/NN-descent require
 separate persistent ownership of those libraries' result buffers and therefore
 fail clearly instead of silently returning host matrices.
+The returned `handle` external pointer owns the CUDA allocations; its lifetime
+must cover every downstream access through `indices_ptr` and `distances_ptr`.
 
 CPU IVFPQ FastScan is exposed to the R layer only through the float32 adapter:
 FAISS always receives a `float*` matrix. For `float::fl()`/float32 inputs this

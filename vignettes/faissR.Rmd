@@ -1,14 +1,15 @@
 ---
-title: "faissR: nearest neighbours, graphs, and clustering"
-author:
-- name: "Stefano Cacciatore"
+title: "faissR: nearest-neighbor search, prediction, and k-means"
+author: "Stefano Cacciatore"
 package: faissR
 output:
   BiocStyle::html_document:
     toc: true
     toc_float: true
+header-includes:
+  - \usepackage{array}
 vignette: >
-  %\VignetteIndexEntry{faissR: nearest neighbours, graphs, and clustering}
+  %\VignetteIndexEntry{faissR: nearest-neighbor search, prediction, and k-means}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -45,6 +46,24 @@ The main public functions are:
 | `knn()` and `predict()` | supervised kNN fitting and prediction |
 | `fast_kmeans()` | CPU or optional CUDA k-means |
 | `backend_info()` and `nn_capabilities()` | inspect compiled backends |
+| `print()` and `summary()` | inspect result and fitted-model metadata |
+
+# Installation contract
+
+FAISS is mandatory. A source installation stops when its headers or library
+cannot be found; it does not silently substitute an unrelated nearest-neighbor
+implementation. On macOS, a typical system installation is
+`brew install faiss libomp`. On Linux, install the distribution's FAISS
+development package or set `FAISS_HOME` to a prefix containing
+`include/faiss` and `lib/libfaiss`. CUDA and cuVS are optional unless a GPU
+build is explicitly requested.
+
+Automatic Homebrew installation is never enabled by default. GitHub users who
+explicitly want that convenience can set
+`FAISSR_AUTO_INSTALL_FAISS=1` before installation. Unsupported WebAssembly and
+package-staging platforms can compile diagnostic stubs for portability checks;
+those artifacts report that native search is unavailable and are not
+functional FAISS builds.
 
 # Example data
 
@@ -53,7 +72,7 @@ observations and columns are features, matching the input convention used by
 `faissR`.
 
 ```{r data}
-library(faissR)
+library("faissR")
 
 set.seed(100)
 n_per_group <- 30L
@@ -86,7 +105,11 @@ session. On a CPU-only machine, CUDA-related entries are expected to be
 unavailable.
 
 ```{r backends}
-backend_info()[, c("backend", "available", "knn_available")]
+available_backends <- backend_info()
+available_backends <- available_backends[
+    c("backend", "available", "knn_available")
+]
+available_backends
 ```
 
 `nn_capabilities()` gives method, backend, and metric support. The table can be
@@ -118,6 +141,7 @@ nearest <- nn(
 )
 
 nearest
+summary(nearest)
 dim(nearest$indices)
 head(nearest$indices)
 head(round(nearest$distances, 3))
@@ -132,9 +156,17 @@ c(
     requested_method = attr(nearest, "requested_method"),
     backend_used = attr(nearest, "backend_used"),
     metric = attr(nearest, "metric"),
-    distance_type = attr(nearest, "distance_type")
+    distance_type = attr(nearest, "distance_type"),
+    exact = attr(nearest, "exact"),
+    exclude_self = attr(nearest, "exclude_self")
 )
 ```
+
+`exact`, `flat`, and `bruteforce` all request exhaustive mathematics, but they
+express different provider intentions. `exact` lets faissR choose an exhaustive
+provider, `flat` explicitly requests FAISS Flat, and CUDA `bruteforce` prefers
+direct cuVS brute force. They should have the same neighbor quality; timing
+differences measure provider and wrapper overhead.
 
 ## Automatic method selection
 
@@ -160,8 +192,8 @@ c(
 ```
 
 For large two- or three-dimensional self-KNN, `method = "auto"` can select the
-native grid route. CPU, CUDA, and Metal have separate implementations. The
-explicit CPU call below demonstrates the API on a small two-dimensional matrix.
+native grid route. CPU and CUDA have separate implementations. The explicit
+CPU call below demonstrates the API on a small two-dimensional matrix.
 
 ```{r grid}
 x2 <- matrix(runif(2000), ncol = 2)
@@ -181,22 +213,10 @@ c(
 )
 ```
 
-On Apple hardware, the same exact spatial search can run in native Metal. It
-keeps the float32 coordinate, grid, candidate, and top-k buffers on the GPU and
-returns only the result matrices. CUDA uses its native grid implementation.
-Explicit device calls fail when unavailable and never report a CPU fallback as
-GPU work.
+CUDA uses its native grid implementation. Explicit CUDA calls fail when the
+requested route is unavailable and never report a CPU fallback as GPU work.
 
-```{r metal-grid, eval=FALSE}
-metal_nearest <- nn(
-    x2,
-    k = 10,
-    exclude_self = TRUE,
-    backend = "metal",
-    method = "grid",
-    metric = "euclidean"
-)
-
+```{r cuda-grid, eval=FALSE}
 cuda_nearest <- nn(
     x2,
     k = 10,
@@ -204,6 +224,20 @@ cuda_nearest <- nn(
     backend = "cuda",
     method = "grid",
     metric = "euclidean"
+)
+```
+
+The same failure rule applies before launch. For example, CAGRA is CUDA-only:
+
+```{r unsupported-combination}
+try(
+    nn(
+        x,
+        k = 5,
+        backend = "cpu",
+        method = "cagra",
+        exclude_self = TRUE
+    )
 )
 ```
 
@@ -259,7 +293,7 @@ float_nearest <- nn(
     xf,
     k = 5,
     backend = "cpu",
-    method = "exact",
+    method = "flat",
     metric = "euclidean",
     exclude_self = TRUE,
     output = "float",
@@ -293,8 +327,14 @@ fit <- knn(
 pred <- predict(fit, x[1:6, , drop = FALSE])
 prob <- predict(fit, x[1:6, , drop = FALSE], type = "prob")
 
-pred
-round(prob, 3)
+summary(fit)
+as.vector(pred)
+prob_display <- matrix(
+    as.numeric(prob),
+    nrow = nrow(prob),
+    dimnames = dimnames(prob)
+)
+round(prob_display, 3)
 ```
 
 Immediate prediction uses the same interface:
@@ -311,7 +351,27 @@ immediate <- knn(
     n_threads = 2
 )
 
-immediate
+as.vector(immediate)
+```
+
+# Candidate refinement
+
+`candidate_knn()` ranks only the supplied candidate rows. This is useful when
+another algorithm constructs a graph or a broad candidate pool and faissR
+should apply the final metric consistently.
+
+```{r candidate-refinement}
+candidates <- nearest$indices
+refined <- candidate_knn(
+    data = x,
+    points = x,
+    candidates = candidates,
+    k = 3,
+    metric = "euclidean",
+    exclude_self = TRUE,
+    n_threads = 2
+)
+summary(refined)
 ```
 
 # k-means
@@ -328,6 +388,7 @@ km <- fast_kmeans(
     max_iter = 20
 )
 
+summary(km)
 c(
     backend = km$backend,
     backend_library = km$backend_library,
@@ -361,6 +422,23 @@ if (cuda_available()) {
 `nn_gpu()` is for downstream CUDA consumers. It keeps result buffers resident on
 the GPU and copies them back to R only when `gpu_knn_to_host()` is called
 explicitly.
+
+# Reproducibility and third-party software
+
+Every nearest-neighbour result records the requested and resolved route,
+metric, exactness, self-exclusion policy, input/output precision, and available
+provider-specific tuning metadata. These fields should be archived with
+benchmark results rather than inferred later from a method label.
+
+`faissR` is MIT licensed. FAISS, CUDA, and cuVS remain external system
+libraries under their own licenses. The package includes a small adaptation of
+the public DLPack C ABI definitions under Apache License 2.0; its installed
+third-party notice and full license are available through:
+
+```{r third-party-notices}
+system.file("THIRD-PARTY-NOTICES", package = "faissR")
+system.file("licenses", "DLPACK-LICENSE.txt", package = "faissR")
+```
 
 # Session information
 

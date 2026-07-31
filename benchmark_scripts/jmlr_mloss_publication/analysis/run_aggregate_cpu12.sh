@@ -18,6 +18,7 @@ RESULTS_ROOT="${RESULTS_ROOT:-${BASE_DIR}/faissR_JMLR_MLOSS/cpu}"
 SINGULARITY_IMAGE="${SINGULARITY_IMAGE:-${BASE_DIR}/singularity/fastembedr_cuda.sif}"
 STAMP="${SLURM_JOB_ID:-manual}_$(date +%Y%m%d_%H%M%S)"
 OUT_DIR="${OUT_DIR:-${BASE_DIR}/faissR_JMLR_MLOSS/analysis/cpu_${STAMP}}"
+DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41}"
 
 mkdir -p "${OUT_DIR}" "${BASE_DIR}/benchmark_logs"
 singularity exec --bind "${BASE_DIR}:${BASE_DIR}" "${SINGULARITY_IMAGE}" \
@@ -25,6 +26,7 @@ singularity exec --bind "${BASE_DIR}:${BASE_DIR}" "${SINGULARITY_IMAGE}" \
   --results_root="${RESULTS_ROOT}" \
   --out_dir="${OUT_DIR}" \
   --backend=cpu \
+  --datasets="${DATASETS}" \
   --target_recalls=0.9,0.95,0.99 \
   --expected_seeds=2 \
   --expected_repeats=3

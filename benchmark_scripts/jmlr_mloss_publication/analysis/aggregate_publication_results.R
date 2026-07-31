@@ -37,7 +37,7 @@ read_union <- function(files) {
 latest_method_runs <- function(x) {
   if (!"dataset_md5" %in% names(x)) x$dataset_md5 <- NA_character_
   suite <- ifelse(is.na(x$dataset_suite) | !nzchar(x$dataset_suite), "real", x$dataset_suite)
-  key <- paste(x$backend, x$method_id, suite, x$dataset, sep = "\r")
+  key <- paste(x$backend, x$method_id, suite, x$dataset, x$metric, sep = "\r")
   selected <- unlist(lapply(split(seq_len(nrow(x)), key), function(ii) {
     roots <- unique(x$run_root[ii])
     root_time <- vapply(roots, function(root) max(x$source_mtime[ii][x$run_root[ii] == root]), numeric(1))
@@ -74,15 +74,22 @@ group_apply <- function(x, columns, fun) {
 
 robust_summary <- function(x, expected_seeds, expected_repeats) {
   if (!"dataset_md5" %in% names(x)) x$dataset_md5 <- NA_character_
+  if (!"result_backend" %in% names(x)) x$result_backend <- NA_character_
   columns <- c(
     "dataset", "dataset_md5", "dataset_suite", "backend", "metric", "k", "target_recall",
-    "implementation", "method_id", "public_method", "kind", "n_threads"
+    "implementation", "method_id", "public_method", "kind", "n_threads",
+    "result_backend"
   )
   group_apply(x, columns, function(part) {
     success <- part$status == "success"
     times <- suppressWarnings(as.numeric(part$time_sec[success]))
     recalls <- suppressWarnings(as.numeric(part$recall_at_k[success]))
     memory <- suppressWarnings(as.numeric(part$peak_rss_gb[success]))
+    gpu_memory <- if ("gpu_memory_peak_mib" %in% names(part)) {
+      suppressWarnings(as.numeric(part$gpu_memory_peak_mib[success]))
+    } else {
+      numeric()
+    }
     copies <- suppressWarnings(as.numeric(part$host_copy_sec[success]))
     target <- suppressWarnings(as.numeric(part$target_recall[[1L]]))
     seeds <- unique(part$validation_seed[success])
@@ -99,6 +106,7 @@ robust_summary <- function(x, expected_seeds, expected_repeats) {
       median_time_sec = if (any(is.finite(times))) median(times[is.finite(times)]) else NA_real_,
       iqr_time_sec = if (sum(is.finite(times)) > 1L) IQR(times[is.finite(times)]) else NA_real_,
       median_peak_rss_gb = if (any(is.finite(memory))) median(memory[is.finite(memory)]) else NA_real_,
+      median_gpu_memory_peak_mib = if (any(is.finite(gpu_memory))) median(gpu_memory[is.finite(gpu_memory)]) else NA_real_,
       median_host_copy_sec = if (any(is.finite(copies))) median(copies[is.finite(copies)]) else NA_real_,
       mean_recall_at_k = if (any(is.finite(recalls))) mean(recalls[is.finite(recalls)]) else NA_real_,
       min_recall_at_k = if (any(is.finite(recalls))) min(recalls[is.finite(recalls)]) else NA_real_,
@@ -120,6 +128,22 @@ rank_qualifying <- function(summary) {
     ]
     auto <- qualifying[grepl("_auto$", qualifying$method_id), , drop = FALSE]
     oracle <- qualifying[!grepl("_auto$", qualifying$method_id), , drop = FALSE]
+    exact_family <- oracle$public_method %in% c("exact", "flat", "bruteforce") |
+      grepl("_(exact|flat|bruteforce)$", oracle$method_id)
+    provider <- as.character(oracle$result_backend)
+    provider[is.na(provider) | !nzchar(provider)] <- oracle$method_id[
+      is.na(provider) | !nzchar(provider)
+    ]
+    route_identity <- ifelse(
+      exact_family,
+      paste("exact_family", oracle$backend, oracle$metric, provider, sep = "::"),
+      paste("method", oracle$method_id, sep = "::")
+    )
+    oracle <- oracle[!duplicated(route_identity), , drop = FALSE]
+    exact <- oracle[
+      oracle$public_method %in% c("exact", "flat", "bruteforce") |
+        grepl("_(exact|flat|bruteforce)$", oracle$method_id), , drop = FALSE
+    ]
     pick <- function(tbl, i, column, default = NA) {
       if (nrow(tbl) < i) default else tbl[[column]][[i]]
     }
@@ -212,12 +236,15 @@ main <- function() {
   targets <- as.numeric(split_values(args$target_recalls, "0.9,0.95,0.99"))
   expected_seeds <- as.integer(args$expected_seeds %||% 2L)
   expected_repeats <- as.integer(args$expected_repeats %||% 3L)
+  datasets <- split_values(args$datasets, "")
+  datasets <- datasets[nzchar(datasets)]
 
   files <- list.files(root, pattern = "^jmlr_tuned_benchmark_results[.]csv$", recursive = TRUE, full.names = TRUE)
   files <- files[!grepl("/calibration/|/analysis/", files)]
   if (!length(files)) stop("No held-out publication result files were found under `results_root`.", call. = FALSE)
   combined <- read_union(files)
   if (backend != "all") combined <- combined[combined$backend == backend, , drop = FALSE]
+  if (length(datasets)) combined <- combined[combined$dataset %in% datasets, , drop = FALSE]
   if (!nrow(combined)) stop("No result rows match the requested backend.", call. = FALSE)
   combined <- latest_method_runs(combined)
   combined <- expand_external_targets(combined, targets)

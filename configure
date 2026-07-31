@@ -18,7 +18,7 @@ write_diagnostic_makevars() {
     echo "PKG_CXXFLAGS ="
     echo "PKG_CPPFLAGS = $diagnostic_cppflags"
     echo "PKG_LIBS ="
-    echo "OBJECTS = RcppExports.o embedding_utils.o nn.o nn_metal_grid_stub.o nn_auto_select.o nn_fortran.o nn_faiss_bridge.o nn_faiss_stub.o nn_cuvs_bridge.o nn_cuvs_stub.o nn_cuda_bridge.o nn_cuda_stub.o"
+    echo "OBJECTS = RcppExports.o embedding_utils.o nn.o nn_auto_select.o nn_fortran.o nn_faiss_bridge.o nn_faiss_stub.o nn_cuvs_bridge.o nn_cuvs_stub.o nn_cuda_bridge.o nn_cuda_stub.o"
   } > src/Makevars
 }
 
@@ -63,12 +63,6 @@ fi
 cppflags=""
 libs="-pthread"
 extra_cxxflags=""
-nn_metal_grid_objects="nn_metal_grid_stub.o"
-if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ]; then
-  nn_metal_grid_objects="nn_metal_grid_impl.o"
-  cppflags="$cppflags -DFAISSR_HAS_METAL"
-  libs="$libs -framework Foundation -framework Metal"
-fi
 
 faiss_home=${FAISS_HOME:-}
 faiss_objects="nn_faiss_bridge.o nn_faiss_impl.o"
@@ -103,20 +97,7 @@ macos_auto_install_faiss() {
   if [ "$(uname -s 2>/dev/null || echo unknown)" != "Darwin" ]; then
     return 1
   fi
-  if [ "${FAISSR_AUTO_INSTALL_FAISS:-}" = "1" ]; then
-    return 0
-  fi
-  if [ -n "${FAISSR_AUTO_INSTALL_FAISS:-}" ]; then
-    return 1
-  fi
-  if [ "${GITHUB_ACTIONS:-}" = "true" ] || \
-     [ "${CI:-}" = "true" ] || \
-     [ -n "${RUNNER_OS:-}" ] || \
-     [ -n "${UNIVERSE_NAME:-}" ] || \
-     [ -n "${MY_UNIVERSE:-}" ]; then
-    return 0
-  fi
-  return 1
+  [ "${FAISSR_AUTO_INSTALL_FAISS:-0}" = "1" ]
 }
 
 runiverse_macos_diagnostic_stubs_allowed() {
@@ -243,8 +224,6 @@ if [ -z "$faiss_cppflags" ] || [ -z "$faiss_libs" ]; then
        find_brew; then
       if [ "${FAISSR_AUTO_INSTALL_FAISS:-}" = "1" ]; then
         echo "FAISSR_AUTO_INSTALL_FAISS=1: installing FAISS and libomp with Homebrew." >&2
-      else
-        echo "macOS CI detected: installing mandatory FAISS and OpenMP runtime with Homebrew." >&2
       fi
       "$brew_cmd" install faiss libomp
       if ! try_homebrew_faiss; then
@@ -303,8 +282,6 @@ if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ]; then
     if macos_auto_install_faiss && find_brew; then
       if [ "${FAISSR_AUTO_INSTALL_FAISS:-}" = "1" ]; then
         echo "FAISSR_AUTO_INSTALL_FAISS=1: installing libomp with Homebrew." >&2
-      else
-        echo "macOS CI detected: installing OpenMP runtime with Homebrew." >&2
       fi
       "$brew_cmd" install libomp
       try_homebrew_libomp || true
@@ -459,5 +436,5 @@ fi
     echo "NVCC = $nvcc"
     printf "%s" "$cuda_rule"
   fi
-    echo "OBJECTS = RcppExports.o embedding_utils.o nn.o $nn_metal_grid_objects nn_auto_select.o nn_fortran.o $faiss_objects $cuvs_objects nn_cuda_bridge.o $cuda_objects"
+    echo "OBJECTS = RcppExports.o embedding_utils.o nn.o nn_auto_select.o nn_fortran.o $faiss_objects $cuvs_objects nn_cuda_bridge.o $cuda_objects"
 } > src/Makevars

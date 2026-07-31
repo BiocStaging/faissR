@@ -1,0 +1,10 @@
+dataset,source_url,source_release,source_accession,citation,license_or_terms,redistribution_permitted,acquisition_date,preprocessing,final_rows,final_columns,storage_type,source_file,dataset_md5,dataset_sha256,notes
+COIL20,,,,,,,,,1440,16384,float32,,,,
+USPS,,,,,,,,,11000,256,float32,,,,
+FashionMNIST,,,,,,,,,70000,784,float32,,,,
+FlowRepository_FR-FCM-ZYRM_files,,,,,,,,,5220347,32,float32,,,,
+flow18,,,,,,,,,1000021,11,float32,,,,
+MNIST,,,,,,,,,70000,784,float32,,,,
+imagenet,,,,,,,,,1281167,1024,float32,,,,
+MetRef,,,,,,,,,873,375,float32,,,,
+mass41,,,,,,,,,965282,14,float32,,,,

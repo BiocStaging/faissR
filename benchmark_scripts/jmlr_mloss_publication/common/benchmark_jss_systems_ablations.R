@@ -21,6 +21,19 @@ logical_value <- function(x, default = FALSE) {
   tolower(x) %in% c("true", "t", "1", "yes")
 }
 
+worker_rscript <- function() {
+  configured <- Sys.getenv("R_BIN", unset = "")
+  if (nzchar(configured)) {
+    resolved <- unname(Sys.which(configured))
+    return(if (nzchar(resolved)) resolved else configured)
+  }
+  file.path(R.home("bin"), "Rscript")
+}
+
+worker_library_env <- function() {
+  paste0("R_LIBS=", paste(.libPaths(), collapse = .Platform$path.sep))
+}
+
 find_data <- function(path) {
   env <- new.env(parent = emptyenv())
   load(path, envir = env)
@@ -74,6 +87,38 @@ peak_rss_gb <- function() {
   line <- grep("^VmHWM:", readLines(path, warn = FALSE), value = TRUE)
   if (!length(line)) return(NA_real_)
   as.numeric(gsub("[^0-9]", "", line[[1L]])) / 1024^2
+}
+
+start_gpu_memory_sampler <- function(enabled, interval = 0.1) {
+  if (!isTRUE(enabled) || !nzchar(Sys.which("nvidia-smi"))) {
+    return(list(enabled = FALSE, sample = NA_character_, stop = NA_character_))
+  }
+  sample_path <- tempfile("faissR_gpu_memory_", fileext = ".csv")
+  stop_path <- tempfile("faissR_gpu_memory_stop_")
+  command <- sprintf(
+    "while [ ! -f %s ]; do nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader,nounits 2>/dev/null | awk -F, '$1 + 0 == %d {print}' >> %s; sleep %.2f; done",
+    shQuote(stop_path), Sys.getpid(), shQuote(sample_path), interval
+  )
+  system2("/bin/sh", c("-c", shQuote(command)), wait = FALSE, stdout = FALSE, stderr = FALSE)
+  Sys.sleep(min(interval, 0.1))
+  list(enabled = TRUE, sample = sample_path, stop = stop_path)
+}
+
+stop_gpu_memory_sampler <- function(sampler) {
+  if (!isTRUE(sampler$enabled)) return(list(peak_mib = NA_real_, source = "not_applicable"))
+  file.create(sampler$stop)
+  Sys.sleep(0.2)
+  values <- numeric()
+  if (file.exists(sampler$sample)) {
+    lines <- readLines(sampler$sample, warn = FALSE)
+    if (length(lines)) {
+      values <- suppressWarnings(as.numeric(trimws(sub("^[^,]*,", "", lines))))
+      values <- values[is.finite(values)]
+    }
+  }
+  unlink(c(sampler$sample, sampler$stop), force = TRUE)
+  list(peak_mib = if (length(values)) max(values) else NA_real_,
+       source = if (length(values)) "nvidia-smi_process_sampled_100ms" else "nvidia-smi_no_process_sample")
 }
 
 result_meta <- function(x) {
@@ -143,16 +188,27 @@ base_row <- function(args, x) data.frame(
   host_copy_sec = NA_real_,
   r_postprocess_sec = NA_real_,
   peak_rss_gb = NA_real_,
+  gpu_memory_peak_mib = NA_real_,
+  gpu_memory_source = if (args$backend == "cuda") "pending" else "not_applicable",
+  cuda_sync_mode = if (args$backend == "cuda")
+    "provider_completion_before_return;explicit_host_copy_timed_separately" else "not_applicable",
   result_signature = NA_real_,
   status = "failed",
   error = "",
   stringsAsFactors = FALSE
 )
 
-timed_call <- function(expr) {
+timed_call <- function(expr, sample_gpu = FALSE) {
+  sampler <- start_gpu_memory_sampler(sample_gpu)
   start <- proc.time()[["elapsed"]]
-  value <- force(expr)
-  list(value = value, elapsed = proc.time()[["elapsed"]] - start)
+  value <- tryCatch(force(expr), error = function(e) {
+    stop_gpu_memory_sampler(sampler)
+    stop(e)
+  })
+  elapsed <- proc.time()[["elapsed"]] - start
+  gpu_memory <- stop_gpu_memory_sampler(sampler)
+  list(value = value, elapsed = elapsed, gpu_memory_peak_mib = gpu_memory$peak_mib,
+       gpu_memory_source = gpu_memory$source)
 }
 
 worker_input_cache <- function(x, args) {
@@ -165,8 +221,10 @@ worker_input_cache <- function(x, args) {
     row$repeat_id <- repeat_id
     tryCatch({
       measured <- timed_call(run_nn(x, args$backend, args$method, args$metric,
-                                    as.integer(args$k), threads, TRUE))
+                                    as.integer(args$k), threads, TRUE), args$backend == "cuda")
       row$elapsed_sec <- measured$elapsed
+      row$gpu_memory_peak_mib <- measured$gpu_memory_peak_mib
+      row$gpu_memory_source <- measured$gpu_memory_source
       row$result_signature <- signature(measured$value)
       row$peak_rss_gb <- peak_rss_gb()
       row$status <- "success"
@@ -206,8 +264,10 @@ worker_self_processing <- function(x, args) {
   compiled <- base_row(args, x)
   compiled$phase <- "compiled_self_removal"
   rows[[1L]] <- tryCatch({
-    measured <- timed_call(run_nn(x, args$backend, args$method, args$metric, k, threads, TRUE))
+    measured <- timed_call(run_nn(x, args$backend, args$method, args$metric, k, threads, TRUE), args$backend == "cuda")
     compiled$elapsed_sec <- measured$elapsed
+    compiled$gpu_memory_peak_mib <- measured$gpu_memory_peak_mib
+    compiled$gpu_memory_source <- measured$gpu_memory_source
     compiled$result_signature <- signature(measured$value)
     compiled$peak_rss_gb <- peak_rss_gb()
     compiled$status <- "success"
@@ -221,9 +281,11 @@ worker_self_processing <- function(x, args) {
   r_side <- base_row(args, x)
   r_side$phase <- "r_self_removal"
   rows[[2L]] <- tryCatch({
-    search <- timed_call(run_nn(x, args$backend, args$method, args$metric, k + 1L, threads, FALSE))
+    search <- timed_call(run_nn(x, args$backend, args$method, args$metric, k + 1L, threads, FALSE), args$backend == "cuda")
     processed <- timed_call(r_remove_self(search$value, k))
     r_side$elapsed_sec <- search$elapsed + processed$elapsed
+    r_side$gpu_memory_peak_mib <- search$gpu_memory_peak_mib
+    r_side$gpu_memory_source <- search$gpu_memory_source
     r_side$r_postprocess_sec <- processed$elapsed
     r_side$result_signature <- signature(processed$value)
     r_side$peak_rss_gb <- peak_rss_gb()
@@ -244,10 +306,12 @@ worker_gpu_residency <- function(x, args) {
       x, k = as.integer(args$k), exclude_self = TRUE,
       method = args$method, metric = args$metric,
       tuning = "auto", target_recall = 0.99
-    ))
+    ), TRUE)
     copied <- timed_call(faissR::gpu_knn_to_host(search$value))
     row$elapsed_sec <- search$elapsed
     row$host_copy_sec <- copied$elapsed
+    row$gpu_memory_peak_mib <- search$gpu_memory_peak_mib
+    row$gpu_memory_source <- search$gpu_memory_source
     row$result_signature <- signature(copied$value)
     row$peak_rss_gb <- peak_rss_gb()
     row$status <- "success"
@@ -296,7 +360,7 @@ driver_main <- function(args) {
   if (!backend %in% c("cpu", "cuda")) stop("`backend` must be cpu or cuda.", call. = FALSE)
   manifest <- read.csv(normalizePath(args$manifest, mustWork = TRUE), stringsAsFactors = FALSE)
   if (!"path" %in% names(manifest) && "output" %in% names(manifest)) manifest$path <- manifest$output
-  datasets <- split_values(args$datasets, "COIL20,MNIST,TabulaMuris")
+  datasets <- split_values(args$datasets, "COIL20,MNIST")
   manifest <- manifest[manifest$dataset %in% datasets & file.exists(manifest$path), , drop = FALSE]
   if (!nrow(manifest)) stop("No selected datasets are available.", call. = FALSE)
   manifest$dataset_md5 <- vapply(
@@ -315,6 +379,9 @@ driver_main <- function(args) {
   repeats <- as.integer(args$repeats %||% 3L)
   k <- as.integer(args$k %||% 30L)
   metric <- args$metric %||% "euclidean"
+  rscript <- worker_rscript()
+  if (!file.exists(rscript)) stop("Cannot find the worker Rscript binary: ", rscript, call. = FALSE)
+  worker_env <- worker_library_env()
   total <- 0L
 
   jobs <- list()
@@ -345,7 +412,7 @@ driver_main <- function(args) {
       job[["input_type"]], job[["experiment"]]
     ))
     command <- c(
-      as.character(timeout), "Rscript", script, "--worker=TRUE",
+      as.character(timeout), rscript, script, "--worker=TRUE",
       paste0("--result_path=", result_path), paste0("--dataset=", job[["dataset"]]),
       paste0("--data_path=", job[["data_path"]]), paste0("--backend=", backend),
       paste0("--dataset_md5=", job[["dataset_md5"]]),
@@ -356,7 +423,10 @@ driver_main <- function(args) {
     log_stem <- sub("[.]csv$", "", basename(result_path))
     stdout_path <- file.path(out_dir, "worker_logs", paste0(log_stem, ".out"))
     stderr_path <- file.path(out_dir, "worker_logs", paste0(log_stem, ".err"))
-    status <- system2("timeout", command, stdout = stdout_path, stderr = stderr_path)
+    status <- system2(
+      "timeout", command, env = worker_env,
+      stdout = stdout_path, stderr = stderr_path
+    )
     if (!file.exists(result_path)) {
       detail <- if (file.exists(stderr_path)) {
         paste(tail(readLines(stderr_path, warn = FALSE), 20L), collapse = " | ")

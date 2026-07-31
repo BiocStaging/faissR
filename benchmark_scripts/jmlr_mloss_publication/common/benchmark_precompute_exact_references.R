@@ -347,11 +347,20 @@ run_task <- function(config, timeout, bench_script) {
   out <- tempfile("faissR_ref_out_", fileext = ".rds")
   saveRDS(config, cfg)
   on.exit(unlink(c(cfg, out)), add = TRUE)
-  cmd <- c(Sys.getenv("R_BIN", "Rscript"), "--vanilla", bench_script,
+  r_bin <- Sys.getenv("R_BIN", unset = "")
+  if (nzchar(r_bin)) {
+    resolved_r_bin <- unname(Sys.which(r_bin))
+    if (nzchar(resolved_r_bin)) r_bin <- resolved_r_bin
+  } else {
+    r_bin <- file.path(R.home("bin"), "Rscript")
+  }
+  if (!file.exists(r_bin)) stop("Cannot find the child Rscript binary: ", r_bin, call. = FALSE)
+  cmd <- c(r_bin, "--vanilla", bench_script,
            "--child=TRUE", paste0("--config=", cfg), paste0("--result=", out))
   timeout_bin <- Sys.which("timeout")
   if (nzchar(timeout_bin)) cmd <- c(timeout_bin, as.character(as.integer(ceiling(timeout))), cmd)
-  status <- system(paste(shQuote(cmd), collapse = " "), intern = TRUE)
+  worker_env <- paste0("R_LIBS=", paste(.libPaths(), collapse = .Platform$path.sep))
+  status <- system2(cmd[[1L]], cmd[-1L], env = worker_env, stdout = TRUE, stderr = TRUE)
   exit_status <- attr(status, "status") %||% 0L
   if (file.exists(out) && !identical(as.integer(exit_status), 124L)) return(readRDS(out))
   data.frame(

@@ -1146,17 +1146,6 @@ nn_compute <- function(data,
         "faiss_flat_l2"
       )
     }
-    if (identical(backend, "metal_grid")) {
-      return(metal_grid_self_knn(
-        data = data,
-        points = points,
-        self_query = self_query,
-        k = k,
-        exclude_self = isTRUE(exclude_self),
-        metric = metric,
-        input_float32 = TRUE
-      ))
-    }
     if (metric %in% c("cosine", "correlation")) {
       if (backend %in% c("faiss_flat_cosine", "faiss_flat_correlation")) {
         if (!isTRUE(faiss_available())) {
@@ -2773,15 +2762,13 @@ nn_compute <- function(data,
                backend %in% c("grid", "cpu_grid", "grid2d", "cpu_grid2d",
                               "grid3d", "cpu_grid3d", "cuda_grid",
                               "cuda_grid_auto", "gpu_grid", "cuda_grid2d",
-                              "cuda_grid3d", "metal_grid", "metal_grid2d",
-                              "metal_grid3d")) {
+                              "cuda_grid3d")) {
       backend <- backend
     } else if (identical(metric, "inner_product") &&
                backend %in% c("grid", "cpu_grid", "grid2d", "cpu_grid2d",
                               "grid3d", "cpu_grid3d", "cuda_grid",
                               "cuda_grid_auto", "gpu_grid", "cuda_grid2d",
-                              "cuda_grid3d", "metal_grid", "metal_grid2d",
-                              "metal_grid3d")) {
+                              "cuda_grid3d")) {
       stop("Grid nearest-neighbour search does not support `metric = \"inner_product\"`.", call. = FALSE)
     } else if (!backend %in% c("auto", "cpu", "cpu_auto",
                                "faiss_hnsw", "faiss_ivf", "faiss_ivf_flat",
@@ -4794,18 +4781,6 @@ nn_compute <- function(data,
     return(result)
   }
 
-  if (backend %in% c("metal_grid", "metal_grid2d", "metal_grid3d")) {
-    return(metal_grid_self_knn(
-      data = data,
-      points = points,
-      self_query = self_query,
-      k = k,
-      exclude_self = isTRUE(exclude_self),
-      metric = metric,
-      input_float32 = FALSE
-    ))
-  }
-
   if (backend %in% c("grid", "cpu_grid", "grid2d", "cpu_grid2d", "grid3d", "cpu_grid3d")) {
     if (!isTRUE(self_query)) {
       stop("`backend = \"cpu_grid\"` is only available for self-KNN searches.", call. = FALSE)
@@ -4985,12 +4960,12 @@ normalize_nn_backend_arg <- function(backend, arg = "backend") {
     backend,
     arg = arg,
     default = "auto",
-    formal_choices = c("auto", "cpu", "cuda", "metal")
+    formal_choices = c("auto", "cpu", "cuda")
   )
   if (is.na(backend) || !nzchar(backend)) backend <- "auto"
   backend <- tolower(backend)
-  if (!backend %in% c("auto", "cpu", "cuda", "metal")) {
-    stop("`", arg, "` must be one of \"auto\", \"cpu\", \"cuda\", or \"metal\".", call. = FALSE)
+  if (!backend %in% c("auto", "cpu", "cuda")) {
+    stop("`", arg, "` must be one of \"auto\", \"cpu\", or \"cuda\".", call. = FALSE)
   }
   backend
 }
@@ -5312,7 +5287,7 @@ cuda_cagra_route_available <- function(faiss_gpu_available_value = faiss_gpu_ava
 #'   `"missing_cuda_route"`, and `"missing_cuvs"` for benchmark preflight
 #'   tables.
 #' @return A data frame with one row per public `method`, `backend` (`"auto"`,
-#'   `"cpu"`, `"cuda"`, or `"metal"`), and `metric` combination. Columns include
+#'   `"cpu"`, or `"cuda"`), and `metric` combination. Columns include
 #'   `supported`, `exact`, `implementation`, and `notes`. If `runtime = TRUE`,
 #'   runtime availability columns are appended.
 #' @examples
@@ -5322,7 +5297,7 @@ cuda_cagra_route_available <- function(faiss_gpu_available_value = faiss_gpu_ava
 nn_capabilities <- function(runtime = FALSE) {
   runtime <- normalize_scalar_logical_arg(runtime, "runtime", default = FALSE)
   methods <- nn_method_labels()
-  backends <- c("auto", "cpu", "cuda", "metal")
+  backends <- c("auto", "cpu", "cuda")
   metrics <- nn_metric_labels()
   rows <- vector("list", length(methods) * length(backends) * length(metrics))
   i <- 0L
@@ -5353,20 +5328,6 @@ nn_capability_runtime_row <- function(row) {
       runtime_available = FALSE,
       runtime_reason = "unsupported_combination",
       runtime_notes = "Unsupported method/backend/metric combination.",
-      stringsAsFactors = FALSE
-    ))
-  }
-  if (identical(row$backend[[1L]], "metal")) {
-    available <- isTRUE(metal_grid_available_cpp())
-    return(data.frame(
-      resolved_backend = "metal_grid",
-      runtime_available = available,
-      runtime_reason = if (available) "available" else "missing_metal",
-      runtime_notes = if (available) {
-        "Native exact Metal grid KNN is available for 2D/3D self-search."
-      } else {
-        "A macOS Metal device is required for native Metal grid KNN."
-      },
       stringsAsFactors = FALSE
     ))
   }
@@ -5478,18 +5439,6 @@ nn_resolved_backend_available <- function(backend) {
   )) {
     return(list(available = TRUE, reason = "available", notes = "Native CPU route is available."))
   }
-  if (backend %in% c("metal_grid", "metal_grid2d", "metal_grid3d")) {
-    ok <- isTRUE(metal_grid_available_cpp())
-    return(list(
-      available = ok,
-      reason = if (ok) "available" else "missing_metal",
-      notes = if (ok) {
-        "Native exact Metal grid KNN is available for 2D/3D self-search."
-      } else {
-        "A macOS Metal device is required for native Metal grid KNN."
-      }
-    ))
-  }
   if (backend %in% c("hnsw", "cpu_hnsw")) {
     return(list(
       available = FALSE,
@@ -5569,22 +5518,7 @@ nn_capability_row <- function(method, backend, metric) {
   euclidean <- identical(metric, "euclidean")
   non_ip_metric <- metric %in% c("euclidean", "cosine", "correlation")
 
-  if (identical(backend, "metal")) {
-    supported <- method %in% c("auto", "grid") && non_ip_metric
-    exact <- if (supported) TRUE else NA
-    implementation <- if (supported) {
-      "native Metal exact 2D/3D grid"
-    } else {
-      NA_character_
-    }
-    notes <- if (supported) {
-      "Only valid for 2D/3D self-KNN. Cosine/correlation use normalized Euclidean grid search; unsupported shapes or methods fail without CPU fallback."
-    } else if (identical(metric, "inner_product") && method %in% c("auto", "grid")) {
-      "Metal grid search does not expose raw inner-product search."
-    } else {
-      "This nearest-neighbour method is not implemented for Metal."
-    }
-  } else if (identical(backend, "auto")) {
+  if (identical(backend, "auto")) {
     cpu <- nn_capability_row(method, "cpu", metric)
     cuda <- nn_capability_row(method, "cuda", metric)
     supported <- isTRUE(cpu$supported[[1L]]) || isTRUE(cuda$supported[[1L]])
@@ -5847,42 +5781,16 @@ resolve_public_nn_backend <- function(backend,
     backend,
     arg = "backend",
     default = "auto",
-    formal_choices = c("auto", "cpu", "cuda", "metal")
+    formal_choices = c("auto", "cpu", "cuda")
   )
   method_label <- normalize_nn_method(method)
   metric <- normalize_nn_metric(metric)
-  if (!tolower(backend_label) %in% c("auto", "cpu", "cuda", "metal")) {
-    stop("`backend` should be one of \"auto\", \"cpu\", \"cuda\", or \"metal\".", call. = FALSE)
+  if (!tolower(backend_label) %in% c("auto", "cpu", "cuda")) {
+    stop("`backend` should be one of \"auto\", \"cpu\", or \"cuda\".", call. = FALSE)
   }
   requested_device <- tolower(backend_label)
-  device <- if (identical(requested_device, "metal")) {
-    "metal"
-  } else {
-    normalize_public_compute_backend(backend)
-  }
+  device <- normalize_public_compute_backend(backend)
   method <- method_label
-  if (identical(requested_device, "metal")) {
-    if (!method %in% c("auto", "grid")) {
-      stop(
-        "Metal nearest-neighbour search currently supports only `method = \"grid\"` ",
-        "for exact two- or three-dimensional self-KNN.",
-        call. = FALSE
-      )
-    }
-    if (identical(self_query, FALSE)) {
-      stop("Metal grid nearest-neighbour search currently supports only self-KNN.", call. = FALSE)
-    }
-    if (!is.null(p) && !as.integer(p) %in% c(2L, 3L)) {
-      stop("Metal grid nearest-neighbour search requires a two- or three-column matrix.", call. = FALSE)
-    }
-    if (identical(metric, "inner_product")) {
-      stop("Metal grid nearest-neighbour search does not support `metric = \"inner_product\"`.", call. = FALSE)
-    }
-    if (!isTRUE(metal_grid_available_cpp())) {
-      stop("No native Metal grid nearest-neighbour backend is available on this machine.", call. = FALSE)
-    }
-    return("metal_grid")
-  }
   if (identical(requested_device, "auto") && !identical(method, "auto")) {
     device <- resolve_auto_public_nn_device(method, metric)
   }
@@ -6056,8 +5964,7 @@ nn_resolved_backend_public_method <- function(backend) {
   if (backend %in% c("grid", "cpu_grid", "grid2d", "grid3d",
                      "cpu_grid2d", "cpu_grid3d", "cuda_grid",
                      "cuda_grid_auto", "gpu_grid", "cuda_grid2d",
-                     "cuda_grid3d", "metal_grid", "metal_grid2d",
-                     "metal_grid3d")) return("grid")
+                     "cuda_grid3d")) return("grid")
   if (backend %in% c("faiss_hnsw", "cuda_cuvs_hnsw", "cuvs_hnsw")) return("hnsw")
   if (backend %in% c("faiss_ivf", "cpu_faiss_index_ivf", "faiss_ivf_flat",
                      "faiss_gpu_ivf", "faiss_gpu_ivf_flat",
@@ -6084,7 +5991,6 @@ nn_resolved_backend_device <- function(backend) {
   backend <- as.character(backend)[1L]
   if (is.na(backend) || !nzchar(backend)) return(NA_character_)
   if (backend %in% c("auto", "cpu_auto", "cuda_auto", "gpu_auto")) return("auto")
-  if (startsWith(backend, "metal")) return("metal")
   if (startsWith(backend, "cuda") ||
       startsWith(backend, "gpu") ||
       startsWith(backend, "cuvs") ||
@@ -8206,8 +8112,10 @@ attach_knn_recall_subset <- function(result,
     return(result)
   }
   sample_size <- knn_recall_subset_size(n)
-  set_rng_seed(as.integer(seed) + 1009L)
-  rows <- sort(sample.int(n, sample_size))
+  rows <- with_rng_seed(
+    as.integer(seed) + 1009L,
+    sort(sample.int(n, sample_size))
+  )
   exact_raw <- nn_compute(
     data,
     data[rows, , drop = FALSE],
@@ -10168,281 +10076,48 @@ grid_self_knn <- function(data,
   stop("`backend = \"cpu_grid\"` supports only two- or three-column matrices.", call. = FALSE)
 }
 
-metal_grid_self_knn <- function(data,
-                                points,
-                                self_query,
-                                k,
-                                exclude_self,
-                                metric,
-                                input_float32 = FALSE) {
-  if (!isTRUE(self_query)) {
-    stop("Metal grid nearest-neighbour search currently supports only self-KNN.", call. = FALSE)
-  }
-  if (!isTRUE(metal_grid_available_cpp())) {
-    stop("No native Metal grid nearest-neighbour backend is available on this machine.", call. = FALSE)
-  }
-  metric <- normalize_nn_metric(metric)
-  if (identical(metric, "inner_product")) {
-    stop("Metal grid nearest-neighbour search does not support `metric = \"inner_product\"`.", call. = FALSE)
-  }
-  input_dims <- if (is_float32_matrix_input(data)) {
-    float32_matrix_dims(data, "data")
-  } else {
-    dim(data)
-  }
-  if (!as.integer(input_dims[[2L]]) %in% c(2L, 3L)) {
-    stop("Metal grid nearest-neighbour search requires a two- or three-column matrix.", call. = FALSE)
-  }
-  metric_inputs <- NULL
-  search_data <- data
-  if (metric %in% c("cosine", "correlation")) {
-    metric_inputs <- normalized_euclidean_metric_inputs(
-      data,
-      points,
-      self_query,
-      metric,
-      storage = if (isTRUE(input_float32)) "float" else "double"
-    )
-    search_data <- metric_inputs$data
-  }
-  search_dims <- if (is_float32_matrix_input(search_data)) {
-    float32_matrix_dims(search_data, "data")
-  } else {
-    dim(search_data)
-  }
-  include_self <- !isTRUE(exclude_self)
-  nonself_k <- if (include_self) as.integer(k) - 1L else as.integer(k)
-  if (nonself_k > 128L) {
-    stop("Metal grid nearest-neighbour search supports at most 128 non-self neighbours.", call. = FALSE)
-  }
-  bins <- grid_bins_per_dim(
-    as.integer(search_dims[[1L]]),
-    max(1L, nonself_k),
-    as.integer(search_dims[[2L]])
-  )
-  out <- metal_grid_self_knn_cpp(
-    search_data,
-    as.integer(k),
-    as.integer(bins),
-    isTRUE(include_self)
-  )
-  resolved <- if (as.integer(search_dims[[2L]]) == 3L) {
-    "metal_grid3d"
-  } else {
-    "metal_grid2d"
-  }
-  result <- finish_nn_result(
-    out,
-    resolved,
-    k,
-    self_query,
-    exact = TRUE,
-    metric = metric
-  )
-  if (!is.null(metric_inputs)) {
-    result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
-  }
-  attr(result, "spatial_index") <- list(
-    strategy = if (as.integer(search_dims[[2L]]) == 3L) {
-      "native_metal_exact_uniform_grid_3d"
-    } else {
-      "native_metal_exact_uniform_grid_2d"
-    },
-    backend = resolved,
-    exact = TRUE,
-    accelerator = "metal",
-    metric_transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
-    bins_per_dim = as.integer(out$bins_per_dim),
-    n_cells = as.integer(out$n_cells),
-    self_column_included = isTRUE(out$self_column_included),
-    input_type = out$input_type %||% if (isTRUE(input_float32)) "float32" else "double_to_float32",
-    input_layout = out$input_layout %||% "column_major_float32_shared",
-    output_layout = out$output_layout %||% "knn_matrix_final",
-    r_side_reshaping = FALSE,
-    cpu_fallback = FALSE
-  )
-  if (isTRUE(input_float32)) {
-    result <- finish_float32_direct_result(result, out)
-  }
-  result
-}
-
 #' Nearest neighbors from row-wise matrices
 #'
 #' `nn()` provides a package-native nearest-neighbor entry point compatible with
 #' the common `nn(data, points, k)` use case. The public API separates device
 #' selection from algorithm selection. `backend` is one of `"auto"`, `"cpu"`,
-#' `"cuda"`, or `"metal"`; `method` chooses the algorithm. For example,
+#' or `"cuda"`; `method` chooses the algorithm. For example,
 #' `backend = "cpu", method = "grid"` uses the CPU grid implementation, while
 #' `backend = "cuda", method = "grid"` uses the CUDA grid implementation.
-#' `backend = "metal", method = "grid"` uses native exact Metal grid search
-#' for two- or three-column self-KNN and never falls back to CPU.
 #' Invalid combinations stop clearly before computation; for example,
 #' `backend = "cpu", method = "cagra"` errors because CAGRA is CUDA-only.
 #'
 #' @details
-#' Method descriptions:
+#' The public methods are:
 #' \itemize{
-#'   \item `"auto"`: shape-aware selector for the selected backend. CPU auto
-#'   uses exact, grid, FAISS IVF, FAISS HNSW, native CPU NSG/Vamana
-#'   refinement, or native CPU NN-descent depending on data shape and size.
-#'   CUDA auto uses CUDA
-#'   grid for 2D/3D Euclidean/cosine/correlation
-#'   self-KNN. For Euclidean non-grid self-KNN, CUDA auto uses benchmark-derived
-#'   shape/k/target-recall rules: large low-dimensional datasets use IVF-Flat,
-#'   very large high-dimensional datasets use IVF only for lower recall tiers,
-#'   and the high-recall default keeps exact FAISS GPU Flat/brute force for the
-#'   other measured shapes. Non-grid cosine/correlation/IP auto routes stay on
-#'   exact FAISS GPU Flat/cuVS brute force when available
-#'   [1-3,5,13-15,22-23]. When `backend = "auto"` is
-#'   combined with an explicit method, faissR first checks whether that exact
-#'   method/metric has a runtime-capable CUDA route; otherwise it uses the CPU
-#'   route when that method/metric is supported on CPU.
-#'   \item `"exact"`: exact nearest-neighbour search. CPU Euclidean exact uses
-#'   FAISS Flat L2, CPU cosine exact uses normalized FAISS Flat cosine, and CPU
-#'   correlation exact uses centered/normalized FAISS Flat correlation; these
-#'   routes apply compiled exact tuning metadata for query batching.
-#'   CUDA uses FAISS GPU Flat when the linked
-#'   FAISS build reports GPU support; Euclidean, cosine, and correlation exact
-#'   CUDA routes use compiled shape/k/target policies for GPU query batching.
-#'   CUDA exact search can otherwise use direct
-#'   cuVS brute force when available: Euclidean uses cuVS L2 directly,
-#'   cosine/correlation use normalized Euclidean search, and inner product uses
-#'   an exact maximum-inner-product-to-L2 transform [1-3,16].
-#'   \item `"flat"`: FAISS Flat exhaustive index. CPU and FAISS GPU support
-#'   L2, IP, and normalized-IP cosine/correlation routes when available
-#'   [1-2,16]. CPU Euclidean/cosine/correlation/inner-product Flat uses compiled metric/shape/k/target-recall
-#'   policies for query batching and fitted-index reuse; CUDA Euclidean/cosine/correlation
-#'   Flat uses compiled FAISS GPU Flat query-batch/resource policies. Result
-#'   metadata stores the selected table row in `attr(result, "flat_tuning")`.
-#'   \item `"bruteforce"`: exhaustive brute-force search. CPU Euclidean
-#'   brute force uses FAISS Flat L2, CPU cosine brute force uses normalized
-#'   FAISS Flat cosine, and CPU correlation brute force uses centered/normalized
-#'   FAISS Flat correlation. It has its own compiled metric/shape/k/target tuning
-#'   policy for FAISS query batching and fitted-index reuse, stored in
-#'   `attr(result, "bruteforce_tuning")`. On CUDA, RAPIDS cuVS brute force is
-#'   preferred when available. CUDA Euclidean and cosine brute force use compiled
-#'   shape/k/target-recall policies for GPU query batch size and resource reuse;
-#'   cosine/correlation use normalized Euclidean search and inner product uses
-#'   an exact maximum-inner-product-to-L2 transform around the cuVS L2 kernel
-#'   [1-3,16].
-#'   \item `"grid"`: native exact 2D/3D spatial grid search for Euclidean,
-#'   cosine, and correlation self-KNN. Cosine/correlation use normalized
-#'   Euclidean grid search. Include-self output is finalized in compiled
-#'   C++/CUDA code rather than by R-side matrix reshaping. Explicit grid
-#'   requests error for higher-dimensional matrices; use `"auto"` to let
-#'   faissR choose a non-grid method when appropriate.
-#'   \item `"hnsw"`: HNSW approximate graph-search index [3,5,16,22-23].
-#'   CPU uses FAISS HNSW. CUDA uses RAPIDS cuVS HNSW by building a CAGRA seed graph and
-#'   converting it with `cuvsHnswFromCagraWithDataset` using the host dataset
-#'   and cuVS CPU hierarchy; result metadata marks this as the cuVS wrapper
-#'   design rather than a pure all-GPU HNSW search implementation.
-#'   Default HNSW parameters are selected by compiled deterministic rules
-#'   without pilot tuning. Euclidean, cosine, correlation, and raw inner-product CPU FAISS HNSW use
-#'   HPC-derived lookup tables keyed by dataset shape group, `k` bucket
-#'   (`15`, `30`, `50`, or `100`), and
-#'   `target_recall = 0.9`, `0.95`, or `0.99`; CUDA cuVS HNSW uses
-#'   metric-specific shape/k/recall lookup tables for its CAGRA seed graph and
-#'   cuVS HNSW conversion route. CUDA raw inner product uses a
-#'   maximum-inner-product-to-L2 transform and currently uses
-#'   `benchmark_scripts/cuda_hnsw_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`
-#'   until the dedicated CUDA IP sweep replaces the seed rows. Raw
-#'   inner-product HNSW rows that did not reach the requested benchmark target
-#'   report `tuning_benchmark_target_met = FALSE`. Result approximation
-#'   metadata records the selected `tuning_rule`, `target_recall`,
-#'   `tuning_shape_group`, `tuning_k_bucket`, benchmark source fields, and
-#'   `tuning_benchmark_target_met`.
-#'   When a CUDA HNSW benchmarked shape did not reach the requested target,
-#'   `tuning_benchmark_basis` is recorded as
-#'   `"target_not_reached_best_available"`.
-#'   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
-#'   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
-#'   cosine/correlation routes on CPU and FAISS GPU [1-2,16]. CPU Euclidean,
-#'   cosine, correlation, and raw inner-product IVF record compiled
-#'   shape/k/target `nlist`/`nprobe` tiers and `tuning_benchmark_target_met` in
-#'   approximation metadata.
-#'   \item `"ivfpq"`: FAISS inverted-file index with product quantization,
-#'   mainly for compressed-memory approximate search. It supports L2, raw IP,
-#'   and normalized-IP cosine/correlation routes on CPU and FAISS GPU [1-2,6,16].
-#'   CPU Euclidean, cosine, correlation, and raw inner-product IVFPQ record
-#'   compiled shape/k/target `nlist`, `nprobe`, `pq_m`, and `pq_nbits` tiers
-#'   plus `tuning_benchmark_target_met` in approximation metadata. IVFPQ is
-#'   still a compression-first route, so best-available or target-not-reached
-#'   rows should not be read as accuracy guarantees. CUDA IVFPQ routes keep
-#'   CUDA-oriented shape/k/target rows for Euclidean, correlation, and raw
-#'   inner product; the raw-IP rows are seeded from the CUDA Euclidean IVFPQ
-#'   table until the dedicated IP sweep replaces them and report
-#'   `tuning_benchmark_target_met = FALSE`.
-#'   \item `"vamana"`: DiskANN/Vamana-style robust-pruned candidate graph
-#'   implemented in faissR [24]. CPU refines top-k within candidate rows
-#'   using native CPU scoring; CUDA refines candidates with faissR's native
-#'   CUDA row-candidate kernel. Large high-dimensional CPU inputs use a
-#'   deterministic FAISS HNSW seed before robust pruning; smaller inputs keep
-#'   the exact seed. The first `k` seed neighbours are protected before robust
-#'   pruning so pruning cannot discard neighbours already found by the seed
-#'   generator. Robust pruning runs in compiled C++ over compact candidate
-#'   storage before CPU or CUDA candidate refinement. cuVS Vamana is
-#'   acknowledged for GPU build/serialization, but current cuVS documentation
-#'   does not expose KNN search for this index. CPU Euclidean, cosine,
-#'   correlation, and raw inner-product plus CUDA Euclidean/cosine/correlation/raw-inner-product
-#'   `tuning = "auto"` select Vamana `r`, `search_l`, and `alpha` from compiled
-#'   shape/k/target-recall tables and record whether the benchmark row reached
-#'   the requested target. CUDA cosine rows come from measured normalized
-#'   float32 Vamana sweeps; CUDA correlation and raw-inner-product rows are
-#'   seeded from those cosine rows and report
-#'   `tuning_benchmark_target_met = FALSE` until the dedicated metric sweeps
-#'   are rerun. Cosine uses row-normalized Euclidean Vamana refinement and
-#'   correlation uses row-centered, normalized Euclidean Vamana refinement;
-#'   raw inner product uses shifted dot-product ordering. All keep
-#'   metric-specific tuning tables.
-#'   \item `"nsg"`: Navigating Spreading-out Graph style approximate search
-#'   [16,21,29]. CPU uses faissR's native NSG-style self-KNN candidate graph for
-#'   all public metrics to avoid unsafe linked-FAISS graph construction. CUDA
-#'   uses faissR's native NSG-style self-KNN candidate graph for all public
-#'   metrics; cosine/correlation use normalized Euclidean search and raw inner
-#'   product uses shifted dot-product distances. Large high-dimensional CPU
-#'   inputs use a deterministic FAISS HNSW seed before NSG/MRNG-style pruning;
-#'   smaller inputs keep the exact seed. The first `k` seed neighbours are
-#'   protected before compiled C++ NSG/MRNG-style pruning over compact
-#'   candidate storage. CPU Euclidean, cosine, correlation, and raw inner-product `tuning = "auto"` select NSG
-#'   `r` and `graph_k` from compiled shape/k/target-recall tables and record
-#'   whether the benchmark row reached the requested target.
-#'   \item `"nndescent"`: NN-descent approximate graph construction via
-#'   faissR's native CPU route, or direct cuVS on CUDA for Euclidean/L2 plus
-#'   normalized cosine/correlation. CUDA raw inner-product NN-descent is not
-#'   exposed because direct cuVS NN-descent does not support it. The native CPU route uses
-#'   random-projection window seeds, flat row-major graph buffers, and
-#'   fixed-width reverse-neighbour candidate storage in C++. CPU Euclidean,
-#'   cosine, correlation, and raw inner-product `tuning = "auto"` select pool
-#'   size, iterations, maximum candidates, and random projections from compiled
-#'   shape/k/target-recall tables. FAISS NNDescent is
-#'   experimental opt-in because linked FAISS builds can abort during graph
-#'   construction [3-4,16].
-#'   \item `"cagra"`: CUDA-only graph-search method via FAISS GPU CAGRA/cuVS
-#'   integration or direct RAPIDS cuVS CAGRA. By default faissR chooses FAISS
-#'   GPU CAGRA when that route is available and otherwise direct cuVS CAGRA;
-#'   set `options(faissR.cagra_implementation = "faiss_gpu")` or `"cuvs"` to
-#'   force one provider for benchmarking. Availability preflights respect this
-#'   forced provider for supported metrics, and approximation metadata records
-#'   `cagra_provider` plus `cagra_provider_option`. It supports Euclidean/L2,
-#'   cosine/correlation through normalized Euclidean graph search, and raw
-#'   inner product through a maximum-inner-product-to-L2 extra-dimension
-#'   transform whose returned distances are converted back to faissR's shifted
-#'   inner-product convention. CUDA Euclidean CAGRA `tuning = "auto"` uses
-#'   measured shape/k/target rows from
-#'   `benchmark_scripts/cuda_cagra_euclidean_shape_tuning_defaults_from_uploaded_results.csv`;
-#'   CUDA cosine normalizes rows to float32, CUDA correlation row-centers then
-#'   row-normalizes rows to float32, and CUDA raw inner product uses the
-#'   maximum-inner-product-to-L2 transform; all three use validation-pending
-#'   tables seeded from the measured Euclidean CAGRA sweep until the corrected
-#'   metric-specific sweeps are rerun. The raw-inner-product seed table is
-#'   `benchmark_scripts/cuda_cagra_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`.
-#'   Those seeded rows report
-#'   `tuning_benchmark_target_met = FALSE` [3,13-16].
+#'   \item `"auto"`: deterministic selection from the requested backend,
+#'   metric, data shape, `k`, and target recall. It does not run a timing pilot.
+#'   \item `"exact"`: exact search using FAISS Flat or direct cuVS brute force.
+#'   \item `"flat"`: an explicit FAISS exhaustive Flat index.
+#'   \item `"bruteforce"`: exhaustive search, using FAISS on CPU and preferring
+#'   direct cuVS on CUDA when available.
+#'   \item `"grid"`: exact 2D/3D self-KNN for Euclidean, cosine, or correlation.
+#'   \item `"hnsw"`: FAISS HNSW on CPU; CUDA uses the cuVS HNSW wrapper that
+#'   converts a CAGRA seed graph and is not a pure all-GPU HNSW search.
+#'   \item `"ivf"`: FAISS IVF-Flat approximate search with coarse-list probing.
+#'   \item `"ivfpq"`: compressed FAISS IVF-PQ approximate search.
+#'   \item `"ivfpq_fastscan"`: FAISS FastScan on CPU and the package's
+#'   separately identified cuVS 4-bit IVF-PQ route on CUDA.
+#'   \item `"vamana"`: a faissR robust-pruned candidate graph inspired by
+#'   DiskANN/Vamana, followed by CPU or CUDA candidate refinement.
+#'   \item `"nsg"`: a faissR NSG/MRNG-style candidate graph followed by CPU or
+#'   CUDA candidate refinement.
+#'   \item `"nndescent"`: native CPU NN-descent or direct cuVS NN-descent on
+#'   CUDA. CUDA raw inner product is unsupported because cuVS exposes a
+#'   symmetric one-dataset graph API.
+#'   \item `"cagra"`: CUDA-only FAISS GPU CAGRA or direct cuVS CAGRA. Use
+#'   `cagra_implementation` to request a provider explicitly.
 #' }
 #'
-#' References are numbered as in `docs/references.md` in the GitHub
-#' repository.
+#' Exact-family names are distinct public policies even when a backend resolves
+#' more than one of them to the same exhaustive provider. Result metadata
+#' records both the requested method and the concrete provider. Unsupported
+#' combinations fail instead of silently changing method, metric, or device.
 #'
 #' @references
 #' Johnson J, Douze M, Jegou H. Billion-scale similarity search with GPUs. IEEE
@@ -10485,14 +10160,11 @@ metal_grid_self_knn <- function(data,
 #'   compiled backend path rather than repaired by R-side post-processing. CUDA
 #'   graph routes that do not yet expose compiled include-self output shaping
 #'   require `exclude_self = TRUE` and fail clearly instead of reshaping in R.
-#' @param backend Device backend: `"auto"`, `"cpu"`, `"cuda"`, or `"metal"`. `"auto"`
+#' @param backend Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
 #'   uses a validated CUDA route only when the requested method/metric
 #'   combination is supported and CUDA/cuVS runtime support is available, and
 #'   otherwise resolves to CPU. Explicit `"cuda"` fails clearly when CUDA
-#'   support or the selected CUDA combination is unavailable. Explicit
-#'   `"metal"` uses native exact float32 grid search and is restricted to
-#'   two- or three-dimensional self-KNN with `method = "auto"` or `"grid"`
-#'   and Euclidean, cosine, or correlation distance. It never falls back to CPU.
+#'   support or the selected CUDA combination is unavailable.
 #' @param method Algorithm selector. `"auto"` chooses a shape-aware default for
 #'   the selected backend. Other values include `"exact"`, `"flat"`,
 #'   `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`,
@@ -10554,137 +10226,20 @@ metal_grid_self_knn <- function(data,
 #'   faissR. CUDA HNSW metadata records the available cuVS HNSW wrapper design.
 #'   Unsupported backend combinations fail clearly instead of returning neighbours
 #'   computed under a different metric.
-#' @param tuning Tuning policy. `"auto"` uses
-#'   deterministic no-pilot defaults for the resolved method, `"cache"`
-#'   reuses/stores pilot results, `"pilot"` tunes for this call without
-#'   persisting, `"fixed"` uses fixed defaults with tuning metadata, and
-#'   `"off"`/`"none"` disables tuning.
-#'   CPU Euclidean/cosine/correlation/inner-product `method = "exact"` uses compiled C++ policies for
-#'   FAISS Flat query batch size metadata; it records
-#'   `exact_recall_by_construction = TRUE` because exact search has no recall
-#'   approximation parameter.
-#'   CPU Euclidean/cosine/correlation/inner-product `method = "flat"` uses separate compiled C++ policies
-#'   for FAISS Flat query batch size and fitted-index reuse, derived from the
-#'   Flat CPU12 HPC tuning sweeps; it records the selected policy in
-#'   `attr(result, "flat_tuning")` and also remains exact by construction.
-#'   CPU Euclidean/cosine/correlation/inner-product `method = "bruteforce"` uses its own compiled C++
-#'   policy for FAISS Flat query batch size and fitted-index reuse, derived
-#'   from the bruteforce CPU12 HPC tuning sweeps; it records the selected policy in
-#'   `attr(result, "bruteforce_tuning")` and also remains exact by construction.
-#'   CUDA Euclidean/cosine/correlation/inner-product `method = "exact"` uses
-#'   compiled C++ policies for FAISS GPU Flat query batch size and GPU resource
-#'   reuse, including the correlation summary in
-#'   `benchmark_scripts/cuda_exact_correlation_shape_tuning_defaults_from_uploaded_results.csv`
-#'   and the validation-pending inner-product seed table in
-#'   `benchmark_scripts/cuda_exact_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`;
-#'   it records the selected policy in `attr(result, "exact_tuning")`.
-#'   CUDA Euclidean/cosine/correlation/inner-product `method = "flat"` uses separate compiled
-#'   policies for FAISS GPU Flat query batch size and GPU resource reuse,
-#'   including the correlation summary in
-#'   `benchmark_scripts/cuda_flat_correlation_shape_tuning_defaults_from_uploaded_results.csv`
-#'   and the validation-pending inner-product seed table in
-#'   `benchmark_scripts/cuda_flat_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`;
-#'   it records the selected policy in `attr(result, "flat_tuning")`.
-#'   CUDA Euclidean/cosine/correlation/inner-product `method = "bruteforce"` use separate compiled C++
-#'   policies for cuVS brute-force GPU query batch size and GPU resource reuse.
-#'   Euclidean rows are derived from CUDA bruteforce HPC tuning sweeps; cosine,
-#'   correlation, and inner-product rows initially reuse those batch/resource choices
-#'   as metric-transform proxies until empirical metric-specific sweeps replace
-#'   them. Correlation uses row-centering plus row normalization before cuVS L2
-#'   brute-force search; raw inner product uses an exact maximum-inner-product-to-L2
-#'   transform. The selected policy is recorded in
-#'   `attr(result, "bruteforce_tuning")`.
-#'   CUDA Euclidean/cosine/correlation/inner-product `method = "ivf"` uses compiled C++
-#'   policies for FAISS GPU IVF-Flat `nlist` and `nprobe`. Euclidean, cosine,
-#'   and correlation rows come from measured CUDA IVF sweeps; raw inner product
-#'   uses the validation-pending seed table in
-#'   `benchmark_scripts/cuda_ivf_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`
-#'   until `run_hpc_ivf_tuning_cuda_inner_product.sh` replaces it with measured
-#'   IP rows. Seeded rows record `tuning_benchmark_target_met = FALSE`.
-#'   CUDA Euclidean/correlation/inner-product `method = "ivfpq"` uses compiled
-#'   C++ policies for FAISS GPU IVF-PQ `nlist`, `nprobe`, `pq_m`, and
-#'   `pq_nbits`. Raw inner product uses
-#'   `benchmark_scripts/cuda_ivfpq_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`
-#'   until `run_hpc_ivfpq_tuning_cuda_inner_product.sh` replaces it with measured
-#'   IP rows. Seeded rows record `tuning_benchmark_target_met = FALSE`.
-#'   FAISS CPU HNSW uses deterministic no-pilot defaults based on `n`, `p`,
-#'   `k`, `metric`, and `target_recall`. Euclidean, cosine, correlation, and raw inner-product CPU FAISS HNSW
-#'   use compiled HPC-derived lookup tables for shape groups, `k` buckets
-#'   (`15`, `30`, `50`, and `100`), and target recall; rows that did not meet
-#'   the target on all shape-group datasets report
-#'   `tuning_benchmark_target_met = FALSE`.
-#'   CUDA cuVS HNSW Euclidean, cosine, correlation, and raw inner product use
-#'   separate compiled HPC-derived lookup tables keyed by dataset shape group,
-#'   `k` bucket (`15`, `30`, `50`, and `100`), and `target_recall`; rows that
-#'   did not meet the target report `tuning_benchmark_target_met = FALSE`.
-#'   Cosine uses row-normalized float32 Euclidean graph search, correlation
-#'   uses centered row-normalized float32 Euclidean graph search, and raw inner
-#'   product uses a maximum-inner-product-to-L2 transform before converting
-#'   distances back to the public metric. Explicit `faissR.cuvs_*` HNSW/CAGRA
-#'   options override those defaults. CPU Euclidean,
-#'   cosine, correlation, and raw inner-product FAISS IVF use compiled
-#'   shape/k/target-recall tables for `nlist` and `nprobe`, and record
-#'   `tuning_benchmark_target_met` so
-#'   best-available partial rows are not confused with guaranteed recall. CUDA
-#'   raw inner-product IVF has a validation-pending seed table from CUDA
-#'   Euclidean IVF until the metric-specific sweep is rerun. CPU Euclidean,
-#'   cosine, correlation, and raw inner-product FAISS IVFPQ use compiled
-#'   shape/k/target-recall tables for `nlist`, `nprobe`, `pq_m`, and
-#'   `pq_nbits`; CPU Euclidean, cosine, correlation, and raw inner-product
-#'   native NSG uses compiled shape/k/target-recall tables for `r` and
-#'   `graph_k`; CUDA Euclidean/cosine/correlation/raw-inner-product native NSG
-#'   uses compiled shape/k/target-recall tables for the same parameters. CUDA
-#'   Euclidean/cosine rows are measured, while CUDA correlation and raw
-#'   inner-product rows are validation-pending defaults seeded from measured
-#'   CUDA cosine rows until the dedicated metric sweeps are rerun; CPU
-#'   Euclidean, cosine, correlation, and raw inner-product
-#'   native Vamana and CUDA Euclidean/cosine/correlation/raw-inner-product native Vamana
-#'   use compiled shape/k/target-recall tables for `r`, `search_l`, and
-#'   `alpha`. CUDA Vamana correlation and raw-inner-product rows are
-#'   validation-pending defaults seeded from measured CUDA cosine rows until
-#'   the dedicated metric sweeps are rerun;
-#'   CUDA CAGRA cosine/correlation/raw-inner-product rows use
-#'   validation-pending defaults seeded from the measured CUDA Euclidean CAGRA
-#'   sweep until the metric-specific sweeps are rerun;
-#'   optional
-#'   FAISS GPU IVF `"cache"`/`"pilot"` tuning
-#'   currently runs only for Euclidean IVF. CPU and
-#'   CUDA HNSW use the selected
-#'   `target_recall` value. CUDA cosine `method = "ivfpq_fastscan"` uses a
-#'   shape/k/target policy seeded from the CUDA Euclidean FastScan sweep and
-#'   records `tuning_benchmark_target_met = FALSE` until the corrected cosine
-#'   sweep is rerun.
-#'   The default is the 0.99
-#'   tier where feasible; `target_recall = 0.95` and `0.9` select faster,
-#'   lower-recall HNSW tiers.
-#'   Deterministic method defaults are computed by C++ `nn_tune_*_cpp()`
-#'   helpers and record `tuning_source = "cpp"` in result metadata. Advanced
-#'   tuning and cache knobs use `options(faissR.<name> = ...)`.
-#' @param target_recall Speed/recall tier. Use `0.9`, `0.95`, or `0.99`.
-#'   CUDA `method = "auto"` uses it to choose between Flat/brute force and
-#'   IVF-Flat for Euclidean self-KNN. CPU Euclidean/cosine/correlation/inner-product
-#'   `method = "ivf"` and CPU Euclidean/cosine/correlation/inner-product
-#'   `method = "ivfpq"` use it for compiled `nlist`/`nprobe` or
-#'   `nlist`/`nprobe`/`pq_m`/`pq_nbits` tiers; CUDA Euclidean/cosine/correlation
-#'   `method = "ivf"` uses it for compiled `nlist`/`nprobe`, CUDA
-#'   Euclidean/correlation/raw-inner-product `method = "ivfpq"` uses it for
-#'   compiled `nlist`/`nprobe`/`pq_m`/`pq_nbits`, CPU Euclidean/cosine/correlation/inner-product
-#'   `method = "nsg"` uses it for compiled `r`/`graph_k` tiers, CUDA
-#'   Euclidean/cosine/correlation/inner-product `method = "nsg"` uses it for
-#'   compiled `r`/`graph_k` tiers, CPU Euclidean/cosine/correlation/inner-product
-#'   `method = "vamana"` and CUDA Euclidean/cosine/correlation/inner-product
-#'   `method = "vamana"` use it for compiled `r`/`search_l`/`alpha` tiers,
-#'   and CPU/CUDA HNSW use it for graph-search tiers.
-#'   CPU IVF/IVFPQ and CUDA IVF/IVFPQ metadata records `tuning_benchmark_target_met` for
-#'   benchmark-derived rows.
-#'   CPU Euclidean/cosine/correlation/inner-product and CUDA Euclidean/cosine/correlation/inner-product
-#'   `method = "exact"` record the requested tier in exact
-#'   tuning metadata, CPU Euclidean/cosine/correlation/inner-product and CUDA
-#'   Euclidean/cosine/correlation/inner-product `method = "flat"` record it in
-#'   flat-tuning metadata, and CPU Euclidean/cosine/correlation/inner-product `method = "bruteforce"` records it in
-#'   bruteforce-tuning metadata, while recall remains 1.0 by construction.
-#'   Lower values trade recall for speed where the selected method supports a
-#'   recall/speed tier.
+#' @param tuning Tuning policy. `"auto"` uses deterministic compiled defaults
+#'   selected from backend, method, metric, data shape, `k`, and
+#'   `target_recall`; it does not run a timing pilot. `"cache"` reuses or stores
+#'   pilot results, `"pilot"` tunes for the current call, `"fixed"` uses
+#'   untuned fixed defaults while retaining metadata, and `"off"`/`"none"`
+#'   disables tuning. Result metadata records the selected parameters, their
+#'   provenance, and `tuning_benchmark_target_met` when a benchmark-derived row
+#'   did not attain the requested target. Exact methods record recall 1 by
+#'   construction; their tuning controls batching, copies, and resource reuse.
+#' @param target_recall Requested recall tier: `0.9`, `0.95`, or `0.99`
+#'   (default). Approximate methods use it to select a speed/quality policy;
+#'   `method = "auto"` may also use it when choosing a method. It is a target,
+#'   not a guarantee: inspect `tuning_benchmark_target_met` and measured recall.
+#'   Exact methods remain exact and use this value only as policy metadata.
 #' @param cagra_implementation CUDA CAGRA provider for this call. `NULL` uses
 #'   the global `options(faissR.cagra_implementation = ...)` value. `"auto"`
 #'   uses a deterministic provider rule: compact high-dimensional self-KNN
@@ -10777,7 +10332,7 @@ nn <- function(data,
                points = data,
                k = NULL,
                exclude_self = FALSE,
-               backend = c("auto", "cpu", "cuda", "metal"),
+               backend = c("auto", "cpu", "cuda"),
                method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"),
                metric = c("euclidean", "cosine", "correlation", "inner_product"),
                tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
@@ -10845,6 +10400,8 @@ nn <- function(data,
   attr(result, "requested_method") <- public_nn_method_label(method)
   attr(result, "tuning") <- tuning
   attr(result, "target_recall") <- target_recall
+  result$exclude_self <- isTRUE(exclude_self)
+  attr(result, "exclude_self") <- result$exclude_self
   if (!is.null(auto_selection)) attr(result, "auto_selection") <- auto_selection
   finalize_nn_output(result, output)
 }
@@ -11064,11 +10621,32 @@ nn_gpu <- function(data,
       resolved_method
     )
   }
+  if (!inherits(out, "faissR_gpu_knn")) {
+    gpu_contract_fields <- c(
+      "handle", "indices_ptr", "distances_ptr", "n_query", "k",
+      "result_residency"
+    )
+    has_gpu_contract <- is.list(out) &&
+      all(gpu_contract_fields %in% names(out)) &&
+      identical(out$result_residency, "cuda") &&
+      typeof(out$handle) == "externalptr" &&
+      typeof(out$indices_ptr) == "externalptr" &&
+      typeof(out$distances_ptr) == "externalptr"
+    if (!isTRUE(has_gpu_contract)) {
+      stop(
+        "Internal error: the CUDA NN route did not return a valid ",
+        "`faissR_gpu_knn` object.",
+        call. = FALSE
+      )
+    }
+    class(out) <- unique(c("faissR_gpu_knn", class(out)))
+  }
   out$requested_backend <- "cuda"
   out$requested_method <- public_nn_method_label(method)
   out$tuning <- tuning
   out$target_recall <- target_recall
   out$self_query <- isTRUE(self_query)
+  out$exclude_self <- isTRUE(exclude_self)
   out$gpu_resident_execution_method <- resolved_method
   out$gpu_resident_execution_backend <- out$backend_used %||% NA_character_
   if (is.list(execution_tuning)) {
@@ -11106,6 +10684,7 @@ nn_gpu <- function(data,
   attr(out, "tuning") <- tuning
   attr(out, "target_recall") <- target_recall
   attr(out, "self_query") <- isTRUE(self_query)
+  attr(out, "exclude_self") <- isTRUE(exclude_self)
   attr(out, "gpu_resident_execution_method") <- resolved_method
   attr(out, "gpu_resident_execution_backend") <- out$backend_used %||% NA_character_
   if (is.list(execution_tuning)) {
@@ -11252,7 +10831,8 @@ print.faissR_nn <- function(x, ...) {
       )
     }
   }
-  if (isTRUE(attr(x, "self_query"))) {
+  if (isTRUE(attr(x, "self_query")) &&
+      !isTRUE(x$exclude_self %||% attr(x, "exclude_self"))) {
     cat("  first column: self-neighbor\n")
   }
   invisible(x)

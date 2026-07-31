@@ -972,11 +972,20 @@ run_task <- function(config, timeout, bench_script) {
   out <- tempfile("faissR_method_out_", fileext = ".rds")
   saveRDS(config, cfg)
   on.exit(unlink(c(cfg, out)), add = TRUE)
-  cmd <- c(Sys.getenv("R_BIN", "Rscript"), "--vanilla", bench_script,
+  r_bin <- Sys.getenv("R_BIN", unset = "")
+  if (nzchar(r_bin)) {
+    resolved_r_bin <- unname(Sys.which(r_bin))
+    if (nzchar(resolved_r_bin)) r_bin <- resolved_r_bin
+  } else {
+    r_bin <- file.path(R.home("bin"), "Rscript")
+  }
+  if (!file.exists(r_bin)) stop("Cannot find the child Rscript binary: ", r_bin, call. = FALSE)
+  cmd <- c(r_bin, "--vanilla", bench_script,
            "--child=TRUE", paste0("--config=", cfg), paste0("--result=", out))
   timeout_bin <- safe_timeout_bin()
   if (nzchar(timeout_bin)) cmd <- c(timeout_bin, as.character(as.integer(ceiling(timeout))), cmd)
-  status <- system(paste(shQuote(cmd), collapse = " "), intern = TRUE)
+  worker_env <- paste0("R_LIBS=", paste(.libPaths(), collapse = .Platform$path.sep))
+  status <- system2(cmd[[1L]], cmd[-1L], env = worker_env, stdout = TRUE, stderr = TRUE)
   exit_status <- attr(status, "status") %||% 0L
   if (file.exists(out) && !identical(as.integer(exit_status), 124L)) return(readRDS(out))
   row <- base_row(config, if (identical(as.integer(exit_status), 124L)) "timeout" else classify_error(paste(status, collapse = "\n")), paste(status, collapse = "\n"))
@@ -1044,7 +1053,19 @@ summarize_results <- function(out_dir, results_path, target_recalls, method) {
     ]
     for (target in target_recalls) {
       ok <- part0[part0$recall_at_k >= target, , drop = FALSE]
-      best <- if (nrow(ok)) ok[order(ok$elapsed_sec, -ok$recall_at_k), , drop = FALSE][1L, , drop = FALSE] else part0[order(-part0$recall_at_k, part0$elapsed_sec), , drop = FALSE][1L, , drop = FALSE]
+      best <- if (nrow(ok)) {
+        ok[
+          order(ok$elapsed_sec, -ok$recall_at_k, ok$candidate_id),
+          ,
+          drop = FALSE
+        ][1L, , drop = FALSE]
+      } else {
+        part0[
+          order(-part0$recall_at_k, part0$elapsed_sec, part0$candidate_id),
+          ,
+          drop = FALSE
+        ][1L, , drop = FALSE]
+      }
       idx <- idx + 1L
       rows[[idx]] <- cbind(target_recall_threshold = target, recommendation_basis = if (nrow(ok)) "fastest_meeting_target" else "best_recall_below_target", best)
     }

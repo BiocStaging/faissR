@@ -1300,7 +1300,7 @@ test_that("NN metric benchmark accounts for data-shaped method skips", {
   expect_true(is.na(env$cagra_implementation_values_for("cpu", "auto", c("faiss_gpu", "cuvs"))))
   expect_true(is.na(env$cagra_implementation_values_for("cpu", "cagra", c("faiss_gpu", "cuvs"))))
   expect_error(
-    env$validate_cagra_implementation_values("metal"),
+    env$validate_cagra_implementation_values("invalid_provider"),
     "cagra_implementations"
   )
 
@@ -2775,8 +2775,21 @@ test_that("publication systems-ablation scripts retain backend-specific headers"
   common <- readLines(common_path, warn = FALSE)
   expect_true(any(grepl("float::dbl(x)", common, fixed = TRUE)))
   expect_true(any(grepl('file.path(out_dir, "worker_logs")', common, fixed = TRUE)))
+  expect_true(any(grepl('file.path(R.home("bin"), "Rscript")', common, fixed = TRUE)))
+  expect_true(any(grepl('paste0("R_LIBS=", paste(.libPaths()', common, fixed = TRUE)))
   sys.source(common_path, envir = env)
-  expect_true(all(c("worker_input_cache", "worker_self_processing", "worker_gpu_residency") %in% ls(env)))
+  expect_true(all(c(
+    "worker_input_cache", "worker_self_processing", "worker_gpu_residency",
+    "worker_rscript", "worker_library_env"
+  ) %in% ls(env)))
+  expect_identical(env$worker_rscript(), file.path(R.home("bin"), "Rscript"))
+  expect_match(env$worker_library_env(), "^R_LIBS=")
+  old_r_bin <- Sys.getenv("R_BIN", unset = NA_character_)
+  on.exit({
+    if (is.na(old_r_bin)) Sys.unsetenv("R_BIN") else Sys.setenv(R_BIN = old_r_bin)
+  }, add = TRUE)
+  Sys.setenv(R_BIN = "Rscript")
+  expect_identical(env$worker_rscript(), unname(Sys.which("Rscript")))
 
   manifest <- readLines(file.path(root, "common", "make_hpc_float32_manifest.R"), warn = FALSE)
   cpu_reference <- readLines(file.path(root, "common", "benchmark_precompute_exact_references.R"), warn = FALSE)
@@ -2820,4 +2833,39 @@ test_that("publication references reject a changed dataset fingerprint", {
   writeBin(charToRaw("tabula-v2"), data_path)
   md5_v2 <- unname(tools::md5sum(data_path)[[1L]])
   expect_false(cpu_env$reference_is_valid(ref_path, 3L, md5_v2))
+})
+
+test_that("JSS reviewer-response scripts are parseable and preserve HPC contracts", {
+  root <- test_path("../../benchmark_scripts/jmlr_mloss_publication")
+  reviewer <- file.path(root, "reviewer_response")
+  if (!dir.exists(reviewer)) {
+    skip("Reviewer-response scripts are not available in this installed-package test context.")
+  }
+  r_files <- c(
+    file.path(root, "common", "benchmark_metric_conformance.R"),
+    file.path(root, "analysis", "analyze_leave_one_dataset_out.R"),
+    file.path(root, "analysis", "build_publication_figures.R"),
+    file.path(root, "analysis", "audit_publication_freeze.R")
+  )
+  expect_true(all(file.exists(r_files)))
+  expect_silent(lapply(r_files, parse))
+
+  cpu <- readLines(file.path(reviewer, "run_metric_conformance_cpu12.sh"), warn = FALSE)
+  cuda <- readLines(file.path(reviewer, "run_metric_conformance_cuda.sh"), warn = FALSE)
+  expect_true(any(grepl("^#SBATCH --account=immunology$", cpu)))
+  expect_true(any(grepl("^#SBATCH --partition=ada$", cpu)))
+  expect_true(any(grepl("^#SBATCH --ntasks=12$", cpu)))
+  expect_true(any(grepl("^#SBATCH --account=l40sfree$", cuda)))
+  expect_true(any(grepl("^#SBATCH --partition=l40s$", cuda)))
+  expect_true(any(grepl("^#SBATCH --gres=gpu:l40s:1$", cuda)))
+  expect_true(any(grepl("singularity exec --nv", cuda, fixed = TRUE)))
+
+  conformance <- readLines(r_files[[1L]], warn = FALSE)
+  expect_true(any(grepl("inner_product_rank_direction_pass", conformance, fixed = TRUE)))
+  expect_true(any(grepl("degenerate_row_pass", conformance, fixed = TRUE)))
+  expect_true(any(grepl('"grid", "euclidean"', conformance, fixed = TRUE)))
+  ablation <- readLines(file.path(root, "common", "benchmark_jss_systems_ablations.R"), warn = FALSE)
+  held_out <- readLines(file.path(root, "common", "benchmark_jmlr_tuned_methods.R"), warn = FALSE)
+  expect_true(any(grepl("nvidia-smi_process_sampled_100ms", ablation, fixed = TRUE)))
+  expect_true(any(grepl("nvidia-smi_process_sampled_100ms", held_out, fixed = TRUE)))
 })

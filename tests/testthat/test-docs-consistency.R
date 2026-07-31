@@ -168,8 +168,7 @@ test_that("public API excludes retired wrapper and platform-specific helper name
     "faiss.fit",
     "cuvs.fit",
     "predict_proba",
-    "knn_recall",
-    "metal_available"
+    "knn_recall"
   )
 
   expect_setequal(namespace_exports, expected_exports)
@@ -181,7 +180,6 @@ test_that("public API excludes retired wrapper and platform-specific helper name
   }
   man_topics <- sub("\\.Rd$", "", basename(list.files(man_dir, pattern = "\\.Rd$")))
   expect_false(any(retired_exports %in% man_topics))
-  expect_false(any(grepl("metal", man_topics, ignore.case = TRUE)))
 })
 
 test_that("R source documentation and function signatures do not contain duplicate arguments", {

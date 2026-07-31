@@ -2,11 +2,15 @@
 #define FAISSR_DLPACK_DLPACK_H_
 
 /*
+ * Copyright (c) 2017 by Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Minimal DLPack C ABI header for the optional RAPIDS cuVS backend.
  *
- * This header follows the stable public DLPack tensor structs and enum names
- * from dmlc/dlpack (Apache-2.0). faissR uses only these ABI definitions
- * to pass dense matrices to cuVS through its C API.
+ * Adapted from the stable public DLPack tensor structs and enum names in
+ * dmlc/dlpack. faissR uses only these ABI definitions to pass dense matrices
+ * to cuVS through its C API. The Apache-2.0 license is installed at
+ * licenses/DLPACK-LICENSE.txt.
  */
 
 #include <stdint.h>

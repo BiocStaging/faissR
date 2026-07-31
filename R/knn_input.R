@@ -99,11 +99,13 @@ finish_nn_result <- function(out,
   out$index_base <- out$index_base %||% 1L
   out$metric <- metric
   out$backend_used <- out$backend_used %||% backend
+  out$exact <- isTRUE(exact)
+  out$self_query <- isTRUE(self_query)
   attr(out, "backend") <- backend
   attr(out, "resolved_backend") <- backend
   attr(out, "k") <- as.integer(k)
   attr(out, "self_query") <- isTRUE(self_query)
-  attr(out, "exact") <- isTRUE(exact)
+  attr(out, "exact") <- out$exact
   attr(out, "metric") <- metric
   attr(out, "index_base") <- as.integer(out$index_base)
   attr(out, "backend_used") <- out$backend_used

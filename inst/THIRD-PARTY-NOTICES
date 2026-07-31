@@ -1,0 +1,16 @@
+Third-party software notices
+============================
+
+DLPack C ABI definitions
+------------------------
+
+The file src/dlpack/dlpack.h contains a minimal adaptation of public DLPack
+C ABI definitions from https://github.com/dmlc/dlpack.
+
+Copyright (c) 2017 by Contributors.
+Licensed under the Apache License, Version 2.0.
+
+The complete license text is installed as
+licenses/DLPACK-LICENSE.txt.
+
+No DLPack runtime library is bundled.

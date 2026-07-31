@@ -141,14 +141,6 @@ grid2d_self_knn_cpp <- function(data, k, parallel, cores, bins_per_dim, include_
     .Call(`_faissR_grid2d_self_knn_cpp`, data, k, parallel, cores, bins_per_dim, include_self)
 }
 
-metal_grid_available_cpp <- function() {
-    .Call(`_faissR_metal_grid_available_cpp`)
-}
-
-metal_grid_self_knn_cpp <- function(data, k, bins_per_dim, include_self) {
-    .Call(`_faissR_metal_grid_self_knn_cpp`, data, k, bins_per_dim, include_self)
-}
-
 grid3d_self_knn_cpp <- function(data, k, parallel, cores, bins_per_dim, include_self) {
     .Call(`_faissR_grid3d_self_knn_cpp`, data, k, parallel, cores, bins_per_dim, include_self)
 }

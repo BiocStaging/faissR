@@ -17,7 +17,7 @@ Numbered citations in this README refer to the bibliography in
 `faissR` provides native nearest-neighbour search, kNN models, and k-means for
 R workflows that need mandatory
 [FAISS](https://faiss.ai/index.html) support and optional NVIDIA CUDA/RAPIDS
-acceleration plus native Apple Metal spatial KNN [1-3,13-16]. The package is intended for CRAN-style source
+acceleration [1-3,13-16]. The package is intended for CRAN-style source
 installation: FAISS is required for all builds, while CUDA and RAPIDS cuVS are
 optional for CPU-only builds. A machine without CUDA can
 still install the package from source and use the CPU/FAISS functionality. For
@@ -123,10 +123,7 @@ headers and libraries discovered by `configure`.
   `options(faissR.cache_fitted_nn_indexes = FALSE)` to disable the cache or
   `faissR.cache_fitted_nn_indexes_max_entries` to bound memory.
 - `candidate_knn()` for exact top-k ranking inside supplied candidate rows.
-- Native exact 2D/3D grid KNN on CPU, CUDA, and Apple Metal. The Metal route
-  keeps float32 coordinates, grid cells, candidates, and top-k buffers on the
-  GPU and returns only the final neighbour matrices. Explicit Metal requests
-  never fall back to CPU.
+- Native exact 2D/3D grid KNN on CPU and CUDA.
 - `fast_kmeans()` for CPU, FAISS CPU/GPU, and optional cuVS k-means [7-8],
   with deterministic shape-aware defaults for `max_iter`, `n_init`, and `tol`
   when `tuning = "auto"`, including no-pilot multistart tiers for cheap
@@ -178,7 +175,7 @@ method/backend/metric matrix is in the
 
 | Function | Main use | Backends | Return |
 | --- | --- | --- | --- |
-| `nn()` | General nearest-neighbour search over reference/query matrices. Supports `backend = "auto"`, `"cpu"`, `"cuda"`, or `"metal"`; `method = "auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"ivfpq_fastscan"`, `"nndescent"`, `"nsg"`, `"vamana"`, or `"cagra"`; and `metric = "euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. Metal is deliberately restricted to exact 2D/3D grid self-KNN. `exclude_self = TRUE` removes self-neighbours in compiled code for self-KNN. | CPU, Apple Metal grid, FAISS CPU/GPU, native CUDA, direct RAPIDS cuVS where compiled. | A `faissR_nn` list with 1-based `indices`, `distances`, `index_base`, `distance_type`, `metric`, `backend_used`, and route/tuning metadata. `output = "float"` can return float32 distances when the optional `float` package is available. |
+| `nn()` | General nearest-neighbour search over reference/query matrices. Supports `backend = "auto"`, `"cpu"`, or `"cuda"`; `method = "auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"ivfpq_fastscan"`, `"nndescent"`, `"nsg"`, `"vamana"`, or `"cagra"`; and `metric = "euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. `exclude_self = TRUE` removes self-neighbours in compiled code for self-KNN. | CPU, FAISS CPU/GPU, native CUDA, and direct RAPIDS cuVS where compiled. | A `faissR_nn` list with 1-based `indices`, `distances`, `index_base`, `distance_type`, `metric`, `backend_used`, and route/tuning metadata. `output = "float"` can return float32 distances when the optional `float` package is available. |
 | `nn_gpu()` | GPU-resident exact-family KNN for downstream CUDA packages. It is narrower than `nn()` and is intended when another package needs device pointers instead of R matrices. | CUDA exact-family routes for `method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. Euclidean and raw inner product use FAISS GPU direct `bfKnn` when available; cosine/correlation use native CUDA exact transforms. | A `faissR_gpu_knn` object with an owning `handle`, CUDA-device `indices_ptr` and `distances_ptr`, `result_residency = "cuda"`, `indices_type = "int32"`, `distance_type = "float32"`, `device_to_host_result_copies = 0`, plus exact-family `execution_tuning` and, for `method = "auto"`, the compiled-policy `auto_preferred_tuning` when applicable. |
 | `gpu_knn_to_host()` | Explicit diagnostic conversion of a GPU-resident KNN result to ordinary R matrices. It is never called automatically by `nn_gpu()`. | Uses the CUDA result handle returned by `nn_gpu()` or the C-callable GPU API. | A host-side `faissR_nn` list with copied integer indices and numeric distances. |
 | `candidate_knn()` | Exact top-k reranking inside a user-supplied candidate-neighbour matrix. This is useful when another algorithm proposes candidates and faissR should compute the final ordered neighbours. | CPU compiled scorer with the public metrics. | A `faissR_nn` list restricted to the supplied candidates. |
@@ -196,13 +193,20 @@ method/backend/metric matrix is in the
 
 faissR also registers stable C-callable entry points with
 `R_RegisterCCallable()`. These are for downstream R packages with C/C++ code and
-are retrieved with `R_GetCCallable("faissR", "<name>")`.
+are retrieved through the installed `<faissR_api.h>` header. Downstream
+packages should add `faissR` to `LinkingTo`, include that header, and use its
+typed getter functions rather than repeating function-pointer signatures.
 
 | C-callable name | ABI | Purpose |
 | --- | --- | --- |
+| `faissR_c_api_version` | `int(void)` | Returns `1` for the current callable ABI. The header helper `faissR_c_api_version()` lets downstream packages reject an incompatible future ABI before dispatch. |
 | `faissR_nn_float32_call` | `(x, k, backend, metric, include_self, n_threads)` | CPU FAISS Flat float32 KNN route. It accepts ordinary R double matrices or optional `float::fl()`/float32 matrices and returns the stable host `faissR_nn` list with double distances. |
 | `faissR_nn_float32_call_output` | `(x, k, backend, metric, include_self, n_threads, distances)` | Same CPU FAISS Flat float32 route, with `distances = "double"` or `"float"` to request host distance storage type. |
 | `faissR_nn_cuda_tuned_gpu_call` | `(x, k, method, metric, include_self, target_recall)` | CUDA self-KNN route that keeps result buffers on the GPU for `method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. It returns the same `faissR_gpu_knn` object shape as `nn_gpu()`, including CUDA device pointers and `device_to_host_result_copies = 0`. |
+
+The returned GPU handle owns its device buffers. It must remain protected from
+R garbage collection while downstream code uses `indices_ptr` or
+`distances_ptr`; releasing the handle invalidates those pointers.
 
 Explicit GPU requests are honest: if a CUDA/cuVS backend is requested
 and was not compiled or is not available at runtime, faissR reports an error
@@ -290,13 +294,11 @@ Sys.setenv(FAISSR_AUTO_INSTALL_FAISS = "1")
 remotes::install_github("tkcaccia/faissR")
 ```
 
-The automatic Homebrew step is opt-in for ordinary user installs. On ordinary
-macOS GitHub Actions workers, `configure` may run `brew install faiss libomp`
-automatically because FAISS is mandatory. Bioconductor/r-universe macOS binary
-workers deliberately remove Homebrew and do not currently provide FAISS, so
-those builds are marked unsupported rather than using a hidden dependency
-manager. Set `FAISSR_AUTO_INSTALL_FAISS=0` to suppress the Homebrew convenience
-path.
+The Homebrew step runs only after the user explicitly sets
+`FAISSR_AUTO_INSTALL_FAISS=1`; generic CI variables do not trigger package
+manager changes. Bioconductor/r-universe macOS binary workers deliberately
+remove Homebrew and do not currently provide FAISS, so those builds are marked
+unsupported rather than using a hidden dependency manager.
 
 If Homebrew is not available on a user macOS machine, an already-active
 conda/mamba environment is also supported:

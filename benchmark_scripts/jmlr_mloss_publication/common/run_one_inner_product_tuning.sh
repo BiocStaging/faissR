@@ -15,6 +15,7 @@ THREAD_VALUES="${THREAD_VALUES:-${THREADS}}"
 K_VALUES="${K_VALUES:-15,30,50,100}"
 TARGET_RECALLS="${TARGET_RECALLS:-0.9,0.95,0.99}"
 METRICS="${METRICS:-inner_product}"
+METRIC_LABEL="${METRIC_LABEL:-$(printf '%s' "${METRICS}" | tr ',' '_')}"
 TIMEOUT="${TIMEOUT:-2000}"
 QUALITY_N="${QUALITY_N:-1024}"
 CALIBRATION_SEED="${CALIBRATION_SEED:-4}"
@@ -57,6 +58,11 @@ if [[ ! -f "${REAL_MANIFEST}" ]]; then
     --data_root="${DATA_ROOT}" --out="${REAL_MANIFEST}"
 fi
 
+run_r -e 'library(faissR); stopifnot(faissR::faiss_available()); cat("faissR tuning preflight OK\n")'
+if [[ "${BACKEND}" == "cuda" ]]; then
+  run_r -e 'library(faissR); stopifnot(faissR::cuda_available()); cat("faissR CUDA tuning preflight OK\n")'
+fi
+
 TUNING_ARGS=(
   "${COMMON_DIR}/benchmark_method_tuning_from_reference.R"
   --manifest="${REAL_MANIFEST}"
@@ -79,4 +85,4 @@ TUNING_ARGS=(
 )
 if [[ -n "${DATASETS:-}" ]]; then TUNING_ARGS+=(--datasets="${DATASETS}"); fi
 run_r "${TUNING_ARGS[@]}" \
-  2>&1 | tee -a "${OUT_DIR}/${METHOD_LABEL}_${BACKEND}_inner_product_tuning.log"
+  2>&1 | tee -a "${OUT_DIR}/${METHOD_LABEL}_${BACKEND}_${METRIC_LABEL}_tuning.log"

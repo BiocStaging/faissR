@@ -8,6 +8,22 @@ set_rng_seed <- function(seed) {
   invisible(seed)
 }
 
+with_rng_seed <- function(seed, code) {
+  had_seed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+  if (had_seed) {
+    old_seed <- get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+  }
+  on.exit({
+    if (had_seed) {
+      assign(".Random.seed", old_seed, envir = .GlobalEnv)
+    } else if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+      rm(".Random.seed", envir = .GlobalEnv)
+    }
+  }, add = TRUE)
+  set_rng_seed(seed)
+  force(code)
+}
+
 set_env_var <- function(name, value) {
   do.call(Sys.setenv, stats::setNames(list(as.character(value)), name))
 }
@@ -67,8 +83,10 @@ landmark_selection_features <- function(x, seed) {
   direct <- x[, seq_len(min(4L, p)), drop = FALSE]
   n_random <- min(4L, p)
 
-  set_rng_seed(seed)
-  directions <- matrix(stats::rnorm(p * n_random), nrow = p, ncol = n_random)
+  directions <- with_rng_seed(
+    seed,
+    matrix(stats::rnorm(p * n_random), nrow = p, ncol = n_random)
+  )
   norms <- sqrt(colSums(directions * directions))
   norms[!is.finite(norms) | norms == 0] <- 1
   directions <- sweep(directions, 2L, norms, "/")
@@ -142,8 +160,8 @@ fill_landmark_rows <- function(selected, n, count, seed) {
   if (length(selected) >= count) {
     return(selected[seq_len(count)])
   }
-  set_rng_seed(seed + 1009L)
   remaining <- setdiff(seq_len(n), selected)
   need <- count - length(selected)
-  c(selected, sort(sample(remaining, need)))
+  sampled <- with_rng_seed(seed + 1009L, sample(remaining, need))
+  c(selected, sort(sampled))
 }

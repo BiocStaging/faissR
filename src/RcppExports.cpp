@@ -537,30 +537,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// metal_grid_available_cpp
-bool metal_grid_available_cpp();
-RcppExport SEXP _faissR_metal_grid_available_cpp() {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    rcpp_result_gen = Rcpp::wrap(metal_grid_available_cpp());
-    return rcpp_result_gen;
-END_RCPP
-}
-// metal_grid_self_knn_cpp
-List metal_grid_self_knn_cpp(SEXP data, int k, int bins_per_dim, bool include_self);
-RcppExport SEXP _faissR_metal_grid_self_knn_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP bins_per_dimSEXP, SEXP include_selfSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
-    Rcpp::traits::input_parameter< int >::type k(kSEXP);
-    Rcpp::traits::input_parameter< int >::type bins_per_dim(bins_per_dimSEXP);
-    Rcpp::traits::input_parameter< bool >::type include_self(include_selfSEXP);
-    rcpp_result_gen = Rcpp::wrap(metal_grid_self_knn_cpp(data, k, bins_per_dim, include_self));
-    return rcpp_result_gen;
-END_RCPP
-}
 // grid3d_self_knn_cpp
 List grid3d_self_knn_cpp(NumericMatrix data, int k, bool parallel, int cores, int bins_per_dim, bool include_self);
 RcppExport SEXP _faissR_grid3d_self_knn_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP parallelSEXP, SEXP coresSEXP, SEXP bins_per_dimSEXP, SEXP include_selfSEXP) {
@@ -2109,8 +2085,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nndescent_self_knn_float32_cpp", (DL_FUNC) &_faissR_nndescent_self_knn_float32_cpp, 10},
     {"_faissR_ivf_self_knn_cpp", (DL_FUNC) &_faissR_ivf_self_knn_cpp, 7},
     {"_faissR_grid2d_self_knn_cpp", (DL_FUNC) &_faissR_grid2d_self_knn_cpp, 6},
-    {"_faissR_metal_grid_available_cpp", (DL_FUNC) &_faissR_metal_grid_available_cpp, 0},
-    {"_faissR_metal_grid_self_knn_cpp", (DL_FUNC) &_faissR_metal_grid_self_knn_cpp, 4},
     {"_faissR_grid3d_self_knn_cpp", (DL_FUNC) &_faissR_grid3d_self_knn_cpp, 6},
     {"_faissR_candidate_knn_cpp", (DL_FUNC) &_faissR_candidate_knn_cpp, 9},
     {"_faissR_candidate_knn_float32_cpp", (DL_FUNC) &_faissR_candidate_knn_float32_cpp, 9},

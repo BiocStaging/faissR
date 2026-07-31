@@ -2,11 +2,11 @@ citHeader("If you use faissR in published work, please cite or acknowledge the p
 
 bibentry(
   bibtype = "Manual",
-  title = "faissR: Fast Native Nearest Neighbours, Graphs, kNN Models, and k-means for R",
+  title = "faissR: FAISS-Backed Nearest Neighbours, kNN Models, and k-Means for R",
   author = c(person(given = "Stefano", family = "Cacciatore")),
   year = "2026",
   url = "https://github.com/tkcaccia/faissR",
-  textVersion = "Cacciatore S (2026). faissR: Fast Native Nearest Neighbours, Graphs, kNN Models, and k-means for R. https://github.com/tkcaccia/faissR"
+  textVersion = "Cacciatore S (2026). faissR: FAISS-Backed Nearest Neighbours, kNN Models, and k-Means for R. https://github.com/tkcaccia/faissR"
 )
 
 citHeader("faissR builds on FAISS for the FAISS CPU/GPU backends. Please also cite the FAISS project and relevant FAISS research papers for the indexes used in your analysis.")

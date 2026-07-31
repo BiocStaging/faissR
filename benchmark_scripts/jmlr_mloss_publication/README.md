@@ -1,8 +1,21 @@
-# JMLR MLOSS Publication Benchmark
+# JSS Publication Benchmark
+
+The directory name `jmlr_mloss_publication` and the output root
+`faissR_JMLR_MLOSS` are retained as historical paths so existing HPC launchers
+and archived results remain reproducible. The active manuscript target is the
+*Journal of Statistical Software* (JSS).
 
 This directory is separate from the earlier tuning files. Every Slurm file in
 `cpu/`, `cuda/`, and `calibration/` tests exactly one method and is intended to
 be submitted individually with `sbatch`.
+
+The fixed, complete rerun requested for the JSS revision is under
+`final_campaign/`. It excludes TabulaMuris, separates every supported
+backend/method/metric combination, and includes synthetic references,
+calibration, held-out validation, low-dimensional ablations, metric
+conformance, evidence aggregation, and freeze auditing. Run
+`Rscript final_campaign/validate_campaign.R` after copying the scripts to the
+HPC; it verifies all 242 launchers without running a benchmark.
 
 ## Resource headers
 
@@ -22,6 +35,10 @@ Only the job name and log filename vary by method.
   R-package method.
 - `cuda/`: one held-out publication benchmark file per CUDA method.
 - `common/`: shared R drivers required by the individual Slurm files.
+- `reviewer_response/`: metric conformance, selector sensitivity, publication
+  figures, provenance, and immutable freeze jobs required by the JSS review.
+- `final_campaign/`: the complete independent-job campaign and its precise
+  run order; use this directory for the new publication rerun.
 
 ## Run One By One
 
@@ -79,11 +96,15 @@ sbatch benchmark_scripts/jmlr_mloss_publication/ablations/run_systems_ablations_
 sbatch benchmark_scripts/jmlr_mloss_publication/ablations/run_systems_ablations_cuda.sh
 ```
 
+After the held-out runs and ablations are complete, follow
+`reviewer_response/README.md` to run the four-metric conformance suite,
+automatic-selector/oracle comparison, leave-one-dataset-out sensitivity,
+publication figures, and strict archive freeze audit.
+
 These jobs compare float32 and double input, cold and warm fitted-index reuse,
 compiled and R-side self-neighbour removal, and GPU-resident exact search with
-an explicit device-to-host copy. They use COIL20, MNIST, and TabulaMuris at
-`k = 30` to cover three different dataset shapes without duplicating the full
-method grid.
+an explicit device-to-host copy. They use COIL20 and MNIST at `k = 30` to
+cover contrasting dataset shapes without duplicating the full method grid.
 
 Every one-method and systems-ablation launcher performs a package/backend
 preflight inside the same Singularity invocation used for measurement. A stale
@@ -99,9 +120,7 @@ Reference files are saved in their dataset directories and reused by every
 method. Synthetic data are generated only when their manifest is absent.
 References and result rows include the source dataset MD5 fingerprint. A
 reference with a missing or different fingerprint is rejected, even when its
-matrix dimensions and `k` still match. For a changed TabulaMuris file, follow
-`refresh_tabula_muris/README.md`; targeted replacement runs are selected per
-dataset and do not displace newer evidence for unrelated datasets.
+matrix dimensions and `k` still match.
 
 ## Experimental Design
 

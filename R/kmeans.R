@@ -215,13 +215,15 @@ fast_kmeans <- function(data,
     ))
   }
 
-  set_rng_seed(seed)
-  stats_fit <- stats::kmeans(
-    x,
-    centers = centers,
-    iter.max = max_iter,
-    nstart = n_init,
-    algorithm = "Lloyd"
+  stats_fit <- with_rng_seed(
+    seed,
+    stats::kmeans(
+      x,
+      centers = centers,
+      iter.max = max_iter,
+      nstart = n_init,
+      algorithm = "Lloyd"
+    )
   )
   out <- list(
     cluster = as.integer(stats_fit$cluster),

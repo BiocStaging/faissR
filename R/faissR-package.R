@@ -7,7 +7,9 @@
 #' Classification probabilities
 #' are returned with `predict(type = "prob")`.
 #'
-#' FAISS is a required system dependency for all builds. RAPIDS cuVS/CUDA is
+#' FAISS is a required system dependency for every functional native build.
+#' Diagnostic-only builds on explicitly unsupported WebAssembly or Bioconductor
+#' staging platforms cannot execute nearest-neighbour methods. RAPIDS cuVS/CUDA is
 #' optional for CPU-only builds, so CPU-only machines can compile and use FAISS
 #' CPU indexes without NVIDIA libraries. For NVIDIA GPU builds, users should
 #' request the GPU features explicitly so missing CUDA/cuVS libraries
@@ -15,7 +17,7 @@
 #' integration when linked against a cuVS-enabled FAISS build; direct RAPIDS
 #' cuVS backends are also available when requested at build time. Explicit
 #' CUDA/cuVS requests fail clearly when those optional libraries are
-#' unavailable. Apple Metal provides native exact float32 2D/3D grid KNN. No
+#' unavailable. No
 #' Python bridge is used.
 #'
 #' @keywords internal

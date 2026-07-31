@@ -11,11 +11,13 @@ Description: Native nearest-neighbour search, k-nearest neighbour prediction,
     and k-means helpers for large dimensionality
     reduction workflows in high-throughput biological data analysis, including
     single-cell, flow cytometry, imaging, and mass spectrometry applications.
-    The package requires the FAISS C++ library for all builds, including
+    Functional native builds require the FAISS C++ library, including
     CPU-only indexes, and can optionally use FAISS GPU indexes with NVIDIA
     cuVS integration or direct RAPIDS cuVS/CUDA indexes on NVIDIA machines.
     CPU-only systems do not need NVIDIA libraries, but NVIDIA CUDA/cuVS
     libraries are mandatory when a GPU-enabled build is explicitly requested.
+    Unsupported WebAssembly and Bioconductor staging platforms may build
+    diagnostic-only stubs that report the unavailable native functionality.
     Supervised kNN models use
     knn(Xtrain, Ytrain) and predict(), or knn(Xtrain, Ytrain, Xtest) for
     immediate prediction. Class probabilities are returned through

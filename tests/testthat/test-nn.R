@@ -74,6 +74,13 @@ test_that("GPU-resident NN API exposes explicit device-output contract", {
   }
 })
 
+test_that("GPU-resident NN implementation enforces its public class contract", {
+  nn_body <- paste(deparse(body(nn_gpu)), collapse = "\n")
+  expect_match(nn_body, "gpu_contract_fields", fixed = TRUE)
+  expect_match(nn_body, "faissR_gpu_knn", fixed = TRUE)
+  expect_match(nn_body, "externalptr", fixed = TRUE)
+})
+
 test_that("GPU-resident NN tuning metadata includes raw inner-product rows", {
   exact <- faissR:::nn_gpu_tuning_params_for_method(
     n = 70000L,
@@ -117,12 +124,7 @@ test_that("public high-level APIs expose documented backends and auto tuning", {
 
   for (name in names(wrappers)) {
     f <- wrappers[[name]]
-    expected_backends <- if (identical(name, "nn")) {
-      c(backend_choices, "metal")
-    } else {
-      backend_choices
-    }
-    expect_equal(eval(f$backend), expected_backends, info = name)
+    expect_equal(eval(f$backend), backend_choices, info = name)
     expect_equal(eval(f$tuning), if (identical(name, "fast_kmeans")) kmeans_tuning_choices else nn_tuning_choices, info = name)
   }
 
@@ -808,16 +810,22 @@ test_that("float32 cuVS input can return float distances directly", {
   expect_false(out$float32_compatibility_conversion)
 })
 
-test_that("float32 C-callable entry point is registered", {
+test_that("installed C API header exposes versioned callable entry points", {
   skip_if_not_installed("Rcpp")
-  Rcpp::cppFunction('
-    #include <R_ext/Rdynload.h>
+  header <- system.file("include", "faissR_api.h", package = "faissR")
+  expect_true(nzchar(header))
+  expect_true(file.exists(header))
+  Rcpp::cppFunction(
+    code = '
     bool faissR_test_float32_callable_registered() {
-      DL_FUNC ptr = R_GetCCallable("faissR", "faissR_nn_float32_call");
-      DL_FUNC ptr_output = R_GetCCallable("faissR", "faissR_nn_float32_call_output");
-      return ptr != NULL && ptr_output != NULL;
+      return faissR_c_api_version() == 1 &&
+        faissR_get_nn_float32() != NULL &&
+        faissR_get_nn_float32_output() != NULL &&
+        faissR_get_nn_cuda_tuned_gpu() != NULL;
     }
-  ')
+  ',
+    includes = paste0('#include "', header, '"')
+  )
   expect_true(faissR_test_float32_callable_registered())
 })
 
@@ -1191,13 +1199,13 @@ test_that("nn_capabilities documents the public method metric matrix", {
 
   expect_s3_class(caps, "data.frame")
   expect_setequal(caps$method, methods)
-  expect_setequal(caps$backend, c("auto", "cpu", "cuda", "metal"))
+  expect_setequal(caps$backend, c("auto", "cpu", "cuda"))
   expect_setequal(caps$metric, metrics)
   expect_identical(
     names(caps),
     c("method", "backend", "metric", "supported", "exact", "implementation", "notes")
   )
-  expect_equal(nrow(caps), length(methods) * 4L * length(metrics))
+  expect_equal(nrow(caps), length(methods) * 3L * length(metrics))
   expect_equal(anyDuplicated(caps[c("method", "backend", "metric")]), 0L)
 
   expect_true(caps$supported[caps$method == "flat" & caps$metric == "correlation" & caps$backend == "cuda"])
@@ -1226,26 +1234,19 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_true(cagra_ip$supported)
   expect_match(cagra_ip$notes, "maximum-inner-product-to-L2")
   expect_true(all(is.na(caps$implementation[!caps$supported])))
-  expect_true(all(caps$supported[caps$method == "ivf" & caps$backend != "metal"]))
-  expect_true(all(caps$supported[caps$method == "ivfpq" & caps$backend != "metal"]))
-  expect_true(all(caps$supported[caps$method == "vamana" & caps$backend != "metal"]))
+  expect_true(all(caps$supported[caps$method == "ivf"]))
+  expect_true(all(caps$supported[caps$method == "ivfpq"]))
+  expect_true(all(caps$supported[caps$method == "vamana"]))
   expect_true(all(caps$supported[
     caps$method == "grid" & caps$metric %in% c("euclidean", "cosine", "correlation")
   ]))
   expect_true(all(!caps$supported[
     caps$method == "grid" & caps$metric == "inner_product"
   ]))
-  expect_true(all(caps$supported[
-    caps$backend == "metal" & caps$method %in% c("auto", "grid") &
-      caps$metric %in% c("euclidean", "cosine", "correlation")
-  ]))
-  expect_false(any(caps$supported[
-    caps$backend == "metal" & !caps$method %in% c("auto", "grid")
-  ]))
   expect_true(all(caps$supported[caps$method == "nsg" & caps$backend == "cpu"]))
   expect_true(all(caps$supported[caps$method == "nsg" & caps$backend == "cuda"]))
   expect_true(all(caps$supported[
-    caps$method == "nndescent" & caps$backend != "metal" &
+    caps$method == "nndescent" &
       caps$metric %in% c("euclidean", "cosine", "correlation")
   ]))
   expect_true(caps$supported[
@@ -1666,7 +1667,7 @@ test_that("backend auto explicit methods require metric-capable CUDA routes befo
 
 test_that("nn_capabilities agrees with public backend resolver", {
   caps <- nn_capabilities()
-  expect_equal(sort(unique(caps$backend)), c("auto", "cpu", "cuda", "metal"))
+  expect_equal(sort(unique(caps$backend)), c("auto", "cpu", "cuda"))
   for (i in seq_len(nrow(caps))) {
     row <- caps[i, , drop = FALSE]
     resolved <- tryCatch(
@@ -2127,120 +2128,6 @@ test_that("grid self KNN supports normalized cosine and correlation metrics", {
     expect_true(all(is.finite(grid$distances)), info = metric)
     expect_true(all(grid$distances >= -1e-6 & grid$distances <= 2 + 1e-6), info = metric)
   }
-})
-
-test_that("Metal grid self KNN exactly matches CPU grid neighbours in 2D and 3D", {
-  skip_if_not(isTRUE(faissR:::metal_grid_available_cpp()))
-
-  set.seed(12140)
-  for (p in c(2L, 3L)) {
-    x <- matrix(runif(4000L * p), ncol = p)
-    for (exclude_self in c(FALSE, TRUE)) {
-      cpu <- nn(
-        x,
-        k = 15L,
-        exclude_self = exclude_self,
-        backend = "cpu",
-        method = "grid",
-        n_threads = 2L
-      )
-      metal <- nn(
-        x,
-        k = 15L,
-        exclude_self = exclude_self,
-        backend = "metal",
-        method = "grid"
-      )
-
-      expect_identical(
-        t(apply(metal$indices, 1L, sort)),
-        t(apply(cpu$indices, 1L, sort)),
-        info = paste(p, exclude_self)
-      )
-      expect_equal(metal$distances, cpu$distances, tolerance = 5e-6, info = paste(p, exclude_self))
-      expect_equal(attr(metal, "backend"), paste0("metal_grid", p, "d"))
-      expect_true(isTRUE(attr(metal, "exact")))
-      expect_equal(attr(metal, "spatial_index")$accelerator, "metal")
-      expect_false(isTRUE(attr(metal, "spatial_index")$cpu_fallback))
-      expect_equal(
-        isTRUE(attr(metal, "spatial_index")$self_column_included),
-        !exclude_self
-      )
-    }
-  }
-})
-
-test_that("Metal grid preserves exact cosine and correlation rankings", {
-  skip_if_not(isTRUE(faissR:::metal_grid_available_cpp()))
-
-  set.seed(12141)
-  x <- matrix(rnorm(6000L), ncol = 3L)
-  for (metric in c("cosine", "correlation")) {
-    cpu <- nn(
-      x,
-      k = 15L,
-      exclude_self = TRUE,
-      backend = "cpu",
-      method = "grid",
-      metric = metric,
-      n_threads = 2L
-    )
-    metal <- nn(
-      x,
-      k = 15L,
-      exclude_self = TRUE,
-      backend = "metal",
-      method = "grid",
-      metric = metric
-    )
-
-    expect_identical(metal$indices, cpu$indices, info = metric)
-    expect_equal(metal$distances, cpu$distances, tolerance = 5e-6, info = metric)
-    expect_equal(attr(metal, "metric"), metric)
-    expect_match(attr(metal, "metric_transform"), "normalize_then_euclidean")
-    expect_false(isTRUE(attr(metal, "spatial_index")$cpu_fallback))
-  }
-})
-
-test_that("Metal grid accepts float32 without a double compatibility conversion", {
-  skip_if_not(isTRUE(faissR:::metal_grid_available_cpp()))
-  skip_if_not_installed("float")
-
-  set.seed(12142)
-  x <- matrix(runif(3000L), ncol = 3L)
-  double <- nn(x, k = 12L, exclude_self = TRUE, backend = "metal", method = "grid")
-  single <- nn(
-    float::fl(x),
-    k = 12L,
-    exclude_self = TRUE,
-    backend = "metal",
-    method = "grid",
-    output = "float"
-  )
-
-  expect_identical(single$indices, double$indices)
-  expect_equal(float::dbl(single$distances), double$distances, tolerance = 5e-6)
-  expect_equal(single$input_type, "float32")
-  expect_false(isTRUE(single$float32_compatibility_conversion))
-  expect_true(inherits(single$distances, "float32"))
-})
-
-test_that("Metal grid rejects unsupported shapes, searches, metrics, and methods", {
-  skip_if_not(isTRUE(faissR:::metal_grid_available_cpp()))
-
-  x <- matrix(runif(600L), ncol = 3L)
-  query <- x[seq_len(10L), , drop = FALSE]
-  expect_error(
-    nn(matrix(runif(800L), ncol = 4L), k = 5L, backend = "metal"),
-    "two- or three-column"
-  )
-  expect_error(nn(x, query, k = 5L, backend = "metal"), "only self-KNN")
-  expect_error(nn(x, k = 5L, backend = "metal", metric = "inner_product"), "inner_product")
-  expect_error(nn(x, k = 5L, backend = "metal", method = "hnsw"), "only.*grid")
-  expect_error(
-    nn(matrix(runif(450L), ncol = 3L), k = 129L, exclude_self = TRUE, backend = "metal"),
-    "at most 128"
-  )
 })
 
 test_that("public grid method rejects higher-dimensional data explicitly", {
@@ -2833,7 +2720,7 @@ test_that("CUDA CAGRA implementation can be selected per call", {
       matrix(rnorm(20), ncol = 4),
       k = 2L,
       backend = "cpu",
-      cagra_implementation = "metal"
+      cagra_implementation = "invalid_provider"
     ),
     "cagra_implementation"
   )
@@ -4963,7 +4850,7 @@ test_that("cuvs availability helper returns a logical scalar", {
 test_that("backend_info reports native availability without crashing", {
   info <- backend_info()
   expect_s3_class(info, "data.frame")
-  expect_setequal(info$backend, c("cpu", "faiss", "faiss_gpu_cuvs", "cuvs", "cuda", "metal_grid"))
+  expect_setequal(info$backend, c("cpu", "faiss", "faiss_gpu_cuvs", "cuvs", "cuda"))
   expect_true(all(c(
     "available",
     "knn_available",
@@ -4991,11 +4878,6 @@ test_that("backend_info reports native availability without crashing", {
   expect_match(info$supported_methods[info$backend == "cuda"], "nsg")
   expect_match(info$supported_methods[info$backend == "cuda"], "ivfpq")
   expect_match(info$supported_methods[info$backend == "cuda"], "cagra")
-  expect_equal(info$supported_methods[info$backend == "metal_grid"], "grid")
-  expect_match(info$supported_metrics[info$backend == "metal_grid"], "euclidean")
-  expect_match(info$supported_metrics[info$backend == "metal_grid"], "cosine")
-  expect_match(info$supported_metrics[info$backend == "metal_grid"], "correlation")
-  expect_false(grepl("inner_product", info$supported_metrics[info$backend == "metal_grid"]))
   expect_match(info$supported_metrics[info$backend == "cpu"], "euclidean")
   expect_match(info$supported_metrics[info$backend == "cpu"], "cosine")
   expect_match(info$supported_metrics[info$backend == "cpu"], "correlation")
