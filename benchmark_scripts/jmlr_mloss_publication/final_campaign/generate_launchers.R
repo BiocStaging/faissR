@@ -776,6 +776,11 @@ readme <- c(
   "sbatch benchmark_scripts/jmlr_mloss_publication/final_campaign/qa/run_package_route_qa_cuda.sh",
   "```",
   "",
+  "The image filename is a deployment label and is not accepted as package",
+  "identity. The preflight reads `packageVersion(\"faissR\")` inside the image",
+  "and the embedded 40-character `FAISSR_IMAGE_COMMIT`; both must match the",
+  "frozen campaign even when the filename contains an older version string.",
+  "",
   "All evidence is written below",
   "`/scratch/firenze/NN/faissR_JMLR_MLOSS/final_campaign/`."
 )
@@ -832,6 +837,7 @@ commands <- c(
   "BASE_DIR=\"${BASE_DIR:-/scratch/firenze/NN}\"",
   "export SINGULARITY_IMAGE=\"${SINGULARITY_IMAGE:-${BASE_DIR}/singularity/fastembedr_cuda_faissR_0.99.19.sif}\"",
   sprintf("export EXPECTED_FAISSR_VERSION=%s", shell_quote(publication_version)),
+  "# The filename is only a deployment label; installed version and embedded commit are authoritative.",
   "IMAGE_FAISSR_VERSION=\"$(singularity exec --cleanenv \"${SINGULARITY_IMAGE}\" Rscript -e 'cat(as.character(utils::packageVersion(\"faissR\")))')\"",
   "IMAGE_FAISSR_COMMIT=\"$(singularity exec --cleanenv \"${SINGULARITY_IMAGE}\" /bin/sh -c 'printf \"%s\" \"${FAISSR_IMAGE_COMMIT:-}\"')\"",
   "printf 'Image: %s\\nfaissR version: %s\\nfaissR commit: %s\\n' \"${SINGULARITY_IMAGE}\" \"${IMAGE_FAISSR_VERSION}\" \"${IMAGE_FAISSR_COMMIT:-UNSET}\"",

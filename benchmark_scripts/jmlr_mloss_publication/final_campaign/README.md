@@ -76,5 +76,10 @@ sbatch benchmark_scripts/jmlr_mloss_publication/final_campaign/qa/run_package_ro
 sbatch benchmark_scripts/jmlr_mloss_publication/final_campaign/qa/run_package_route_qa_cuda.sh
 ```
 
+The image filename is a deployment label and is not accepted as package
+identity. The preflight reads `packageVersion("faissR")` inside the image
+and the embedded 40-character `FAISSR_IMAGE_COMMIT`; both must match the
+frozen campaign even when the filename contains an older version string.
+
 All evidence is written below
 `/scratch/firenze/NN/faissR_JMLR_MLOSS/final_campaign/`.
