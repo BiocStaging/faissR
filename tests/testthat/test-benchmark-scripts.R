@@ -3631,6 +3631,79 @@ test_that("final JSS campaign submitter preserves explicit phase gates", {
   expect_true(any(grepl("run_package_route_qa_cuda.sh", output, fixed = TRUE)))
 })
 
+test_that("final JSS campaign submitter preserves a partial submission ledger", {
+  campaign <- test_path(
+    "../../benchmark_scripts/jmlr_mloss_publication/final_campaign"
+  )
+  submitter_path <- file.path(campaign, "submit_campaign.R")
+  if (!file.exists(submitter_path)) {
+    skip("Final campaign submitter is unavailable after installation.")
+  }
+  old_source_only <- Sys.getenv("FAISSR_JSS_SOURCE_ONLY", unset = NA_character_)
+  tracked_env <- c(
+    "BASE_DIR", "SINGULARITY_IMAGE", "EXPECTED_FAISSR_VERSION",
+    "FAISSR_PACKAGE_COMMIT"
+  )
+  old_env <- Sys.getenv(tracked_env, unset = NA_character_)
+  on.exit({
+    if (is.na(old_source_only)) Sys.unsetenv("FAISSR_JSS_SOURCE_ONLY") else
+      Sys.setenv(FAISSR_JSS_SOURCE_ONLY = old_source_only)
+    for (i in seq_along(tracked_env)) {
+      if (is.na(old_env[[i]])) Sys.unsetenv(tracked_env[[i]]) else
+        do.call(Sys.setenv, setNames(list(old_env[[i]]), tracked_env[[i]]))
+    }
+  }, add = TRUE)
+
+  Sys.setenv(FAISSR_JSS_SOURCE_ONLY = "true")
+  env <- new.env(parent = globalenv())
+  sys.source(submitter_path, envir = env)
+  env$script_path <- function() submitter_path
+
+  base_dir <- tempfile("faissR-submit-ledger-")
+  dir.create(base_dir, recursive = TRUE)
+  Sys.setenv(
+    BASE_DIR = base_dir,
+    SINGULARITY_IMAGE = file.path(base_dir, "frozen.sif"),
+    EXPECTED_FAISSR_VERSION = "0.99.20"
+  )
+  calls <- list()
+  fake_submitter <- function(command, args, stdout, stderr) {
+    calls[[length(calls) + 1L]] <<- list(command = command, args = args)
+    if (length(calls) == 1L) return("12345")
+    value <- "simulated sbatch rejection"
+    attr(value, "status") <- 1L
+    value
+  }
+  fake_preflight <- function(image, expected_version) {
+    list(version = expected_version, commit = paste(rep("a", 40L), collapse = ""))
+  }
+
+  expect_error(
+    env$submit_phase(
+      "qa", preflight = fake_preflight, submitter = fake_submitter
+    ),
+    "Submission failed after 1 jobs"
+  )
+  expect_length(calls, 2L)
+  expect_true(all(vapply(
+    calls,
+    function(x) normalizePath(tail(x$args, 1L), mustWork = TRUE) %in%
+      normalizePath(env$phase_launchers(campaign, "qa"), mustWork = TRUE),
+    logical(1L)
+  )))
+
+  ledgers <- list.files(
+    file.path(base_dir, "faissR_JMLR_MLOSS", "final_campaign", "submissions"),
+    pattern = "[.]csv$", full.names = TRUE
+  )
+  expect_length(ledgers, 1L)
+  ledger <- read.csv(ledgers[[1L]], stringsAsFactors = FALSE)
+  expect_identical(ledger$submission_status, c("submitted", "failed"))
+  expect_equal(ledger$job_id[[1L]], 12345)
+  expect_true(is.na(ledger$job_id[[2L]]))
+  expect_match(ledger$submission_output[[2L]], "simulated sbatch rejection")
+})
+
 test_that("JSS compact replication report is executed and error-free", {
   jss <- test_path("../../manuscript/jss")
   code_path <- file.path(jss, "code.R")

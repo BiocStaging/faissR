@@ -639,6 +639,9 @@ entry point. It preflights the image, submits those unchanged launchers one at
 a time for an explicitly named phase, and saves the returned Slurm identifiers
 with the package/image identity. Phase advancement remains manual so failed QA,
 reference, calibration, or aggregation gates cannot be bypassed accidentally.
+The ledger is updated after every submission, including a failure record when
+Slurm rejects a later launcher, so accepted jobs remain identifiable and are
+not blindly duplicated on retry.
 The directory retains its historical \path{jmlr_mloss_publication} name, but
 the protocol and artifacts described here are the JSS submission campaign; the
 path is not a claim of simultaneous submission to another journal.

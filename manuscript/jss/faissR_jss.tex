@@ -1012,7 +1012,9 @@ The full special-hardware campaign has a single commented submission program,
 version and embedded source commit, then submits each existing CPU/CUDA Slurm
 launcher separately for one explicitly requested phase. It records a CSV job
 ledger and never advances to a later phase automatically, so report inspection
-and policy-freeze gates remain enforceable.
+and policy-freeze gates remain enforceable. The ledger is persisted after every
+\code{sbatch} call, preserving accepted job identifiers even when a later
+submission in the same phase fails.
 
 \section{Limitations} \label{sec:limitations}
 

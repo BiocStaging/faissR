@@ -130,7 +130,8 @@ preflight_image <- function(image, expected_version) {
   list(version = version, commit = tolower(commit))
 }
 
-submit_phase <- function(phase, dry_run = FALSE) {
+submit_phase <- function(
+    phase, dry_run = FALSE, preflight = preflight_image, submitter = NULL) {
   campaign_dir <- dirname(script_path())
   contract <- phase_contract()
   if (identical(phase, "list")) {
@@ -172,7 +173,7 @@ submit_phase <- function(phase, dry_run = FALSE) {
       unset = "<commit-read-from-image-during-live-submission>"
     )
   } else {
-    identity <- preflight_image(image, expected_version)
+    identity <- preflight(image, expected_version)
     commit <- identity$commit
     Sys.setenv(
       SINGULARITY_IMAGE = image,
@@ -185,50 +186,19 @@ submit_phase <- function(phase, dry_run = FALSE) {
   relative <- substring(launchers, nchar(suite_root) + 2L)
   commands <- sprintf(
     "sbatch --export=ALL,FAISSR_PACKAGE_COMMIT=%s %s",
-    commit, relative
+    commit, shQuote(launchers)
   )
   if (dry_run) {
     cat(paste(commands, collapse = "\n"), "\n", sep = "")
     return(invisible(commands))
   }
-  if (!nzchar(Sys.which("sbatch"))) {
-    stop("`sbatch` is not available on PATH.", call. = FALSE)
-  }
-
-  records <- vector("list", length(launchers))
-  for (i in seq_along(launchers)) {
-    output <- system2(
-      "sbatch",
-      c(
-        "--parsable",
-        paste0("--export=ALL,FAISSR_PACKAGE_COMMIT=", commit),
-        relative[[i]]
-      ),
-      stdout = TRUE,
-      stderr = TRUE
-    )
-    status <- attr(output, "status")
-    if (!is.null(status) && status != 0L) {
-      stop(
-        "Submission failed after ", i - 1L, " jobs: ",
-        paste(output, collapse = "\n"),
-        call. = FALSE
-      )
+  if (is.null(submitter)) {
+    if (!nzchar(Sys.which("sbatch"))) {
+      stop("`sbatch` is not available on PATH.", call. = FALSE)
     }
-    records[[i]] <- data.frame(
-      phase = phase,
-      launcher = relative[[i]],
-      job_id = sub(";.*$", "", trimws(output[[1L]])),
-      image = image,
-      faissR_version = expected_version,
-      faissR_commit = commit,
-      submitted_utc = format(Sys.time(), tz = "UTC", usetz = TRUE),
-      stringsAsFactors = FALSE
-    )
-    cat(sprintf("[%d/%d] %s\n", i, length(launchers), output[[1L]]))
+    submitter <- system2
   }
 
-  records <- do.call(rbind, records)
   log_dir <- file.path(
     base_dir, "faissR_JMLR_MLOSS", "final_campaign", "submissions"
   )
@@ -236,11 +206,77 @@ submit_phase <- function(phase, dry_run = FALSE) {
   log_path <- file.path(
     log_dir,
     sprintf(
-      "%s_%s.csv", phase,
-      format(Sys.time(), tz = "UTC", format = "%Y%m%d_%H%M%S")
+      "%s_%s_pid%s.csv", phase,
+      format(Sys.time(), tz = "UTC", format = "%Y%m%d_%H%M%S"),
+      Sys.getpid()
     )
   )
-  write.csv(records, log_path, row.names = FALSE)
+  write_ledger <- function(rows) {
+    write.csv(do.call(rbind, rows), log_path, row.names = FALSE)
+  }
+
+  records <- vector("list", length(launchers))
+  for (i in seq_along(launchers)) {
+    output <- submitter(
+      "sbatch",
+      c(
+        "--parsable",
+        paste0("--export=ALL,FAISSR_PACKAGE_COMMIT=", commit),
+        launchers[[i]]
+      ),
+      stdout = TRUE,
+      stderr = TRUE
+    )
+    status <- attr(output, "status")
+    parsed_job_id <- if (length(output)) {
+      sub(";.*$", "", trimws(output[[1L]]))
+    } else {
+      ""
+    }
+    submission_failed <- (!is.null(status) && status != 0L) ||
+      !grepl("^[0-9]+$", parsed_job_id)
+    if (submission_failed) {
+      failure_output <- if (length(output)) {
+        paste(output, collapse = "\n")
+      } else {
+        "sbatch returned no parsable job identifier"
+      }
+      records[[i]] <- data.frame(
+        phase = phase,
+        launcher = relative[[i]],
+        job_id = NA_character_,
+        submission_status = "failed",
+        submission_output = failure_output,
+        image = image,
+        faissR_version = expected_version,
+        faissR_commit = commit,
+        submitted_utc = format(Sys.time(), tz = "UTC", usetz = TRUE),
+        stringsAsFactors = FALSE
+      )
+      write_ledger(records[seq_len(i)])
+      stop(
+        "Submission failed after ", i - 1L, " jobs: ",
+        failure_output, "\nSubmission ledger: ", log_path,
+        call. = FALSE
+      )
+    }
+    records[[i]] <- data.frame(
+      phase = phase,
+      launcher = relative[[i]],
+      job_id = parsed_job_id,
+      submission_status = "submitted",
+      submission_output = paste(output, collapse = "\n"),
+      image = image,
+      faissR_version = expected_version,
+      faissR_commit = commit,
+      submitted_utc = format(Sys.time(), tz = "UTC", usetz = TRUE),
+      stringsAsFactors = FALSE
+    )
+    write_ledger(records[seq_len(i)])
+    cat(sprintf("[%d/%d] %s\n", i, length(launchers), output[[1L]]))
+  }
+
+  records <- do.call(rbind, records)
   cat("Submission ledger: ", log_path, "\n", sep = "")
   invisible(records)
 }

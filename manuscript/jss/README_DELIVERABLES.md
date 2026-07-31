@@ -38,7 +38,7 @@ fingerprint, metric, seed, and query rows.
 
 The current PDF and Word reading copies have been rendered and visually
 inspected. The JSS-layout article is currently 21 pages, the supplement is 12
-pages, the vignette is 12 pages, and the reference manual is 21 pages. These
+pages, the vignette is 11 pages, and the reference manual is 21 pages. These
 are not the final submission freeze: all deliverables must be regenerated
 after the pending aggregates have been validated and inserted.
 

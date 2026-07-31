@@ -13,15 +13,20 @@ The remaining experiments must support four claims and no more:
 4. Float32 input, fitted-index reuse, compiled self-removal, batching, and GPU
    residency explain measurable systems-level differences.
 
-The study does not need another broad calibration pass unless the audit finds a
-missing calibration cell used by the compiled policy. TabulaMuris is excluded
-from the manuscript campaign.
+The final commit-locked campaign reruns the full calibration matrix once under
+the frozen image because older rows do not establish package/image identity for
+this release. It is not an invitation to tune on held-out results: any policy
+change triggered by the calibration audit requires a new package commit, image,
+route QA, and campaign restart. TabulaMuris is excluded from the manuscript
+campaign.
 
 The phase-aware `final_campaign/submit_campaign.R` program is the single
 commented HPC submission entry point. It validates the frozen image and then
 submits the existing independent launchers one by one for only the requested
 phase, preserving their CPU/CUDA headers and writing a submission ledger. It
-never advances to a later phase without an explicit command.
+never advances to a later phase without an explicit command. The ledger is
+updated after each `sbatch` call, so partial submission is visible and can be
+reconciled without duplicating jobs that Slurm already accepted.
 
 ## Frozen design
 

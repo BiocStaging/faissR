@@ -40,7 +40,8 @@ The full special-hardware replication uses
 `benchmark_scripts/jmlr_mloss_publication/final_campaign/submit_campaign.R`.
 That single commented entry point validates the frozen image and submits the
 existing independent CPU/CUDA launchers one phase at a time; it does not hide
-their resource headers or advance past an unchecked evidence gate.
+their resource headers or advance past an unchecked evidence gate. Its ledger
+is updated after every submission so a partial Slurm phase remains auditable.
 
 Generated PDFs, DOCX files, LaTeX intermediates, and internal review-cycle
 reports are intentionally excluded from version control. The LaTeX, BibTeX,

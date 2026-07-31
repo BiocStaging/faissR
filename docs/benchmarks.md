@@ -879,8 +879,11 @@ For the frozen JSS campaign,
 `final_campaign/submit_campaign.R` provides a guarded, phase-aware submission
 entry point. It verifies the installed package version and embedded commit,
 submits each existing CPU/CUDA launcher separately, and records Slurm job IDs
-in a CSV ledger. It deliberately requires the user to advance between phases
-after inspecting the preceding reports.
+in a CSV ledger. The ledger is persisted after every job, including a failed
+submission row when `sbatch` stops partway through a phase, so a partial phase
+can be reconciled without blindly resubmitting successful jobs. It deliberately
+requires the user to advance between phases after inspecting the preceding
+reports.
 
 The CPU and CUDA systems-ablation jobs compare double and float32 input,
 disabled and warm fitted-index/transformation caches, compiled and R-side
