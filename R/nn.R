@@ -10634,7 +10634,7 @@ nn_gpu <- function(data,
       typeof(out$distances_ptr) == "externalptr"
     if (!isTRUE(has_gpu_contract)) {
       stop(
-        "Internal error: the CUDA NN route did not return a valid ",
+        "The CUDA NN route did not return a valid ",
         "`faissR_gpu_knn` object.",
         call. = FALSE
       )
