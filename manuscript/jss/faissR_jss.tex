@@ -31,31 +31,23 @@
 \Abstract{
 Nearest-neighbor search is a computational primitive for manifold learning,
 retrieval, clustering, and supervised prediction. Existing \proglang{R}
-interfaces cover several individual algorithms, but accelerator-aware analyses
-also require explicit device semantics, consistent metric transformations,
-float32 data flow, reusable indexes, and auditable speed--recall choices.
+interfaces cover individual algorithms, but accelerator-aware analyses also
+require explicit device semantics, consistent metrics, float32 data flow,
+reusable indexes, and auditable speed--recall choices.
 \pkg{faissR} is an MIT-licensed, Python-free \proglang{R} package that requires
 the FAISS \proglang{C++} library for CPU builds and optionally links to FAISS GPU,
 NVIDIA CUDA, and RAPIDS cuVS. Its central \fct{nn} interface separates device
 selection from algorithm selection and supports Euclidean, cosine,
 correlation, and raw inner-product search. Exact, inverted-file,
 product-quantization, graph, and low-dimensional grid methods are exposed
-through a common result contract that records the requested and executed
-routes. The package accepts optional \pkg{float} matrices, reuses fitted
-indexes, performs batching and self-neighbor removal in compiled code, and
-offers GPU-resident exact KNN results through public and C-callable interfaces.
-When \method{auto} would prefer an approximate CUDA method, the current
-GPU-resident API keeps an exact-family execution route and records both the
-preferred method and the residency constraint.
-For approximate methods, deterministic compiled policies interpolate among
-calibrated regimes using dataset shape, neighbor count, metric, and a desired
-recall operating point of 0.90, 0.95, or 0.99. The operating point is an
-auditable selection objective rather than a per-dataset guarantee; returned
-metadata states whether the calibration evidence reached it. These policies
-are not claimed to generalize beyond the calibrated dataset and hardware
-regimes. This article describes the statistical contract, implementation, user
-interface, calibration design, and reproducible CPU/CUDA evaluation framework
-for \pkg{faissR}.
+through a common result contract. The package accepts optional \pkg{float}
+matrices, reuses fitted indexes, performs batching and self-neighbor removal in
+compiled code, and can return exact KNN buffers that remain on the GPU.
+Deterministic compiled policies select parameters from dataset shape, neighbor
+count, metric, backend, and a desired recall of 0.90, 0.95, or 0.99. This target
+is an auditable calibration objective rather than a guarantee for a new
+dataset. We describe the statistical contract, implementation, user interface,
+calibration procedure, and reproducible CPU/CUDA evaluation of \pkg{faissR}.
 }
 
 \Keywords{nearest neighbors, approximate search, FAISS, CUDA, float32, \proglang{R}}
@@ -125,17 +117,12 @@ float32 adapters, fitted-index reuse, compiled query batching and result
 processing, GPU-resident output for downstream packages, and deterministic
 parameter policies derived from recall-constrained calibration.
 
-The article makes four contributions. First, it defines the common statistical
-and metadata contract used by exact and approximate methods. Second, it
-documents the package architecture and explains which implementation is owned
-by \pkg{faissR} and which is delegated to FAISS or cuVS. Third, it formalizes
-the recall-targeted calibration and prespecified query-subsample validation
-used to construct and evaluate \code{tuning = "auto"}; its claims are limited
-to interpolation among calibrated regimes unless a separate
-leave-one-dataset-out analysis is supplied. Fourth, it provides reproducible user workflows for
-search, reusable KNN prediction, float32 input, and GPU-resident inter-package
-use. K-means is documented as a secondary package utility and is outside the
-comparative claims of this article.
+The article defines the common metric and metadata contract, distinguishes
+\pkg{faissR}-owned code from FAISS and cuVS providers, formalizes the
+recall-targeted calibration behind \code{tuning = "auto"}, and demonstrates
+search, fitted-index reuse, float32 input, and GPU-resident interoperability.
+Empirical claims concern nearest-neighbor search; secondary utilities such as
+k-means are documented in the package reference manual.
 
 \section{Nearest-neighbor problem and metric contract} \label{sec:metrics}
 
@@ -240,60 +227,13 @@ low-dimensional libnabo search \citep{nabor}. Embedding packages such as
 public contribution is dimensionality reduction rather than a general
 vector-search result contract.
 
-Table~\ref{tab:related-software} summarizes the comparison set. These packages
-are not interchangeable. Tree methods can be attractive for
-moderate dimension; graph indexes favor repeated ANN queries; Annoy supports
-disk-backed index workflows; and \pkg{BiocNeighbors} emphasizes a stable
-Bioconductor-facing abstraction. \pkg{faissR} complements them when an analysis
-needs the FAISS index family, direct CUDA/cuVS integration, optional float32
-input, explicit GPU failure semantics, GPU-resident results, or a common
-target-recall policy across several algorithms.
-
-\begin{table}[t!]
-\centering
-\small
-\begin{tabularx}{\linewidth}{
-  p{0.15\linewidth}
-  p{0.22\linewidth}
-  p{0.18\linewidth}
-  X}
-\toprule
-Package & Principal search family & Study metrics & Interface property \\
-\midrule
-\pkg{RANN} & ANN kd/bd trees & Euclidean & Compact tree interface; no fitted
-object from \fct{nn2}. \\
-\pkg{Rnanoflann} & nanoflann kd tree & Euclidean & Lightweight compiled tree
-search. \\
-\pkg{FNN} & kd tree, cover tree, and exhaustive search & Euclidean & Multiple
-search families behind one direct KNN interface. \\
-\pkg{nabor} & libnabo kd tree and exhaustive search & Euclidean &
-Low-dimensional exact/approximate search interface. \\
-\pkg{RcppAnnoy} & Annoy projection forests & Euclidean & Reusable,
-disk-backed indexes. \\
-\pkg{RcppHNSW} & hnswlib HNSW & Euclidean, cosine & Multithreaded one-call
-and reusable-index interfaces. \\
-\pkg{rnndescent} & Projection and NN-descent routes & Euclidean &
-Graph-construction alternatives. \\
-\pkg{BiocNeighbors} & Exhaustive, HNSW, Annoy, and other indexes &
-Euclidean, cosine & Reusable Bioconductor index abstraction. \\
-\pkg{uwot} & Embedding-oriented neighbor machinery & API audit only &
-No exported standalone KNN-result interface in the frozen benchmark build;
-namespace internals are not timed. \\
-\pkg{cuda.ml} & Supervised cuML KNN models & Not timed as self-KNN &
-Public API returns fitted prediction models rather than neighbor matrices
-\citep{cudaML}. \\
-\pkg{faissR} & Exact, IVF/PQ, graph, and grid routes & Euclidean, cosine,
-correlation, inner product & Reusable indexes and exact-family GPU-resident
-output. \\
-\bottomrule
-\end{tabularx}
-\caption{Functional comparison and API-audit set for the publication
-benchmark. ``Study metrics'' describes the prespecified comparative study
-rather than every metric accepted by each upstream package. Build and query
-timing are reported separately when a package exposes a reusable index; API
-audits are not entered into timing rankings.}
-\label{tab:related-software}
-\end{table}
+These packages are not interchangeable: tree methods suit some
+low-to-moderate-dimensional data, graph indexes favor repeated approximate
+queries, and \pkg{BiocNeighbors} provides a stable Bioconductor abstraction.
+\pkg{faissR} instead emphasizes the FAISS index family, explicit CUDA/cuVS
+routes, float32 input, GPU-resident output, and a common recall-targeted policy.
+The full comparator-by-metric eligibility table is provided in the supplement;
+only packages exposing a comparable public KNN result are timed.
 
 The relationship to FAISS and cuVS is also explicit. FAISS and cuVS retain
 their own implementations and licenses; they are linked as system libraries
@@ -421,99 +361,29 @@ is supplied by FAISS GPU or cuVS. FAISS FastScan uses compact codes and SIMD
 lookup-table accumulation \citep{FaissFastScan}. \pkg{faissR} acknowledges
 these sources without claiming their algorithms as package inventions.
 
-\subsection{Native candidate-graph routes}
+\subsection{Compiled data path and failure semantics}
 
-The public names \method{nndescent}, \method{nsg}, and \method{vamana} denote
-distinct faissR-owned candidate-graph routes, but they are described as
-``style'' implementations because they do not reproduce every construction,
-navigation, persistence, or deletion feature of the corresponding reference
-systems. This distinction is part of the method contract rather than a
-licensing qualification.
+The compiled core consumes contiguous float32 views. Base \proglang{R}
+matrices are converted once; optional \pkg{float} matrices \citep{float}
+avoid the double-to-float conversion, although a provider-specific layout
+conversion may remain. Cosine normalization and correlation centering are
+performed in compiled code and compatible transformed data are cached. The
+default result uses ordinary numeric distances, while \code{output = "float"}
+retains float32 distances on supported routes.
 
-The native NN-descent-style route initializes a fixed-width neighbor matrix
-from random-projection or randomized candidates. Each iteration joins forward
-and reverse neighbor candidates, scores the resulting pairs, retains the best
-unique candidates, and stops after the configured iteration budget or when
-updates stabilize. The NSG/MRNG-style route starts from a wider seed graph and
-applies relative-neighborhood pruning before candidate refinement: after
-sorting seed candidates for vertex $x$, candidate $y$ is rejected when an
-already retained vertex $z$ satisfies $d(z,y)<d(x,y)$. The Vamana-style route
-uses the robust condition $\alpha d(z,y)\leq d(x,y)$ and protects the first $k$
-seed neighbors before pruning additional candidates. Candidate duplication and
-self edges are removed, and distance--index ordering provides deterministic
-tie resolution for a fixed seed and thread configuration. CPU and CUDA variants
-share the same candidate-matrix and ordering contract; the CUDA variants
-accelerate candidate scoring and refinement without silently changing the
-public method. Result metadata records seed provider, seed width, candidate
-width, pruning rule, $\alpha$, protected width, and iteration controls.
+HNSW, IVF, IVF-PQ, and FastScan indexes can be reused by fitted \fct{knn}
+models and compatible repeated \fct{nn} calls. Queries are batched, results
+are returned already ordered, and self-neighbor removal occurs in compiled
+code. These choices reduce conversion, construction, and \proglang{R}-side
+post-processing overhead rather than changing the underlying search
+mathematics.
 
-If $g$ is the seed width, $c$ the candidate width, and $I$ the number of
-refinement iterations, storage is $O(n(g+c))$ indices plus the input matrix.
-The worst-case scoring work is $O(Incp)$ for fixed-width refinement, although
-pruning and duplicate rejection reduce the realized candidate count. The
-replication benchmark validates every route against metric-matched exact
-neighbors and records the executed provider and parameter record. It does not
-claim graph identity with the original NSG, DiskANN/Vamana, or NN-descent
-implementations.
-
-\subsection{Compiled bridge layers and failure semantics}
-
-The native source is divided into a general \proglang{C++} layer, FAISS bridge
-and implementation layers, optional cuVS and CUDA bridges, and stubs compiled
-when an optional provider is absent. Every functional native build requires
-FAISS. CUDA, FAISS GPU, and cuVS are optional for CPU-only installation but
-become mandatory when a user explicitly requests a GPU-enabled build.
-Diagnostic-only stubs are restricted to explicitly unsupported
-Bioconductor/r-universe macOS and WebAssembly workers; they can report
-availability but cannot execute nearest-neighbor methods. The configuration
-script detects system libraries and changes a Homebrew installation only after
-the user sets \code{FAISSR_AUTO_INSTALL_FAISS=1}; generic CI variables do not
-enable installation. This organization prevents optional NVIDIA headers from
-entering ordinary CPU compilation units and keeps functional and diagnostic
-artifacts distinguishable.
-
-Provider calls are validated after execution. A result is rejected if the
-provider label, requested device, dimensions, metric, or output contract does
-not match the route. This behavior is important for benchmarking: an unavailable
-GPU algorithm produces an unavailable or failed row rather than a deceptively
-fast CPU fallback.
-
-\subsection{Float32 adapters and transformed-data cache}
-
-FAISS and cuVS consume contiguous \code{float*} buffers. The compiled core
-therefore operates on an internal float32 matrix view rather than using
-\class{NumericMatrix} as its primary search API. A base \proglang{R} numeric
-matrix is converted once from double precision and column-major layout.
-Optional \pkg{float} \class{fl} matrices \citep{float} expose float32 payloads
-and avoid the initial double-to-float conversion; a layout conversion is still
-performed when required by the provider.
-
-Cosine and correlation require row normalization, and correlation additionally
-requires row centering. A bounded session-local cache stores compatible
-transformed float32 data so repeated searches do not repeat these operations.
-The cache key incorporates dimensions, metric, and data identity/content
-information. Result metadata records the input type, layout, and relevant
-conversion path.
-
-By default distances return as ordinary double-precision \proglang{R}
-matrices for compatibility. With \code{output = "float"}, supported routes
-return float32-compatible distances so downstream numerical code need not
-immediately convert them back to double precision.
-
-\subsection{Persistent indexes and batched queries}
-
-Index construction can dominate HNSW, IVF, IVF-PQ, FastScan, and graph-based
-workflows. \pkg{faissR} therefore supports two forms of reuse. First,
-\fct{knn} can return a fitted model whose external-pointer FAISS index is reused
-by \fct{predict}. For IVF and IVF-PQ this preserves trained coarse centroids,
-inverted lists, product-quantizer codebooks, and encoded vectors. Second,
-compatible raw \fct{nn} calls use a bounded session-local fitted-index cache.
-
-Queries are submitted as matrices rather than one row at a time. Returned
-neighbors are already ordered, and self-neighbor removal and output shaping are
-performed in compiled code. Metadata records query count, query-call count,
-batch size, fitted-index use, and provider-specific resource reuse where
-available.
+The native NN-descent-, NSG-, and Vamana-style routes use fixed-width candidate
+graphs with distinct refinement and pruning rules; their detailed algorithms
+and complexity bounds are given in the supplement. They are not claimed to be
+feature-identical reproductions of the reference systems. Every provider call
+is checked against the requested backend, method, metric, and result shape. An
+unsupported CUDA route therefore fails explicitly instead of executing on CPU.
 
 \subsection{GPU-resident results and inter-package API}
 
@@ -548,17 +418,6 @@ executed route. The field \path{auto_residency_constraint} is
 approximate recommendation cannot yet be returned through this ABI. Thus
 \fct{nn\_gpu} does not present the residency-constrained choice as the
 unrestricted \fct{nn} policy.
-
-\subsection{Scope of empirical claims}
-
-The quantitative claims in this article concern nearest-neighbor construction
-and query execution through \fct{nn} and \fct{nn\_gpu}. The \fct{knn} and
-\fct{predict} examples demonstrate index reuse and result interoperability, but
-the article does not claim improved predictive accuracy over dedicated
-classification or regression packages. Likewise, \fct{fast\_kmeans} is a
-documented secondary interface rather than part of the nearest-neighbor timing
-comparison. This scope prevents unrelated API breadth from being treated as
-empirical evidence for the central contribution.
 
 \section{Recall-constrained automatic tuning} \label{sec:tuning}
 
@@ -646,56 +505,20 @@ log-normal-norm, and Pareto-norm vectors at multiple $(n,p)$ combinations.
 This design separates failures caused by a provider implementation from loss of
 quality caused by intrinsically difficult norm distributions.
 
-\subsection{Completed calibration audit}
+\subsection{Calibration evidence}
 
-The completed raw-inner-product archive contains 21 report-backed method runs.
-The importer retained 267 shape--$k$--target policy cells only when the same
-candidate completed every dataset assigned to that shape group. Table~\ref{tab:calibrationaudit}
-summarizes the promoted cells. A promoted cell is not necessarily a successful
-recall tier: 79 cells retained the fastest candidate meeting the requested
-target, whereas the remaining 188 preserve the best complete-coverage candidate
-with \code{tuning\_benchmark\_target\_met = FALSE}. Partial rows and failed
-routes were not converted into defaults.
+Only candidates completing every dataset in a shape group are eligible for a
+compiled policy. When none reaches the desired recall, the best complete
+candidate remains available but carries
+\code{tuning\_benchmark\_target\_met = FALSE}; partial or failed rows are never
+promoted. The supplement reports candidate counts, target attainment, and
+negative evidence separately for each method, metric, backend, $k$, and shape
+group.
 
-\begin{table}[t!]
-\centering
-\begin{tabular}{llrr}
-\toprule
-Backend & Method & Complete-shape cells & Target reached \\
-\midrule
-CPU & HNSW & 48 & 19 \\
-CPU & IVF & 24 & 24 \\
-CPU & IVF-PQ & 3 & 0 \\
-CPU & NN-descent & 6 & 1 \\
-CPU & NSG & 9 & 0 \\
-CPU & Vamana & 9 & 0 \\
-CUDA & exact & 48 & 48 \\
-CUDA & Flat & 48 & 48 \\
-CUDA & IVF & 48 & 24 \\
-CUDA & IVF-PQ & 24 & 0 \\
-\bottomrule
-\end{tabular}
-\caption{Raw-inner-product calibration cells imported into compiled policies.
-Counts are policy cells, not independent validation comparisons. Cells below
-the desired recall retain explicit negative target-attainment metadata.}
-\label{tab:calibrationaudit}
-\end{table}
-
-Table~\ref{tab:calibrationaudit} is deliberately limited to the completed
-raw-inner-product import represented in the frozen archive. The final
-replication bundle also emits the corresponding candidate, completion,
-target-attainment, timeout, and below-target summaries for Euclidean, cosine,
-and correlation. A metric is not declared empirically calibrated merely
-because a transformed route exists in code; proxy-derived parameter rows are
-reported as validation-pending.
-
-Several original CUDA rows failed before execution because transformed
-float32 self-query buffers were distinct allocations. The corrected adapters
-now permit equal-row reference and query buffers while compiled code still removes
-the self index. CUDA NN-descent is intentionally excluded for raw inner product:
-cuVS builds a symmetric graph from one L2 dataset, whereas the exact MIPS
-reduction requires asymmetric reference and query embeddings. This combination
-now fails before computation instead of returning a low-recall surrogate.
+Raw inner-product search receives an additional norm-stress calibration suite.
+CUDA NN-descent is explicitly unsupported for this metric because the symmetric
+one-dataset graph construction cannot apply the asymmetric MIPS reduction. It
+fails before computation rather than returning a low-recall surrogate.
 
 \subsection{Automatic method selection}
 
@@ -712,9 +535,9 @@ self-search where their calibration evidence supports the intended use.
 
 The policy is conservative across metrics. A method is not selected for a
 metric merely because it performed well for Euclidean distance. Proxy or seeded
-rows remain marked validation-pending until replaced by metric-specific HPC
-measurements. Returned metadata includes the rule identifier and whether the
-requested operating point was reached in calibration. Section~\ref{sec:evaluation}
+rows are labeled and are not treated as metric-specific calibration evidence.
+Returned metadata includes the rule identifier and whether the requested
+operating point was reached in calibration. Section~\ref{sec:evaluation}
 evaluates this selector against the fastest independently requested qualifying
 method; it does not treat the selector's own prediction as validation.
 
@@ -751,10 +574,11 @@ can be inspected without inferring the implementation from timing.
 %
 \begin{CodeChunk}
 \begin{CodeInput}
-R> c(requested = z$requested_method,
-+    executed = z$method,
-+    backend = z$backend_used,
-+    metric = z$metric)
+R> route <- attr(z, "faiss")
+R> c(requested = attr(z, "requested_method"),
++    executed = route$method,
++    backend = attr(z, "backend_used"),
++    metric = attr(z, "metric"))
 \end{CodeInput}
 \end{CodeChunk}
 %
@@ -1059,38 +883,6 @@ and do not extrapolate minimum sampled recall into a population guarantee.
 
 \section{Results} \label{sec:results}
 
-\subsection{Pre-submission evidence audit}
-
-The benchmark archive was re-audited on July 31, 2026 before numerical results
-were admitted to this draft. Table~\ref{tab:evidenceaudit} records the status
-of each evidence stream. This audit prevents calibration rows and incomplete
-ablations from being presented as
-independent performance evidence.
-
-\begin{table}[H]
-\centering
-\small
-\begin{tabularx}{\linewidth}{p{0.25\linewidth}p{0.27\linewidth}X}
-\toprule
-Evidence stream & Archive status & Consequence for this draft \\
-\midrule
-Calibration policies & Present for CPU and CUDA methods; incomplete or below-target cells retain negative-evidence metadata & Calibration defines candidate defaults, not held-out performance. \\
-Exact references & Metric-matched references present for all nine real datasets in the evaluation set & Reference fingerprints and CPU audits are retained with the frozen archive. \\
-Held-out explicit methods & CPU and CUDA publication result roots absent & No comparative speed or recall ranking is reported. \\
-Automatic selector/oracle & Held-out method aggregate absent & Auto/oracle performance remains unevaluated. \\
-CPU metric conformance & 46/46 supported method--metric cells pass; 22/22 degenerate-row cells pass & CPU metric contracts are supported on the deterministic fixture. \\
-CUDA metric conformance & 49/49 evaluated cells pass; NN-descent inner product is explicitly unsupported; 24/24 degenerate-row cells pass & CUDA metric contracts pass without silent CPU substitution. \\
-CPU systems ablation & 92 successful measurements across two datasets & Completion is established; paired effect estimates remain to be frozen. \\
-CUDA systems ablation & 124 successful measurements across two datasets & Completion is established; paired effect estimates remain to be frozen. \\
-\bottomrule
-\end{tabularx}
-\caption{Evidence status at the pre-submission archive audit. Counts diagnose
-archive completeness and are not performance results. A result is eligible for
-the final article only after fingerprint, route, repetition, and recall checks
-pass.}
-\label{tab:evidenceaudit}
-\end{table}
-
 \subsection{Calibration-policy outcome}
 
 The completed calibration establishes three facts without substituting for
@@ -1120,22 +912,17 @@ Metric conformance does not imply that an approximate index attained the
 requested recall. On this fixture, 36 of 46 CPU cells and 41 of 49 evaluated
 CUDA cells reached 0.99 recall. CPU misses were confined to IVF under cosine
 or correlation and to IVF-PQ/FastScan variants. CUDA misses were confined to
-IVF-PQ and IVF-PQ FastScan. These fixture-level counts diagnose policies and
-contracts; they are not substituted for the dataset-level held-out benchmark.
-The frozen held-out analysis must still report, for every backend, metric,
-$k$, and target, eligible cells, successful repeats, timeouts, unsupported
-routes, mean/median/minimum sampled-query recall, and target attainment.
+IVF-PQ and IVF-PQ FastScan. These fixture-level results establish interface
+contracts, not dataset-level performance.
 
-\subsection{Search time and memory}
+\subsection{Comparative performance}
 
-No numerical speed ranking is reported because the held-out method results are
-absent. The frozen analysis must identify the fastest and second-fastest method
-meeting each recall target, together with an exact baseline, median and
-interquartile range over repeats, cold/warm status, allocated and requested
-threads plus threading scope, build
-inclusion, input conversion, result residency, and memory telemetry. CPU and
-CUDA appear in separate tables and exact and approximate frontiers are not
-collapsed into one unconditional league table.
+The final comparison reports, separately for CPU and CUDA, cold end-to-end
+time, warm query time where supported, peak host memory, recall, failures, and
+the fastest two methods meeting each recall target. Exact and approximate
+frontiers remain separate, and build, conversion, and transfer costs are
+identified rather than mixed with kernel-only timing. Numerical tables will be
+inserted only from the fingerprint-verified held-out archive.
 
 \subsection{Automatic selection versus the empirical oracle}
 
@@ -1151,157 +938,40 @@ qualifying explicit method are reported as unsupported evidence rather than
 assigned an oracle retrospectively. This analysis tests the selector without
 using validation timings to revise it.
 
-Because the held-out method aggregate is absent, the current draft reports no
-auto/oracle agreement or runtime ratio. These quantities are mandatory before
-the selector can support an empirical performance claim.
-
 \subsection{Systems ablations}
 
-Table~\ref{tab:ablations} defines four engineering contrasts. Dedicated CPU
-and CUDA jobs isolate base double versus \pkg{float} input, disabled versus
-reused fitted indexes and transformed
-data, R-side versus compiled self-neighbor handling, and host-returned versus
-GPU-resident exact output. The design reports cache-disabled repetitions,
-cache-enabled cold and warm calls, explicit host-copy time, route metadata, and
-peak resident memory on COIL20 and MNIST at $k=30$. These
-comparisons distinguish provider search time from conversion, construction,
-post-processing, and transfer overhead.
+Dedicated CPU and CUDA jobs isolate base double versus \pkg{float} input,
+disabled versus reused indexes and transformed data, R-side versus compiled
+self-neighbor handling, and host-returned versus GPU-resident exact output on
+COIL20 and MNIST at $k=30$. These contrasts separate provider search from
+conversion, construction, post-processing, and transfer overhead.
 
-The corrected reruns completed successfully: the CPU archive contains 92
-eligible measurements and the CUDA archive contains 124 across COIL20 and
-MNIST. CPU measurements cover Flat, HNSW, and IVF; CUDA
-measurements additionally cover exact-family residency and CAGRA routes.
-The jobs include float32/double input arms, cache-disabled and cache-enabled
-cold/warm phases, compiled versus R self-removal, and explicit device-to-host
-copy timing where applicable. These counts establish execution completeness.
-Effect sizes are not reported here until the fingerprint-matched pairing and
-contrast table are frozen by the publication aggregator.
-
-\begin{table}[H]
-\centering
-\small
-\begin{tabularx}{\linewidth}{p{0.23\linewidth}p{0.14\linewidth}X X}
-\toprule
-Ablation & Backend & Primary contrast & Reported estimand \\
-\midrule
-Input representation & CPU/CUDA & double vs float32 & time and peak memory ratio \\
-Index/transform reuse & CPU/CUDA & disabled, cold, warm & build and warm-query ratio \\
-Self-neighbor handling & CPU/CUDA & R vs compiled & post-processing time ratio \\
-Result residency & CUDA & device vs copied host result & transfer time and copy count \\
-\bottomrule
-\end{tabularx}
-\caption{Systems-ablation estimands. Numerical values are inserted only from
-successful fingerprint-matched reruns; failed preliminary workers are retained
-in the archive but excluded from quantitative contrasts.}
-\label{tab:ablations}
-\end{table}
+The completed archive contains 92 eligible CPU and 124 eligible CUDA
+measurements. Effect estimates are produced only after fingerprint-matched
+pairing; the full contrast definitions and eligibility rules are in the
+supplement.
 
 \section{Software quality and reproducibility} \label{sec:quality}
 
-The package is distributed under the GPL-compatible MIT license. FAISS, CUDA,
-and cuVS are external system dependencies with their own licenses. No Python bridge or
-Python runtime is used. The repository contains API documentation, a vignette,
-unit tests, build-time feature detection, and separate benchmark scripts. The
-development source uses the Bioconductor pre-release version convention and is
-mirrored to a Bioconductor staging repository, but this draft does not claim
-acceptance into Bioconductor.
+The MIT-licensed package has no Python dependency; FAISS, CUDA, and cuVS remain
+external system libraries under their respective licenses. The repository
+contains unit tests, API documentation, a vignette, feature-detecting build
+scripts, and CPU/CUDA route tests. Version 0.99.19 is the development snapshot
+described here.
 
-Version 0.99.19 is the development snapshot described here. An isolated build
-or backend smoke test is not treated as a clean package-check matrix. Before
-submission, the frozen software evidence must include complete install, load,
-unit-test, and package-check reports for every claimed CPU platform, together
-with separate CUDA route tests on the NVIDIA host. The replication archive
-records compiler, provider, device, package, container, and session metadata;
-failed checks remain visible rather than being summarized as successful.
-Generated calibration, reference, held-out, and reusable-index launchers embed
-the package version read from \code{DESCRIPTION} and stop before loading
-benchmark data when the Singularity image contains a different version.
+Benchmark jobs are generated from a manifest and test one method, backend, and
+metric per launcher. They record failures rather than substituting another
+route. Every reference and result row carries a dataset fingerprint, package
+version, route metadata, seed, repetition, and environment record. CUDA QA also
+checks that GPU-resident results own device pointers and report zero
+device-to-host result copies.
 
-The benchmark archive is organized so that every Slurm launcher tests exactly
-one method and backend. Exact references are stored beside dataset files and
-cropped for smaller $k$. Calibration, independent validation, and external-package
-comparisons write append-only CSV records containing route metadata and error
-messages. A single method failure therefore does not erase evidence or cause a
-different algorithm to be substituted.
-For held-out aggregation, the immediate timestamped output directory defines a
-run. Only the newest run for each method, dataset suite, dataset, and metric is
-retained; rows from earlier reruns are not pooled. A cell is complete only when
-that run contains exactly one successful row for each prespecified validation
-seed and repeat identifier, and recall eligibility requires every such row to
-meet the target.
-
-The complete campaign is generated rather than hand-maintained. Its validator
-checks 263 independent launchers: 5 exact-reference jobs, 105 calibration jobs,
-131 held-out jobs, 9 reusable external-index jobs, 2 systems-ablation jobs,
-2 installed-package route-QA jobs, and 9 analysis or freeze jobs. The
-requirement-to-script matrix maps each computational claim to its R program,
-Slurm launcher set, and expected archive location.
-The generated launcher and campaign-source manifests retain MD5 row-identity
-keys and SHA-256 integrity digests. Before timed jobs are accepted,
-installed-package route QA verifies the frozen \pkg{faissR} version, inventories
-the versions of every external comparator, and records the container SHA-256
-digest. CUDA QA additionally requires CUDA, FAISS-GPU, and cuVS and verifies
-that a \pkg{float} input passed to \code{nn\_gpu()} returns owning device
-pointers with \code{result\_residency = "cuda"}, zero device-to-host result
-copies, and no compatibility double-to-float conversion.
-The route suite uses self-query fixtures for grid, NN-descent, NSG, and
-Vamana and separate-query fixtures for methods that expose that contract;
-all reference/query fixtures use \pkg{float} matrices. Capability-declared
-unsupported method--metric cells are retained explicitly rather than counted
-as execution failures. CPU QA additionally executes every eligible external
-comparator through its exported public API on a small deterministic fixture,
-checking dimensions, finite sorted distances, and self-neighbor exclusion.
-An installed package without an exported standalone KNN-result API is recorded
-as unavailable for that comparison rather than timed through namespace
-internals.
-This campaign-specific QA complements but does not replace the platform
-package checks and unit tests required for the software release.
-
-Every dataset manifest, exact-reference object, calibration row, validation
-row, and ablation row carries an MD5 fingerprint of the source dataset file.
-A missing or different fingerprint invalidates reference reuse and prevents an
-older result from displacing the newest run for that dataset.
-
-MD5 is used only as an internal identity key for matching rows generated from
-the same local data object; it is not claimed as a security checksum. SHA-256
-digests are retained for the submitted source archive, container image, frozen
-result bundle, and externally distributed data files so that artifact integrity
-can be verified independently of the row-matching key.
-
-For JSS replication, the submission archive will contain the article source,
-package source, compact CPU examples, synthetic-data generator, result-table
-builder, container definition, checksums for the frozen CSV files, and download
-instructions for data exceeding the journal upload limit. Full HPC computation
-will not be rerun while typesetting the article; small examples will execute
-directly and tables will be regenerated from frozen intermediate results.
-
-The standalone entry point is \path{manuscript/jss/replication_article.R}.
-With \path{FAISSR_JSS_RESULTS_DIR} set to the frozen result root, it checks
-the compact CPU examples, verifies the required result schema, retains the raw
-rerun ledger while selecting the newest run per method cell, invokes the
-publication aggregator, and writes derived tables plus \code{sessionInfo()}.
-The frozen archive additionally records the Singularity image digest, compiler,
-FAISS, CUDA, cuVS, GPU, CPU, and package versions. A minimal CPU replication
-requires FAISS and the package source; NVIDIA software is required only for the
-CUDA-specific results.
-
-The same script is the regular-computer replication path requested by JSS. With
-no result-root environment variable it executes the small CPU examples and
-writes their checks plus \code{sessionInfo()}; with a frozen result root it also
-verifies the required result schema and regenerates publication tables without
-rerunning the HPC campaign. The full Slurm/Singularity campaign is retained
-separately as computational provenance. A commented \code{code.R} and its
-\code{knitr::spin()}-generated \code{code.html} counterpart are included in the
-replication materials.
-
-The final frozen archive must also contain a package commit hash or immutable
-release tag, checksums for every result table, and a machine-readable dataset
-provenance manifest containing source URL, release identifier, redistribution
-terms, preprocessing, final dimensions, and source-file fingerprint.
-The strict freeze audit requires a 40-character hexadecimal package commit, a
-64-character container SHA-256 digest, matching dataset fingerprints, complete
-provenance, and \pkg{faissR} result rows whose recorded implementation version
-matches the package installed in the frozen image.
+The replication entry point, \path{manuscript/jss/replication_article.R}, runs
+small CPU examples on a regular computer. Given the frozen result directory, it
+also verifies schemas and fingerprints and regenerates article tables without
+rerunning the HPC campaign. SHA-256 digests identify the package source,
+container, distributed data, and frozen result archive. Detailed launcher,
+eligibility, rerun-selection, and freeze rules are provided in the supplement.
 
 \section{Limitations} \label{sec:limitations}
 
@@ -1360,26 +1030,14 @@ benchmarks.
 
 The principal methodological software contribution is recall-aware automatic
 tuning. Parameters are selected by constrained optimization on calibration
-data and are designed to be checked on independent query subsamples. Shape, $k$, metric,
+data and evaluated on independent query subsamples. Shape, $k$, metric,
 backend, and desired recall enter compiled selectors, while below-target and
 proxy-derived rules remain visible in metadata. The desired recall is not a
-guarantee. At the present evidence freeze, the held-out auto-versus-oracle
-comparison is not available, so no claim of selector optimality is made. This
-design makes an automatic choice auditable while the required validation
-remains explicit.
-
-The completed calibration supplies auditable compiled defaults and exposes
-where desired raw-inner-product recall was not reached. The quantitative
-benchmark remains necessary to determine the strength of any performance claim.
-A successful JSS submission must show not only that individual methods can be
-fast, but also that desired recall is achieved on independent query subsets, that
-automatic selection is competitive with the best qualifying method, and that
-float32, reuse, and residency deliver measurable gains. The replication suite
-now produces those comparisons directly without overstating calibration as
-validation. The final metric-conformance and systems-ablation reruns remove
-two earlier implementation-evidence gaps, while the independent held-out
-speed/recall comparison and auto-versus-oracle analysis remain the principal
-empirical submission gates.
+guarantee, and selector performance is assessed against the fastest qualifying
+explicit method rather than inferred from calibration. This makes automatic
+selection auditable and exposes regimes, particularly difficult
+maximum-inner-product searches, where exact search or additional calibration
+is preferable.
 
 \section*{Author contributions}
 

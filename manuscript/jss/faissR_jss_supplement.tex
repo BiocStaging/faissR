@@ -182,6 +182,19 @@ finite-result or explicit unsupported-path contract; for correlation, the same
 rule applies to constant rows after centering. CUDA routes are not allowed to
 repair either edge case by silently executing a CPU search.
 
+The native candidate-graph routes share a fixed-width candidate matrix but use
+different refinement rules. NN-descent joins forward and reverse candidates,
+scores unique pairs, and retains the best candidates until convergence or the
+iteration limit. NSG/MRNG-style refinement rejects candidate $y$ for vertex
+$x$ when an already retained $z$ satisfies $d(z,y)<d(x,y)$. Vamana-style
+refinement instead applies $\alpha d(z,y)\leq d(x,y)$ and protects the first
+$k$ seed neighbors. Self edges and duplicates are removed and distance--index
+ordering gives deterministic ties for a fixed seed and thread configuration.
+If $g$ is seed width, $c$ candidate width, and $I$ the iteration count, storage
+is $O(n(g+c))$ indices plus the input and worst-case fixed-width scoring is
+$O(Incp)$. These are package-owned style implementations, not feature-complete
+copies of the reference NSG, DiskANN/Vamana, or NN-descent systems.
+
 \section{Dataset manifest}
 
 \begin{table}[ht]
@@ -272,6 +285,34 @@ candidate meeting the threshold. If no candidate reaches the threshold, the
 best available row is retained with explicit negative-evidence metadata rather
 than relabeled as successful. Exact-family methods record exactness by
 construction and tune only systems parameters.
+
+The completed raw-inner-product import contains 267 complete-shape policy
+cells. Seventy-nine reached the requested tier; 188 retain the best
+complete-coverage candidate with negative target-attainment metadata. The
+breakdown is shown in Table~\ref{tab:supp-mips-calibration}; these counts are
+calibration cells, not independent performance comparisons.
+
+\begin{table}[ht]
+\centering
+\caption{Raw-inner-product calibration cells imported into compiled policies.}
+\label{tab:supp-mips-calibration}
+\begin{tabular}{llrr}
+\toprule
+Backend & Method & Complete cells & Target reached \\
+\midrule
+CPU & HNSW & 48 & 19 \\
+CPU & IVF & 24 & 24 \\
+CPU & IVF-PQ & 3 & 0 \\
+CPU & NN-descent & 6 & 1 \\
+CPU & NSG & 9 & 0 \\
+CPU & Vamana & 9 & 0 \\
+CUDA & exact & 48 & 48 \\
+CUDA & Flat & 48 & 48 \\
+CUDA & IVF & 48 & 24 \\
+CUDA & IVF-PQ & 24 & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 Calibration uses seed 4. Independent publication evaluation uses query subsets
 from seeds 20260706 and 20260807; validation timings cannot alter the compiled

@@ -74,6 +74,54 @@ exact <- faissR::nn(
 )
 stopifnot(identical(dim(exact$indices), c(150L, 5L)))
 stopifnot(all(exact$indices >= 1L), all(is.finite(exact$distances)))
+exact_route <- attr(exact, "faiss")
+stopifnot(
+  identical(attr(exact, "requested_method"), "exact"),
+  identical(exact_route$method, "exact"),
+  identical(attr(exact, "metric"), "euclidean"),
+  identical(attr(exact, "backend_used"), exact$backend_used)
+)
+
+hnsw <- faissR::nn(
+  x,
+  k = 15,
+  exclude_self = TRUE,
+  backend = "cpu",
+  method = "hnsw",
+  metric = "cosine",
+  tuning = "auto",
+  target_recall = 0.99,
+  n_threads = 2
+)
+hnsw_tuning <- attr(hnsw, "approximation")
+stopifnot(
+  identical(dim(hnsw$indices), c(150L, 15L)),
+  identical(hnsw_tuning$target_recall, 0.99),
+  is.logical(hnsw_tuning$tuning_benchmark_target_met),
+  length(hnsw_tuning$tuning_benchmark_target_met) == 1L,
+  is.character(hnsw_tuning$tuning_benchmark_source),
+  nzchar(hnsw_tuning$tuning_benchmark_source)
+)
+
+float_example_ran <- FALSE
+if (requireNamespace("float", quietly = TRUE)) {
+  xf <- float::fl(x)
+  float_result <- faissR::nn(
+    xf,
+    k = 5,
+    exclude_self = TRUE,
+    backend = "cpu",
+    method = "flat",
+    output = "float",
+    n_threads = 2
+  )
+  stopifnot(
+    identical(dim(float_result$indices), c(150L, 5L)),
+    identical(float_result$input_type, "float32"),
+    identical(float_result$distance_type, "float32")
+  )
+  float_example_ran <- TRUE
+}
 
 model <- faissR::knn(
   x,
@@ -95,9 +143,25 @@ stopifnot(identical(dim(probabilities), c(6L, 3L)))
 stopifnot(all(abs(rowSums(probabilities) - 1) < 1e-12))
 
 example_summary <- data.frame(
-  example = c("exact_cpu", "knn_classification"),
-  rows = c(nrow(exact$indices), length(classes)),
-  columns = c(ncol(exact$indices), ncol(probabilities)),
+  example = c(
+    "exact_cpu",
+    "hnsw_cpu",
+    "float32_cpu_optional",
+    "knn_classification"
+  ),
+  executed = c(TRUE, TRUE, float_example_ran, TRUE),
+  rows = c(
+    nrow(exact$indices),
+    nrow(hnsw$indices),
+    if (float_example_ran) nrow(float_result$indices) else NA_integer_,
+    length(classes)
+  ),
+  columns = c(
+    ncol(exact$indices),
+    ncol(hnsw$indices),
+    if (float_example_ran) ncol(float_result$indices) else NA_integer_,
+    ncol(probabilities)
+  ),
   stringsAsFactors = FALSE
 )
 write.csv(

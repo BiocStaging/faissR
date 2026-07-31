@@ -34,6 +34,12 @@ available. The evaluation set contains nine real datasets with complete
 metric-matched exact references.
 
 The current PDF and Word reading copies have been rendered and visually
-inspected, but they are not the final submission freeze. Final deliverables
-must be regenerated after the pending aggregates have been validated and
-inserted.
+inspected. The JSS-layout article is currently 21 pages, the supplement is 11
+pages, the vignette is 10 pages, and the reference manual is 21 pages. These
+are not the final submission freeze: all deliverables must be regenerated
+after the pending aggregates have been validated and inserted.
+
+The focused execution order, eligibility rules, and remaining evidence gates
+are recorded in `JSS_EXPERIMENT_PLAN.md`. The generated Slurm launchers remain
+the authoritative executable protocol; the plan does not replace their route,
+fingerprint, or archive validators.
