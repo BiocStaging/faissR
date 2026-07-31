@@ -874,7 +874,12 @@ benchmark converts them inside the timed adapter as
 $d_{\mathrm{cos}}=d_{\mathrm{normalized\mbox{-}L2}^2}/2$. This conversion
 does not affect neighbor order or recall, but makes distance error comparable
 with the documented $1-\mathrm{cosine}$ contract. The exact call and
-conversion are retained in the raw parameter string.
+conversion are retained in the raw parameter string. After canonical unit
+conversion, distance error is calculated only for neighbor identifiers shared
+by the candidate and exact results, with positions matched by identifier rather
+than by rank. Set recall separately penalizes missing exact neighbors. Thus, a
+rank permutation of the same neighbors cannot create a spurious distance error,
+and an incorrect neighbor is not compared with an unrelated exact distance.
 
 Reported outcomes are cold end-to-end time, warm/repeated-query time, index
 build time where separable, query time, process peak resident memory, recall at $k$,
@@ -890,9 +895,9 @@ Sampled \code{nvidia-smi} process memory, when used, is labeled as an external
 high-water estimate and not as an allocator-exact measurement.
 
 For exact references, the primary quality endpoint is set recall on the sampled
-queries. Distance error and rank agreement are retained as sensitivity
-diagnostics because tied points at the $k$th boundary can produce different but
-equally valid exact sets. The final tables report the number of sampled queries
+queries. Identifier-matched distance error and rank agreement are retained as
+sensitivity diagnostics because tied points at the $k$th boundary can produce
+different but equally valid exact sets. The final tables report the number of sampled queries
 and do not extrapolate minimum sampled recall into a population guarantee.
 
 \section{Results} \label{sec:results}

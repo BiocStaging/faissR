@@ -516,6 +516,14 @@ resource-reuse overhead.
 These comparator packages are dependencies of the frozen benchmark image only;
 they are not runtime, compilation, or fallback dependencies of \pkg{faissR}.
 
+Provider-specific distances are converted to the public \pkg{faissR} metric
+scale inside the timed adapter. Distance-error diagnostics then match candidate
+and reference entries by neighbor identifier and use only identifiers present
+in both sets. Set recall is reported separately and penalizes missing reference
+neighbors. This avoids comparing unrelated distances merely because they occupy
+the same rank and makes a permutation of an otherwise identical neighbor set
+distance-error neutral.
+
 \begin{longtable}{P{0.20\linewidth}P{0.72\linewidth}}
 \caption{Frozen external-comparator call families. Exact argument values,
 package versions, allocated/requested threads, and threading scope are written

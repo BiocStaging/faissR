@@ -90,10 +90,14 @@ benchmark_scripts/jmlr_mloss_publication/final_campaign/held_out/cuda/
 ```
 
 Primary outputs per cell are cold end-to-end time, mean/median/minimum recall,
-target attainment, rank agreement, distance error, peak host memory, route and
-provider metadata, conversion path, and failure state. CUDA rows also record
+target attainment, rank agreement, identifier-matched distance error, peak host
+memory, route and provider metadata, conversion path, and failure state. CUDA
+rows also record
 result residency, transfer counts/timing, and device-memory telemetry when
 available.
+Provider distances are first normalized to the `faissR` public metric scale.
+Distance error is then calculated only for neighbor IDs shared by the
+candidate and exact result; recall separately penalizes missing exact neighbors.
 
 ## Experiment 2: comparison with other R packages
 

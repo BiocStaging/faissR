@@ -2890,6 +2890,36 @@ test_that("publication external comparison enforces a common recall tier", {
     ),
     euclidean_distances
   )
+
+  reordered <- env$quality_metrics(
+    list(
+      indices = matrix(c(3L, 2L), nrow = 1L),
+      distances = matrix(c(30, 20), nrow = 1L)
+    ),
+    list(
+      indices = matrix(c(2L, 3L), nrow = 1L),
+      distances = matrix(c(20, 30), nrow = 1L)
+    ),
+    rows = 1L,
+    k = 2L
+  )
+  expect_equal(reordered$recall_at_k, 1)
+  expect_equal(reordered$mean_relative_distance_error, 0)
+
+  partial <- env$quality_metrics(
+    list(
+      indices = matrix(c(3L, 4L), nrow = 1L),
+      distances = matrix(c(31, 40), nrow = 1L)
+    ),
+    list(
+      indices = matrix(c(2L, 3L), nrow = 1L),
+      distances = matrix(c(20, 30), nrow = 1L)
+    ),
+    rows = 1L,
+    k = 2L
+  )
+  expect_equal(partial$recall_at_k, 0.5)
+  expect_equal(partial$mean_relative_distance_error, 1 / 30)
 })
 
 test_that("reusable external benchmark records its actual index seed", {

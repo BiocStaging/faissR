@@ -668,9 +668,38 @@ quality_metrics <- function(obj, ref, rows, k) {
   kk <- min(k, ncol(idx), ncol(ref$indices))
   recalls <- numeric(length(rows))
   ranks <- rep(NA_real_, length(rows))
+  matched_reference_distances <- numeric()
+  matched_distance_errors <- numeric()
   for (ii in seq_along(rows)) {
-    a <- idx[rows[[ii]], seq_len(kk)]
-    b <- ref$indices[ii, seq_len(kk)]
+    a_all <- idx[rows[[ii]], seq_len(kk)]
+    b_all <- ref$indices[ii, seq_len(kk)]
+    candidate_distances <- dst[rows[[ii]], seq_len(kk)]
+    reference_distances <- ref$distances[ii, seq_len(kk)]
+    common <- intersect(
+      a_all[!is.na(a_all) & is.finite(a_all)],
+      b_all[!is.na(b_all) & is.finite(b_all)]
+    )
+    if (length(common)) {
+      candidate_positions <- match(common, a_all)
+      reference_positions <- match(common, b_all)
+      candidate_values <- candidate_distances[candidate_positions]
+      reference_values <- reference_distances[reference_positions]
+      valid_distances <- is.finite(candidate_values) &
+        is.finite(reference_values)
+      if (any(valid_distances)) {
+        matched_reference_distances <- c(
+          matched_reference_distances,
+          abs(reference_values[valid_distances])
+        )
+        matched_distance_errors <- c(
+          matched_distance_errors,
+          abs(candidate_values[valid_distances] -
+                reference_values[valid_distances])
+        )
+      }
+    }
+    a <- a_all
+    b <- b_all
     a <- a[!is.na(a) & is.finite(a)]
     b <- b[!is.na(b) & is.finite(b)]
     recalls[[ii]] <- if (length(b)) sum(a %in% b) / length(b) else NA_real_
@@ -685,10 +714,8 @@ quality_metrics <- function(obj, ref, rows, k) {
       }
     }
   }
-  cand_d <- as.matrix(dst[rows, seq_len(kk), drop = FALSE])
-  ref_d <- as.matrix(ref$distances[, seq_len(kk), drop = FALSE])
-  abs_ref <- finite_mean(abs(ref_d))
-  abs_err <- finite_mean(abs(cand_d - ref_d))
+  abs_ref <- finite_mean(matched_reference_distances)
+  abs_err <- finite_mean(matched_distance_errors)
   data.frame(
     recall_at_k = finite_mean(recalls),
     median_recall_at_k = if (any(is.finite(recalls))) median(recalls[is.finite(recalls)]) else NA_real_,
