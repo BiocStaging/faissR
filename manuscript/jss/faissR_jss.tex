@@ -966,8 +966,11 @@ described here.
 
 Benchmark jobs are generated from a manifest and test one method, backend, and
 metric per launcher. They record failures rather than substituting another
-route. Every reference and result row carries a dataset fingerprint, package
-version, route metadata, seed, repetition, and environment record. CUDA QA also
+route. Before loading data, every launcher checks both the package version and
+the 40-character source commit embedded in the image; a same-version image from
+a different commit is rejected. Every reference and result row carries a
+dataset fingerprint, package version, source commit, route metadata, seed,
+repetition, and environment record. CUDA QA also
 checks that GPU-resident results own device pointers and report zero
 device-to-host result copies.
 

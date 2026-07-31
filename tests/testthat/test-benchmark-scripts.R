@@ -3092,6 +3092,15 @@ test_that("final JSS campaign rejects a stale faissR Singularity image", {
     generator, fixed = TRUE
   )))
   expect_true(any(grepl(
+    'FAISSR_PACKAGE_COMMIT:?Export the 40-character faissR commit',
+    generator, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    'FAISSR_IMAGE_COMMIT:-',
+    generator,
+    fixed = TRUE
+  )))
+  expect_true(any(grepl(
     'packageVersion("faissR")',
     held_out, fixed = TRUE
   )))
@@ -3203,6 +3212,14 @@ test_that("final JSS campaign rejects a stale faissR Singularity image", {
   expected <- as.character(packageVersion("faissR"))
   expect_true(any(grepl(
     sprintf("export EXPECTED_FAISSR_VERSION='%s'", expected),
+    generated, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    'IMAGE_FAISSR_COMMIT="$(singularity exec --cleanenv',
+    generated, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    'Frozen campaign requires faissR commit ${FAISSR_PACKAGE_COMMIT}',
     generated, fixed = TRUE
   )))
   generated_qa_cpu <- readLines(

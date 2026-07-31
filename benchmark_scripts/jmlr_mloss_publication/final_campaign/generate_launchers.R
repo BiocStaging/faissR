@@ -124,6 +124,17 @@ common_environment <- c(
     "export EXPECTED_FAISSR_VERSION=%s",
     shell_quote(publication_version)
   ),
+  ': "${FAISSR_PACKAGE_COMMIT:?Export the 40-character faissR commit embedded in the frozen image}"',
+  'if [[ ! "${FAISSR_PACKAGE_COMMIT}" =~ ^[[:xdigit:]]{40}$ ]]; then',
+  '  echo "FAISSR_PACKAGE_COMMIT must be a 40-character hexadecimal Git commit" >&2',
+  '  exit 2',
+  'fi',
+  'export FAISSR_PACKAGE_COMMIT',
+  "IMAGE_FAISSR_COMMIT=\"$(singularity exec --cleanenv \"${SINGULARITY_IMAGE}\" /bin/sh -c 'printf \"%s\" \"${FAISSR_IMAGE_COMMIT:-}\"')\"",
+  'if [[ ! "${IMAGE_FAISSR_COMMIT}" == "${FAISSR_PACKAGE_COMMIT}" ]]; then',
+  '  echo "Frozen campaign requires faissR commit ${FAISSR_PACKAGE_COMMIT}, but the Singularity image reports ${IMAGE_FAISSR_COMMIT:-UNSET}" >&2',
+  '  exit 2',
+  'fi',
   'mkdir -p "${BASE_DIR}/benchmark_logs"',
   ""
 )
@@ -812,6 +823,9 @@ sbatch_commands <- function(section) {
 }
 commands <- c(
   "# Run from /scratch/firenze/NN.",
+  "# Set this once to the 40-character commit embedded in the frozen image.",
+  "export FAISSR_PACKAGE_COMMIT='REPLACE_WITH_40_CHARACTER_GIT_COMMIT'",
+  "",
   "# Phase 1: metric-matched real and synthetic exact references.",
   sbatch_commands("references"),
   "",

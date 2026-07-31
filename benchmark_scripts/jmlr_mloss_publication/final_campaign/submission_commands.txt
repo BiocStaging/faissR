@@ -1,4 +1,7 @@
 # Run from /scratch/firenze/NN.
+# Set this once to the 40-character commit embedded in the frozen image.
+export FAISSR_PACKAGE_COMMIT='REPLACE_WITH_40_CHARACTER_GIT_COMMIT'
+
 # Phase 1: metric-matched real and synthetic exact references.
 sbatch benchmark_scripts/jmlr_mloss_publication/final_campaign/references/run_real_references_cuda_correlation.sh
 sbatch benchmark_scripts/jmlr_mloss_publication/final_campaign/references/run_real_references_cuda_cosine.sh
