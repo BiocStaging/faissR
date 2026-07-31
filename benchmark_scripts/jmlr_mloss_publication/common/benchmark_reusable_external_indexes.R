@@ -139,6 +139,34 @@ canonicalize_biocneighbors_distances <- function(distances, metric) {
   if (identical(metric, "cosine")) pmax(distances, 0)^2 / 2 else distances
 }
 
+canonicalize_annoy_angular_distances <- function(distances) {
+  pmax(as.matrix(distances), 0)^2 / 2
+}
+
+canonicalize_annoy_dot_product_scores <- function(scores) {
+  scores <- as.matrix(scores)
+  result <- matrix(NA_real_, nrow(scores), ncol(scores))
+  for (i in seq_len(nrow(scores))) {
+    valid <- is.finite(scores[i, ])
+    if (any(valid)) {
+      result[i, valid] <- max(scores[i, valid]) - scores[i, valid]
+    }
+  }
+  result
+}
+
+canonicalize_hnsw_inner_product_distances <- function(distances) {
+  distances <- as.matrix(distances)
+  result <- matrix(NA_real_, nrow(distances), ncol(distances))
+  for (i in seq_len(nrow(distances))) {
+    valid <- is.finite(distances[i, ])
+    if (any(valid)) {
+      result[i, valid] <- distances[i, valid] - min(distances[i, valid])
+    }
+  }
+  result
+}
+
 remove_annoy_self <- function(index, rows, k) {
   out_i <- matrix(NA_integer_, nrow = length(rows), ncol = k)
   out_d <- matrix(NA_real_, nrow = length(rows), ncol = k)
@@ -175,11 +203,23 @@ remove_query_self <- function(result, rows, k) {
 }
 
 query_index <- function(index, route, x, rows, k, threads, metric) {
-  if (identical(route, "RcppAnnoy_euclidean")) {
-    return(remove_annoy_self(index, rows, k))
+  if (route %in% c(
+    "RcppAnnoy_euclidean", "RcppAnnoy_angular", "RcppAnnoy_dot_product"
+  )) {
+    result <- remove_annoy_self(index, rows, k)
+    if (identical(route, "RcppAnnoy_angular")) {
+      result$distances <- canonicalize_annoy_angular_distances(
+        result$distances
+      )
+    } else if (identical(route, "RcppAnnoy_dot_product")) {
+      result$distances <- canonicalize_annoy_dot_product_scores(
+        result$distances
+      )
+    }
+    return(result)
   }
   if (identical(route, "RcppHNSW_hnsw")) {
-    return(remove_query_self(
+    result <- remove_query_self(
       RcppHNSW::hnsw_search(
         x[rows, , drop = FALSE],
         index,
@@ -193,7 +233,13 @@ query_index <- function(index, route, x, rows, k, threads, metric) {
       ),
       rows,
       k
-    ))
+    )
+    if (identical(metric, "inner_product")) {
+      result$distances <- canonicalize_hnsw_inner_product_distances(
+        result$distances
+      )
+    }
+    return(result)
   }
   result <- standardize(BiocNeighbors::findKNN(
     index,
@@ -212,15 +258,29 @@ query_index <- function(index, route, x, rows, k, threads, metric) {
 }
 
 build_index <- function(x, route, metric, k, threads, index_seed) {
-  if (identical(route, "RcppAnnoy_euclidean")) {
-    if (!identical(metric, "euclidean")) {
-      stop("RcppAnnoy_euclidean supports only Euclidean in this campaign.",
+  if (route %in% c(
+    "RcppAnnoy_euclidean", "RcppAnnoy_angular", "RcppAnnoy_dot_product"
+  )) {
+    expected_metric <- switch(
+      route,
+      RcppAnnoy_euclidean = "euclidean",
+      RcppAnnoy_angular = "cosine",
+      RcppAnnoy_dot_product = "inner_product"
+    )
+    if (!identical(metric, expected_metric)) {
+      stop(route, " supports only ", expected_metric, " in this campaign.",
            call. = FALSE)
     }
     if (!requireNamespace("RcppAnnoy", quietly = TRUE)) {
       stop("RcppAnnoy is unavailable.", call. = FALSE)
     }
-    index <- new(RcppAnnoy::AnnoyEuclidean, ncol(x))
+    index <- if (identical(route, "RcppAnnoy_angular")) {
+      new(RcppAnnoy::AnnoyAngular, ncol(x))
+    } else if (identical(route, "RcppAnnoy_dot_product")) {
+      new(RcppAnnoy::AnnoyDotProduct, ncol(x))
+    } else {
+      new(RcppAnnoy::AnnoyEuclidean, ncol(x))
+    }
     index$setSeed(as.integer(index_seed))
     index$setVerbose(0L)
     for (i in seq_len(nrow(x))) index$addItem(i - 1L, x[i, ])
@@ -229,8 +289,8 @@ build_index <- function(x, route, metric, k, threads, index_seed) {
   }
 
   if (identical(route, "RcppHNSW_hnsw")) {
-    if (!metric %in% c("euclidean", "cosine")) {
-      stop("RcppHNSW_hnsw supports only Euclidean and cosine in this campaign.",
+    if (!metric %in% c("euclidean", "cosine", "inner_product")) {
+      stop("RcppHNSW_hnsw supports only Euclidean, cosine, and inner product in this campaign.",
            call. = FALSE)
     }
     if (!requireNamespace("RcppHNSW", quietly = TRUE)) {
@@ -238,7 +298,7 @@ build_index <- function(x, route, metric, k, threads, index_seed) {
     }
     return(RcppHNSW::hnsw_build(
       x,
-      distance = metric,
+      distance = if (identical(metric, "inner_product")) "ip" else metric,
       M = 16L,
       ef = 200L,
       verbose = FALSE,
@@ -282,7 +342,9 @@ build_index <- function(x, route, metric, k, threads, index_seed) {
 }
 
 reusable_thread_metadata <- function(route, threads) {
-  if (identical(route, "RcppAnnoy_euclidean")) {
+  if (route %in% c(
+    "RcppAnnoy_euclidean", "RcppAnnoy_angular", "RcppAnnoy_dot_product"
+  )) {
     return(list(
       requested = 1L,
       scope = "serial public build and item-query API"
@@ -313,9 +375,18 @@ reusable_parameter_string <- function(route, metric, k, threads, index_seed) {
       "AnnoyEuclidean(build_trees=50,index_seed=%d,getNNsByItemList(k=%d))",
       index_seed, k + 1L
     ),
+    RcppAnnoy_angular = sprintf(
+      "AnnoyAngular(build_trees=50,index_seed=%d,getNNsByItemList(k=%d));distance=(angular^2)/2",
+      index_seed, k + 1L
+    ),
+    RcppAnnoy_dot_product = sprintf(
+      "AnnoyDotProduct(build_trees=50,index_seed=%d,getNNsByItemList(k=%d));distance=row_max(score)-score",
+      index_seed, k + 1L
+    ),
     RcppHNSW_hnsw = sprintf(
       "RcppHNSW::hnsw_build(distance=%s,M=16,ef=200,n_threads=%d,random_seed=%d);hnsw_search(k=%d,ef=%d,n_threads=%d)",
-      metric, threads, index_seed, k + 1L, max(50L, 3L * k), threads
+      if (metric == "inner_product") "ip" else metric,
+      threads, index_seed, k + 1L, max(50L, 3L * k), threads
     ),
     BiocNeighbors_exhaustive = sprintf(
       "buildIndex(ExhaustiveParam(distance=%s),num.threads=%d);findKNN(k=%d)%s",
@@ -371,7 +442,9 @@ base_row <- function(config, package_version, n, p, seed, phase, repeat_id) {
     metric = config$metric,
     k = config$k,
     seed = seed,
-    algorithm_seed = if (identical(config$route, "RcppAnnoy_euclidean")) {
+    algorithm_seed = if (config$route %in% c(
+      "RcppAnnoy_euclidean", "RcppAnnoy_angular", "RcppAnnoy_dot_product"
+    )) {
       config$index_seed
     } else {
       NA_integer_
@@ -398,6 +471,18 @@ base_row <- function(config, package_version, n, p, seed, phase, repeat_id) {
     status = "failed",
     error = "",
     stringsAsFactors = FALSE
+  )
+}
+
+reusable_supported_metrics <- function() {
+  list(
+    RcppAnnoy_euclidean = "euclidean",
+    RcppAnnoy_angular = "cosine",
+    RcppAnnoy_dot_product = "inner_product",
+    RcppHNSW_hnsw = c("euclidean", "cosine", "inner_product"),
+    BiocNeighbors_exhaustive = c("euclidean", "cosine"),
+    BiocNeighbors_hnsw = c("euclidean", "cosine"),
+    BiocNeighbors_annoy = c("euclidean", "cosine")
   )
 }
 
@@ -492,7 +577,9 @@ worker_main <- function(args) {
       package_version = NA_character_,
       route = config$route, metric = config$metric, k = config$k,
       seed = NA_integer_,
-      algorithm_seed = if (identical(config$route, "RcppAnnoy_euclidean")) {
+      algorithm_seed = if (config$route %in% c(
+        "RcppAnnoy_euclidean", "RcppAnnoy_angular", "RcppAnnoy_dot_product"
+      )) {
         config$index_seed
       } else {
         NA_integer_
@@ -554,7 +641,9 @@ run_child <- function(config, timeout, script) {
     package = sub("_.*$", "", config$route), package_version = NA_character_,
     route = config$route, metric = config$metric, k = config$k,
     seed = NA_integer_,
-    algorithm_seed = if (identical(config$route, "RcppAnnoy_euclidean")) {
+    algorithm_seed = if (config$route %in% c(
+      "RcppAnnoy_euclidean", "RcppAnnoy_angular", "RcppAnnoy_dot_product"
+    )) {
       config$index_seed
     } else {
       NA_integer_
@@ -604,12 +693,7 @@ main <- function() {
   if (!nrow(manifest)) stop("No requested datasets are in the manifest.", call. = FALSE)
   route <- args$route %||% stop("`--route` is required.", call. = FALSE)
   metric <- tolower(args$metric %||% "euclidean")
-  valid <- list(
-    RcppAnnoy_euclidean = "euclidean",
-    BiocNeighbors_exhaustive = c("euclidean", "cosine"),
-    BiocNeighbors_hnsw = c("euclidean", "cosine"),
-    BiocNeighbors_annoy = c("euclidean", "cosine")
-  )
+  valid <- reusable_supported_metrics()
   if (!route %in% names(valid) || !metric %in% valid[[route]]) {
     stop("Unsupported route/metric combination: ", route, " / ", metric,
          call. = FALSE)

@@ -114,14 +114,19 @@ conversion in `method_parameters`.
 
 Use the external-package launchers in the same `held_out/cpu/` directory.
 Euclidean is the common comparison metric; cosine is additionally evaluated
-for RcppHNSW and eligible BiocNeighbors routes. Correlation and raw inner
-product are reported for `faissR` only unless another package exposes the same
+with RcppAnnoy angular search, RcppHNSW, and eligible BiocNeighbors routes.
+RcppAnnoy angular distances are converted inside the timed adapter as
+`angular^2 / 2` to obtain `1 - cosine`. RcppAnnoy dot-product and RcppHNSW
+inner-product outputs are row-shifted after self removal to the package's
+smaller-is-better contract. All four rnndescent routes are additionally tested
+with their native cosine and correlation metrics. Other correlation and raw
+inner-product cells remain faissR-only unless a comparator exposes the same
 public contract. Compare cold with cold. Warm query timing is a separate
 experiment and is never ranked against a one-call cold result.
 
 ## Experiment 3: build-once/query-many comparison
 
-Run the nine launchers under:
+Run the twelve launchers under:
 
 ```text
 benchmark_scripts/jmlr_mloss_publication/final_campaign/reusable_external/

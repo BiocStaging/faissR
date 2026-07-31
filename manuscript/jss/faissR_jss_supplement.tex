@@ -546,17 +546,25 @@ and the allocated core count where supported; one-call cold timing. \\
 \code{"cover\_tree"}, and \code{"brute"}; one-call cold timing. \\
 \pkg{nabor} & \code{knn(data, query = data)} with
 \code{searchtype = "auto"} and \code{"brute"}; one-call cold timing. \\
-\pkg{RcppAnnoy} & \code{AnnoyEuclidean} construction, item insertion,
+\pkg{RcppAnnoy} & \code{AnnoyEuclidean} for Euclidean distance,
+\code{AnnoyAngular} for cosine search, and \code{AnnoyDotProduct} for raw
+inner-product search, followed by item insertion,
 \code{build()}, and iterative \code{getNNsByItemList()} calls because no
-matrix-batch query is exposed; cold build-plus-query and
-separately labeled reusable-index query time. \\
+matrix-batch query is exposed. Angular distances are converted inside the
+timed adapter as $d_{\mathrm{cos}}=d_{\mathrm{angular}}^2/2$. Dot-product
+scores are converted after self removal to
+$d_{ji}=\max_{\ell\in N_k(j)}s_{j\ell}-s_{ji}$; cold
+build-plus-query and separately labeled reusable-index query time are reported. \\
 \pkg{RcppHNSW} & \code{hnsw\_knn()} supplies the all-row cold comparison for
-Euclidean and cosine. A separate \code{hnsw\_build()} plus
+Euclidean, cosine, and inner product. Its documented \code{distance = "ip"}
+output, $1-s_{ji}$, is row-shifted after self removal to the public package
+contract. A separate \code{hnsw\_build()} plus
 \code{hnsw\_search()} experiment reports construction and repeated sampled
 query time with $M=16$, construction effort 200, query effort
 $\max(50,3k)$, the recorded random seed, and the allocated CPU thread count. \\
 \pkg{rnndescent} & Public \code{rpf\_knn()}, \code{rnnd\_knn()},
-\code{nnd\_knn()}, and \code{brute\_force\_knn()} routes when their metric and
+\code{nnd\_knn()}, and \code{brute\_force\_knn()} routes under their native
+Euclidean, cosine, and correlation metrics when their metric and
 self-exclusion contracts match. The worker initializes the recorded run seed
 before stochastic routes and disables progress output through the supported
 \code{verbose = FALSE} argument. \\
@@ -624,14 +632,14 @@ without launching Slurm. Full
 computation is reproduced separately with
 \path{benchmark_scripts/jmlr_mloss_publication/final_campaign/}%
 \path{submission_commands.txt};
-the campaign contains 263 independent jobs so one failure cannot erase the
+the campaign contains 277 independent jobs so one failure cannot erase the
 other method/backend evidence.
 The directory retains its historical \path{jmlr_mloss_publication} name, but
 the protocol and artifacts described here are the JSS submission campaign; the
 path is not a claim of simultaneous submission to another journal.
 
-The 263 jobs comprise 5 exact-reference, 105 calibration, 131 held-out,
-9 reusable external-index, 2 systems-ablation, 2 installed-package route-QA,
+The 277 jobs comprise 5 exact-reference, 105 calibration, 142 held-out,
+12 reusable external-index, 2 systems-ablation, 2 installed-package route-QA,
 and 9 analysis/freeze jobs. The reusable-index diagnostic uses the same
 independent exact-reference query rows (up to 1,024), reports conversion,
 construction, first-query, and three repeated-query timings separately, and

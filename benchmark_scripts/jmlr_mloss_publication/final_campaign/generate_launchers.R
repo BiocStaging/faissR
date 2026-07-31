@@ -196,7 +196,8 @@ cpu_specs <- data.frame(
   method_id = c(
     paste0("faissR_cpu_", c("auto", cpu_tuning_methods, "grid")),
     "BiocNeighbors_annoy", "BiocNeighbors_exhaustive", "BiocNeighbors_hnsw",
-    "RANN_bd", "RANN_kd", "RcppAnnoy_euclidean", "RcppHNSW_hnsw",
+    "RANN_bd", "RANN_kd", "RcppAnnoy_euclidean", "RcppAnnoy_angular",
+    "RcppAnnoy_dot_product", "RcppHNSW_hnsw",
     "Rnanoflann_standard",
     "FNN_kd", "FNN_cover", "FNN_brute", "nabor_auto", "nabor_brute",
     "rnndescent_bruteforce", "rnndescent_nnd", "rnndescent_rnnd",
@@ -205,7 +206,8 @@ cpu_specs <- data.frame(
   label = c(
     paste0("faissR_", c("auto", cpu_tuning_methods, "grid")),
     "BiocNeighbors_annoy", "BiocNeighbors_exhaustive", "BiocNeighbors_hnsw",
-    "RANN_bd", "RANN_kd", "RcppAnnoy_euclidean", "RcppHNSW_hnsw",
+    "RANN_bd", "RANN_kd", "RcppAnnoy_euclidean", "RcppAnnoy_angular",
+    "RcppAnnoy_dot_product", "RcppHNSW_hnsw",
     "Rnanoflann_standard",
     "FNN_kd", "FNN_cover", "FNN_brute", "nabor_auto", "nabor_brute",
     "rnndescent_bruteforce", "rnndescent_nnd", "rnndescent_rnnd",
@@ -216,17 +218,20 @@ cpu_specs <- data.frame(
     list("euclidean"),
     rep(list(c("euclidean", "cosine")), 3L),
     rep(list("euclidean"), 3L),
-    list(c("euclidean", "cosine")),
-    rep(list("euclidean"), 10L)
+    list("cosine"),
+    list("inner_product"),
+    list(c("euclidean", "cosine", "inner_product")),
+    rep(list("euclidean"), 6L),
+    rep(list(c("euclidean", "cosine", "correlation")), 4L)
   )),
   external = c(
     rep(FALSE, 2L + length(cpu_tuning_methods)),
-    rep(TRUE, 17L)
+    rep(TRUE, 19L)
   ),
   spatial = c(
     rep(FALSE, 1L + length(cpu_tuning_methods)),
     TRUE,
-    rep(FALSE, 17L)
+    rep(FALSE, 19L)
   ),
   stringsAsFactors = FALSE
 )
@@ -434,7 +439,9 @@ write_executable(
 reusable_specs <- data.frame(
   route = c(
     "RcppAnnoy_euclidean",
-    "RcppHNSW_hnsw", "RcppHNSW_hnsw",
+    "RcppAnnoy_angular",
+    "RcppAnnoy_dot_product",
+    "RcppHNSW_hnsw", "RcppHNSW_hnsw", "RcppHNSW_hnsw",
     rep(
       c(
         "BiocNeighbors_exhaustive",
@@ -446,7 +453,9 @@ reusable_specs <- data.frame(
   ),
   metric = c(
     "euclidean",
-    "euclidean", "cosine",
+    "cosine",
+    "inner_product",
+    "euclidean", "cosine", "inner_product",
     rep(c("euclidean", "cosine"), 3L)
   ),
   stringsAsFactors = FALSE

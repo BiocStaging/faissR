@@ -111,10 +111,14 @@ external_comparator_route_qa <- function(x, out_dir, n_threads = 12L) {
   k <- 5L
   rows <- list()
   for (method in methods$method_id) {
-    metrics <- "euclidean"
-    if (isTRUE(helpers$metric_supported_external(method, "cosine"))) {
-      metrics <- c(metrics, "cosine")
-    }
+    metrics <- c("euclidean", "cosine", "correlation", "inner_product")
+    metrics <- metrics[vapply(
+      metrics,
+      function(metric) {
+        isTRUE(helpers$metric_supported_external(method, metric))
+      },
+      logical(1L)
+    )]
     for (metric in metrics) {
       public_api_exposed <- !identical(method, "uwot_nearest_neighbors") ||
         "nearest_neighbors" %in% getNamespaceExports("uwot")

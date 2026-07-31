@@ -2865,9 +2865,30 @@ test_that("publication external comparison enforces a common recall tier", {
   cpu_external <- env$external_methods("cpu")
   expect_true(all(c(
     "FNN_kd", "FNN_cover", "FNN_brute", "nabor_auto", "nabor_brute",
-    "RcppHNSW_hnsw"
+    "RcppAnnoy_angular", "RcppAnnoy_dot_product", "RcppHNSW_hnsw"
   ) %in% cpu_external$method_id))
+  expect_true(env$metric_supported_external("RcppAnnoy_angular", "cosine"))
+  expect_false(env$metric_supported_external("RcppAnnoy_angular", "euclidean"))
+  expect_true(env$metric_supported_external(
+    "RcppAnnoy_dot_product", "inner_product"
+  ))
+  expect_false(env$metric_supported_external(
+    "RcppAnnoy_dot_product", "euclidean"
+  ))
   expect_true(env$metric_supported_external("RcppHNSW_hnsw", "cosine"))
+  expect_true(env$metric_supported_external(
+    "RcppHNSW_hnsw", "inner_product"
+  ))
+  for (method in c(
+    "rnndescent_rpf", "rnndescent_rnnd", "rnndescent_nnd",
+    "rnndescent_bruteforce"
+  )) {
+    expect_true(env$metric_supported_external(method, "cosine"), info = method)
+    expect_true(env$metric_supported_external(method, "correlation"), info = method)
+    expect_false(env$metric_supported_external(
+      method, "inner_product"
+    ), info = method)
+  }
   cuda_external <- env$external_methods("cuda")
   expect_identical(cuda_external$method_id, "cuda_ml_knn")
   expect_identical(cuda_external$kind, "not_standalone")
@@ -2889,6 +2910,25 @@ test_that("publication external comparison enforces a common recall tier", {
       euclidean_distances, "euclidean"
     ),
     euclidean_distances
+  )
+  expect_equal(
+    env$canonicalize_annoy_angular_distances(
+      matrix(c(0, sqrt(0.5), sqrt(2)), nrow = 1L)
+    ),
+    matrix(c(0, 0.25, 1), nrow = 1L),
+    tolerance = 1e-12
+  )
+  expect_equal(
+    env$canonicalize_annoy_dot_product_scores(
+      matrix(c(3, 2, -1), nrow = 1L)
+    ),
+    matrix(c(0, 1, 4), nrow = 1L)
+  )
+  expect_equal(
+    env$canonicalize_hnsw_inner_product_distances(
+      matrix(c(-2, -1, 2), nrow = 1L)
+    ),
+    matrix(c(0, 1, 4), nrow = 1L)
   )
 
   reordered <- env$quality_metrics(
@@ -2985,6 +3025,167 @@ test_that("reusable external benchmark records its actual index seed", {
     matrix(c(0, 0.25, 1), nrow = 1L),
     tolerance = 1e-12
   )
+  expect_equal(
+    env$canonicalize_annoy_angular_distances(
+      matrix(c(0, sqrt(0.5), sqrt(2)), nrow = 1L)
+    ),
+    matrix(c(0, 0.25, 1), nrow = 1L),
+    tolerance = 1e-12
+  )
+  expect_match(
+    env$reusable_parameter_string(
+      "RcppAnnoy_angular", "cosine", 5L, 2L, 4L
+    ),
+    "AnnoyAngular"
+  )
+  expect_equal(
+    env$canonicalize_annoy_dot_product_scores(
+      matrix(c(3, 2, -1), nrow = 1L)
+    ),
+    matrix(c(0, 1, 4), nrow = 1L)
+  )
+  expect_equal(
+    env$canonicalize_hnsw_inner_product_distances(
+      matrix(c(-2, -1, 2), nrow = 1L)
+    ),
+    matrix(c(0, 1, 4), nrow = 1L)
+  )
+  valid <- env$reusable_supported_metrics()
+  expect_identical(valid$RcppAnnoy_dot_product, "inner_product")
+  expect_identical(
+    valid$RcppHNSW_hnsw,
+    c("euclidean", "cosine", "inner_product")
+  )
+  expect_match(
+    env$reusable_parameter_string(
+      "RcppAnnoy_dot_product", "inner_product", 5L, 2L, 4L
+    ),
+    "AnnoyDotProduct"
+  )
+  expect_match(
+    env$reusable_parameter_string(
+      "RcppHNSW_hnsw", "inner_product", 5L, 2L, 4L
+    ),
+    "distance=ip"
+  )
+})
+
+test_that("RcppAnnoy angular comparison obeys the cosine-distance contract", {
+  skip_if_not_installed("RcppAnnoy")
+  path <- test_path(
+    "../../benchmark_scripts/jmlr_mloss_publication/common/benchmark_jmlr_tuned_methods.R"
+  )
+  if (!file.exists(path)) {
+    skip("Publication scripts are not available in this installed-package test context.")
+  }
+  old <- Sys.getenv("FAISSR_JMLR_SOURCE_ONLY", unset = NA_character_)
+  on.exit({
+    if (is.na(old)) Sys.unsetenv("FAISSR_JMLR_SOURCE_ONLY") else
+      Sys.setenv(FAISSR_JMLR_SOURCE_ONLY = old)
+  }, add = TRUE)
+  Sys.setenv(FAISSR_JMLR_SOURCE_ONLY = "true")
+  env <- new.env(parent = globalenv())
+  sys.source(path, envir = env)
+
+  set.seed(20260801)
+  x <- matrix(rnorm(64L * 7L), nrow = 64L)
+  result <- env$run_external_method(
+    x, "RcppAnnoy_angular", k = 5L, metric = "cosine",
+    threads = 1L, seed = 17L
+  )
+  expect_equal(dim(result$indices), c(64L, 5L))
+  expect_equal(dim(result$distances), c(64L, 5L))
+  expect_true(all(is.finite(result$distances)))
+  expect_true(all(vapply(seq_len(nrow(x)), function(i) {
+    !i %in% result$indices[i, ]
+  }, logical(1L))))
+
+  expected <- matrix(NA_real_, nrow(x), 5L)
+  norms <- sqrt(rowSums(x^2))
+  for (i in seq_len(nrow(x))) {
+    ids <- result$indices[i, ]
+    expected[i, ] <- 1 - drop(x[ids, , drop = FALSE] %*% x[i, ]) /
+      (norms[ids] * norms[[i]])
+  }
+  expect_equal(result$distances, expected, tolerance = 2e-5)
+})
+
+test_that("RcppAnnoy dot-product comparison obeys the score contract", {
+  skip_if_not_installed("RcppAnnoy")
+  path <- test_path(
+    "../../benchmark_scripts/jmlr_mloss_publication/common/benchmark_jmlr_tuned_methods.R"
+  )
+  if (!file.exists(path)) {
+    skip("Publication scripts are not available in this installed-package test context.")
+  }
+  old <- Sys.getenv("FAISSR_JMLR_SOURCE_ONLY", unset = NA_character_)
+  on.exit({
+    if (is.na(old)) Sys.unsetenv("FAISSR_JMLR_SOURCE_ONLY") else
+      Sys.setenv(FAISSR_JMLR_SOURCE_ONLY = old)
+  }, add = TRUE)
+  Sys.setenv(FAISSR_JMLR_SOURCE_ONLY = "true")
+  env <- new.env(parent = globalenv())
+  sys.source(path, envir = env)
+
+  set.seed(20260801)
+  x <- matrix(rnorm(64L * 7L), nrow = 64L)
+  result <- env$run_external_method(
+    x, "RcppAnnoy_dot_product", k = 5L, metric = "inner_product",
+    threads = 1L, seed = 17L
+  )
+  expect_equal(dim(result$indices), c(64L, 5L))
+  expect_equal(dim(result$distances), c(64L, 5L))
+  expect_true(all(is.finite(result$distances)))
+  expect_true(all(vapply(seq_len(nrow(x)), function(i) {
+    !i %in% result$indices[i, ]
+  }, logical(1L))))
+
+  expected <- matrix(NA_real_, nrow(x), 5L)
+  for (i in seq_len(nrow(x))) {
+    ids <- result$indices[i, ]
+    scores <- drop(x[ids, , drop = FALSE] %*% x[i, ])
+    expected[i, ] <- max(scores) - scores
+  }
+  expect_equal(result$distances, expected, tolerance = 2e-5)
+})
+
+test_that("RcppHNSW inner-product comparison obeys the score contract", {
+  skip_if_not_installed("RcppHNSW")
+  path <- test_path(
+    "../../benchmark_scripts/jmlr_mloss_publication/common/benchmark_jmlr_tuned_methods.R"
+  )
+  if (!file.exists(path)) {
+    skip("Publication scripts are not available in this installed-package test context.")
+  }
+  old <- Sys.getenv("FAISSR_JMLR_SOURCE_ONLY", unset = NA_character_)
+  on.exit({
+    if (is.na(old)) Sys.unsetenv("FAISSR_JMLR_SOURCE_ONLY") else
+      Sys.setenv(FAISSR_JMLR_SOURCE_ONLY = old)
+  }, add = TRUE)
+  Sys.setenv(FAISSR_JMLR_SOURCE_ONLY = "true")
+  env <- new.env(parent = globalenv())
+  sys.source(path, envir = env)
+
+  set.seed(20260801)
+  x <- matrix(rnorm(64L * 7L), nrow = 64L)
+  result <- env$run_external_method(
+    x, "RcppHNSW_hnsw", k = 5L, metric = "inner_product",
+    threads = 1L, seed = 17L
+  )
+  expect_equal(dim(result$indices), c(64L, 5L))
+  expect_equal(dim(result$distances), c(64L, 5L))
+  expect_true(all(is.finite(result$distances)))
+  expect_true(all(vapply(seq_len(nrow(x)), function(i) {
+    !i %in% result$indices[i, ]
+  }, logical(1L))))
+
+  expected <- matrix(NA_real_, nrow(x), 5L)
+  for (i in seq_len(nrow(x))) {
+    ids <- result$indices[i, ]
+    scores <- drop(x[ids, , drop = FALSE] %*% x[i, ])
+    expected[i, ] <- max(scores) - scores
+  }
+  expect_equal(result$distances, expected, tolerance = 2e-5)
 })
 
 test_that("publication systems-ablation scripts retain backend-specific headers", {
@@ -3256,6 +3457,10 @@ test_that("final JSS campaign rejects a stale faissR Singularity image", {
     'status = "not_public_api"',
     route_qa, fixed = TRUE
   )))
+  expect_true(any(grepl(
+    'metrics <- c("euclidean", "cosine", "correlation", "inner_product")',
+    route_qa, fixed = TRUE
+  )))
 
   tuned_methods <- readLines(
     file.path(root, "common", "benchmark_jmlr_tuned_methods.R"),
@@ -3342,6 +3547,34 @@ test_that("final JSS campaign rejects a stale faissR Singularity image", {
   )
   expect_true(file.exists(rcpphnsw_held_out))
   expect_true(file.exists(rcpphnsw_reusable))
+  expect_true(file.exists(file.path(
+    campaign, "held_out", "cpu",
+    "run_RcppAnnoy_angular_cpu12_cosine.sh"
+  )))
+  expect_true(file.exists(file.path(
+    campaign, "reusable_external",
+    "run_RcppAnnoy_angular_cpu12_cosine.sh"
+  )))
+  expect_true(file.exists(file.path(
+    campaign, "held_out", "cpu",
+    "run_RcppAnnoy_dot_product_cpu12_inner_product.sh"
+  )))
+  expect_true(file.exists(file.path(
+    campaign, "reusable_external",
+    "run_RcppAnnoy_dot_product_cpu12_inner_product.sh"
+  )))
+  expect_true(file.exists(file.path(
+    campaign, "held_out", "cpu",
+    "run_RcppHNSW_hnsw_cpu12_inner_product.sh"
+  )))
+  expect_true(file.exists(file.path(
+    campaign, "reusable_external",
+    "run_RcppHNSW_hnsw_cpu12_inner_product.sh"
+  )))
+  expect_true(file.exists(file.path(
+    campaign, "held_out", "cpu",
+    "run_rnndescent_nnd_cpu12_correlation.sh"
+  )))
   expect_true(any(grepl(
     "export REQUIRED_EXTERNAL_PACKAGE='RcppHNSW'",
     readLines(rcpphnsw_held_out, warn = FALSE),
@@ -3404,6 +3637,28 @@ test_that("publication rnndescent routes use their current public APIs", {
     expect_identical(dim(answer$indices), c(64L, 5L), info = method)
     expect_identical(dim(answer$distances), c(64L, 5L), info = method)
     expect_true(all(is.finite(answer$distances)), info = method)
+  }
+
+  for (metric in c("cosine", "correlation")) {
+    answer <- env$run_external_method(
+      x, "rnndescent_bruteforce", 5L, metric, 2L, 20260730L
+    )
+    expected <- matrix(NA_real_, nrow(x), 5L)
+    for (i in seq_len(nrow(x))) {
+      ids <- answer$indices[i, ]
+      if (identical(metric, "cosine")) {
+        denom <- sqrt(rowSums(x[ids, , drop = FALSE]^2)) *
+          sqrt(sum(x[i, ]^2))
+        expected[i, ] <- 1 - drop(
+          x[ids, , drop = FALSE] %*% x[i, ]
+        ) / denom
+      } else {
+        expected[i, ] <- 1 - vapply(ids, function(j) {
+          stats::cor(x[i, ], x[j, ])
+        }, numeric(1L))
+      }
+    }
+    expect_equal(answer$distances, expected, tolerance = 2e-5, info = metric)
   }
 
   set.seed(1L)

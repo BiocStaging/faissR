@@ -812,7 +812,8 @@ query level within the same datasets, not at the dataset-collection level.}
 
 All applicable \pkg{faissR} methods in Table~\ref{tab:methods} are tested
 individually, including \method{auto}. CPU comparisons include
-\pkg{Rnanoflann}, \pkg{RANN} kd- and bd-tree routes, \pkg{RcppAnnoy},
+\pkg{Rnanoflann}, \pkg{RANN} kd- and bd-tree routes, \pkg{RcppAnnoy}
+Euclidean, angular-cosine, and dot-product routes,
 \pkg{RcppHNSW}, four \pkg{rnndescent} routes, and exhaustive, HNSW, and Annoy routes available
 through \pkg{BiocNeighbors}. \pkg{FNN} kd-tree, cover-tree, and brute-force
 routes and \pkg{nabor} automatic and brute-force routes are also included.
@@ -855,7 +856,14 @@ only a cold result. A warm fitted-index time is never compared with another
 package's cold one-call time. For \pkg{RcppAnnoy}, the public item-query method
 is called iteratively because the package does not expose a matrix-batch query;
 this is recorded as interface behavior rather than described as batched
-execution. Before a stochastic external route is called, the worker initializes
+execution. Its angular distance $\sqrt{2-2\cos(x,y)}$ is converted inside the
+timed adapter to the public cosine distance as $d_{\mathrm{angular}}^2/2$;
+dot-product scores are converted after self removal to the same row-shifted
+smaller-is-better contract used by \pkg{faissR}. The \pkg{RcppHNSW} inner-product
+route is normalized to that contract by subtracting each returned row minimum.
+The four public \pkg{rnndescent} calls are evaluated under Euclidean, cosine,
+and correlation metrics.
+Before a stochastic external route is called, the worker initializes
 R's RNG from the prespecified run seed; explicit package seed arguments are
 also supplied where available. The resulting algorithm seed is retained in
 the raw row. Repetition remains necessary because parallel graph construction

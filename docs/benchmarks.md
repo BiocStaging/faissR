@@ -848,6 +848,14 @@ required because multithreaded graph construction may not be bitwise
 deterministic. `uwot` and `cuda.ml` remain API-audit entries but receive no
 held-out timing launcher when their public interfaces do not return standalone
 self-KNN indices and distances.
+RcppAnnoy is evaluated with `AnnoyEuclidean` for Euclidean search and
+`AnnoyAngular` for cosine search, and `AnnoyDotProduct` for raw inner-product
+search. Angular distance is converted inside the timed adapter to the public
+`1 - cosine` scale as `angular^2 / 2`; dot-product scores are shifted after
+self removal to `row_max(score) - score`. RcppHNSW is tested with its public
+Euclidean, cosine, and `ip` routes; `1 - score` from `ip` is likewise shifted
+after self removal. The four rnndescent calls are tested with their public
+Euclidean, cosine, and correlation metrics.
 
 After all one-method jobs finish,
 `analysis/aggregate_publication_results.R` selects the newest run for each

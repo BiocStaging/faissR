@@ -256,13 +256,24 @@ shape_group <- function(n, p) {
 }
 
 metric_supported_external <- function(method, metric) {
+  if (identical(method, "RcppAnnoy_angular")) {
+    return(identical(metric, "cosine"))
+  }
+  if (identical(method, "RcppAnnoy_dot_product")) {
+    return(identical(metric, "inner_product"))
+  }
   if (metric == "euclidean") return(TRUE)
+  if (startsWith(method, "rnndescent_") &&
+      metric %in% c("cosine", "correlation")) return(TRUE)
   if (method %in% c(
+        "RcppAnnoy_angular",
         "RcppHNSW_hnsw",
         "BiocNeighbors_exhaustive", "BiocNeighbors_hnsw",
         "BiocNeighbors_annoy"
       ) &&
       metric == "cosine") return(TRUE)
+  if (identical(method, "RcppHNSW_hnsw") &&
+      identical(metric, "inner_product")) return(TRUE)
   FALSE
 }
 
@@ -271,10 +282,39 @@ canonicalize_biocneighbors_distances <- function(distances, metric) {
   if (identical(metric, "cosine")) pmax(distances, 0)^2 / 2 else distances
 }
 
+canonicalize_annoy_angular_distances <- function(distances) {
+  pmax(as.matrix(distances), 0)^2 / 2
+}
+
+canonicalize_annoy_dot_product_scores <- function(scores) {
+  scores <- as.matrix(scores)
+  result <- matrix(NA_real_, nrow(scores), ncol(scores))
+  for (i in seq_len(nrow(scores))) {
+    valid <- is.finite(scores[i, ])
+    if (any(valid)) {
+      result[i, valid] <- max(scores[i, valid]) - scores[i, valid]
+    }
+  }
+  result
+}
+
+canonicalize_hnsw_inner_product_distances <- function(distances) {
+  distances <- as.matrix(distances)
+  result <- matrix(NA_real_, nrow(distances), ncol(distances))
+  for (i in seq_len(nrow(distances))) {
+    valid <- is.finite(distances[i, ])
+    if (any(valid)) {
+      result[i, valid] <- distances[i, valid] - min(distances[i, valid])
+    }
+  }
+  result
+}
+
 stochastic_external_methods <- function() {
   c(
     "rnndescent_rpf", "rnndescent_rnnd", "rnndescent_nnd",
-    "RcppAnnoy_euclidean", "RcppHNSW_hnsw",
+    "RcppAnnoy_euclidean", "RcppAnnoy_angular",
+    "RcppAnnoy_dot_product", "RcppHNSW_hnsw",
     "BiocNeighbors_hnsw", "BiocNeighbors_annoy"
   )
 }
@@ -306,7 +346,8 @@ external_methods <- function(backend) {
     method_id = c(
       "Rnanoflann_standard", "RANN_kd", "RANN_bd",
       "rnndescent_rpf", "rnndescent_rnnd", "rnndescent_nnd", "rnndescent_bruteforce",
-      "RcppAnnoy_euclidean", "RcppHNSW_hnsw",
+      "RcppAnnoy_euclidean", "RcppAnnoy_angular",
+      "RcppAnnoy_dot_product", "RcppHNSW_hnsw",
       "BiocNeighbors_exhaustive", "BiocNeighbors_hnsw", "BiocNeighbors_annoy",
       "FNN_kd", "FNN_cover", "FNN_brute",
       "nabor_auto", "nabor_brute",
@@ -315,7 +356,7 @@ external_methods <- function(backend) {
     implementation = c(
       "Rnanoflann", "RANN", "RANN",
       "rnndescent", "rnndescent", "rnndescent", "rnndescent",
-      "RcppAnnoy", "RcppHNSW",
+      "RcppAnnoy", "RcppAnnoy", "RcppAnnoy", "RcppHNSW",
       "BiocNeighbors", "BiocNeighbors", "BiocNeighbors",
       "FNN", "FNN", "FNN",
       "nabor", "nabor",
@@ -324,14 +365,15 @@ external_methods <- function(backend) {
     backend = "cpu",
     public_method = NA_character_,
     kind = c(
-      rep("knn_search", 17),
+      rep("knn_search", 19),
       "not_standalone", "not_standalone", "embedding_consumer"
     ),
     detail = c(
       "Rnanoflann standard KNN", "RANN kd tree", "RANN bd tree",
       "rnndescent random projection forest", "rnndescent random-pair NN-descent",
       "rnndescent NN-descent", "rnndescent brute force",
-      "RcppAnnoy Euclidean Annoy",
+      "RcppAnnoy Euclidean Annoy", "RcppAnnoy angular cosine Annoy",
+      "RcppAnnoy dot-product Annoy",
       "RcppHNSW hnswlib HNSW",
       "BiocNeighbors exhaustive", "BiocNeighbors HNSW", "BiocNeighbors Annoy",
       "FNN kd tree", "FNN cover tree", "FNN brute force",
@@ -405,10 +447,17 @@ run_faissr_method <- function(x, row, k, metric, threads, target_recall, output)
   )
 }
 
-annoy_knn <- function(x, k, n_trees = 50L, n_threads = 1L, seed = 4L) {
+annoy_knn <- function(x, k, metric = "euclidean", n_trees = 50L,
+                      n_threads = 1L, seed = 4L) {
   if (!available_pkg("RcppAnnoy")) stop("RcppAnnoy unavailable")
   p <- ncol(x)
-  index <- new(RcppAnnoy::AnnoyEuclidean, p)
+  index <- if (identical(metric, "cosine")) {
+    new(RcppAnnoy::AnnoyAngular, p)
+  } else if (identical(metric, "inner_product")) {
+    new(RcppAnnoy::AnnoyDotProduct, p)
+  } else {
+    new(RcppAnnoy::AnnoyEuclidean, p)
+  }
   index$setSeed(as.integer(seed))
   for (i in seq_len(nrow(x))) index$addItem(i - 1L, x[i, ])
   index$build(as.integer(n_trees))
@@ -429,10 +478,14 @@ annoy_knn <- function(x, k, n_trees = 50L, n_threads = 1L, seed = 4L) {
   } else {
     res <- lapply(rows, query_one)
   }
-  list(
+  result <- list(
     indices = do.call(rbind, lapply(res, `[[`, "indices")),
     distances = do.call(rbind, lapply(res, `[[`, "distances"))
   )
+  if (identical(metric, "cosine")) {
+    result$distances <- canonicalize_annoy_angular_distances(result$distances)
+  }
+  result
 }
 
 run_external_method <- function(x_input, method, k, metric, threads, seed) {
@@ -460,37 +513,57 @@ run_external_method <- function(x_input, method, k, metric, threads, seed) {
     rnndescent_rpf = {
       if (!available_pkg("rnndescent")) stop("rnndescent unavailable")
       remove_self(rnndescent::rpf_knn(
-        x, k = k + 1L, n_threads = threads,
+        x, k = k + 1L, metric = metric, n_threads = threads,
         include_self = TRUE, verbose = FALSE
       ), k)
     },
     rnndescent_rnnd = {
       if (!available_pkg("rnndescent")) stop("rnndescent unavailable")
       remove_self(rnndescent::rnnd_knn(
-        x, k = k + 1L, n_threads = threads, verbose = FALSE
+        x, k = k + 1L, metric = metric,
+        n_threads = threads, verbose = FALSE
       ), k)
     },
     rnndescent_nnd = {
       if (!available_pkg("rnndescent")) stop("rnndescent unavailable")
       remove_self(rnndescent::nnd_knn(
-        x, k = k + 1L, n_threads = threads, verbose = FALSE
+        x, k = k + 1L, metric = metric,
+        n_threads = threads, verbose = FALSE
       ), k)
     },
     rnndescent_bruteforce = {
       if (!available_pkg("rnndescent")) stop("rnndescent unavailable")
-      remove_self(rnndescent::brute_force_knn(x, k = k + 1L, n_threads = threads), k)
+      remove_self(rnndescent::brute_force_knn(
+        x, k = k + 1L, metric = metric, n_threads = threads
+      ), k)
     },
     RcppAnnoy_euclidean = remove_self(
-      annoy_knn(x, k, n_threads = threads, seed = seed),
+      annoy_knn(x, k, metric = "euclidean", n_threads = threads, seed = seed),
       k
     ),
+    RcppAnnoy_angular = remove_self(
+      annoy_knn(x, k, metric = "cosine", n_threads = threads, seed = seed),
+      k
+    ),
+    RcppAnnoy_dot_product = {
+      result <- remove_self(
+        annoy_knn(
+          x, k, metric = "inner_product", n_threads = threads, seed = seed
+        ),
+        k
+      )
+      result$distances <- canonicalize_annoy_dot_product_scores(
+        result$distances
+      )
+      result
+    },
     RcppHNSW_hnsw = {
       if (!available_pkg("RcppHNSW")) stop("RcppHNSW unavailable")
-      remove_self(
+      result <- remove_self(
         RcppHNSW::hnsw_knn(
           x,
           k = k + 1L,
-          distance = metric,
+          distance = if (identical(metric, "inner_product")) "ip" else metric,
           M = 16L,
           ef_construction = 200L,
           ef = max(50L, 3L * k),
@@ -503,6 +576,12 @@ run_external_method <- function(x_input, method, k, metric, threads, seed) {
         ),
         k
       )
+      if (identical(metric, "inner_product")) {
+        result$distances <- canonicalize_hnsw_inner_product_distances(
+          result$distances
+        )
+      }
+      result
     },
     BiocNeighbors_exhaustive = {
       if (!available_pkg("BiocNeighbors")) stop("BiocNeighbors unavailable")
@@ -795,7 +874,9 @@ method_thread_metadata <- function(method, threads) {
       scope = "public interface exposes no thread-count argument"
     ))
   }
-  if (identical(id, "RcppAnnoy_euclidean")) {
+  if (id %in% c(
+    "RcppAnnoy_euclidean", "RcppAnnoy_angular", "RcppAnnoy_dot_product"
+  )) {
     return(list(
       requested = as.integer(threads),
       scope = "serial build; item queries use parallel::mclapply"
@@ -849,28 +930,37 @@ method_parameter_string <- function(method, k, metric, target_recall, threads,
       "RANN::nn2(data,query=data,k=%d,treetype=bd);remove_self", k + 1L
     ),
     rnndescent_rpf = sprintf(
-      "rnndescent::rpf_knn(k=%d,n_threads=%d,include_self=TRUE,verbose=FALSE);remove_self",
-      k + 1L, threads
+      "rnndescent::rpf_knn(k=%d,metric=%s,n_threads=%d,include_self=TRUE,verbose=FALSE);remove_self",
+      k + 1L, metric, threads
     ),
     rnndescent_rnnd = sprintf(
-      "rnndescent::rnnd_knn(k=%d,n_threads=%d,verbose=FALSE);remove_self",
-      k + 1L, threads
+      "rnndescent::rnnd_knn(k=%d,metric=%s,n_threads=%d,verbose=FALSE);remove_self",
+      k + 1L, metric, threads
     ),
     rnndescent_nnd = sprintf(
-      "rnndescent::nnd_knn(k=%d,n_threads=%d,verbose=FALSE);remove_self",
-      k + 1L, threads
+      "rnndescent::nnd_knn(k=%d,metric=%s,n_threads=%d,verbose=FALSE);remove_self",
+      k + 1L, metric, threads
     ),
     rnndescent_bruteforce = sprintf(
-      "rnndescent::brute_force_knn(k=%d,n_threads=%d);remove_self",
-      k + 1L, threads
+      "rnndescent::brute_force_knn(k=%d,metric=%s,n_threads=%d);remove_self",
+      k + 1L, metric, threads
     ),
     RcppAnnoy_euclidean = sprintf(
       "AnnoyEuclidean(build_trees=50,seed=%d,getNNsByItemList(k=%d));remove_self",
       seed, k + 1L
     ),
+    RcppAnnoy_angular = sprintf(
+      "AnnoyAngular(build_trees=50,seed=%d,getNNsByItemList(k=%d));remove_self;distance=(angular^2)/2",
+      seed, k + 1L
+    ),
+    RcppAnnoy_dot_product = sprintf(
+      "AnnoyDotProduct(build_trees=50,seed=%d,getNNsByItemList(k=%d));remove_self;distance=row_max(score)-score",
+      seed, k + 1L
+    ),
     RcppHNSW_hnsw = sprintf(
       "RcppHNSW::hnsw_knn(k=%d,distance=%s,M=16,ef_construction=200,ef=%d,n_threads=%d,random_seed=%d);remove_self",
-      k + 1L, metric, max(50L, 3L * k), threads, seed
+      k + 1L, if (metric == "inner_product") "ip" else metric,
+      max(50L, 3L * k), threads, seed
     ),
     BiocNeighbors_exhaustive = sprintf(
       "BiocNeighbors::findKNN(k=%d,ExhaustiveParam(distance=%s),num.threads=%d);remove_self%s",
