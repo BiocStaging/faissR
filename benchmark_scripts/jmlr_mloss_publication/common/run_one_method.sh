@@ -22,6 +22,7 @@ VALIDATION_SEEDS="${VALIDATION_SEEDS:-20260706,20260807}"
 REPEATS="${REPEATS:-3}"
 OUTPUT="${OUTPUT:-double}"
 INCLUDE_EXTERNAL="${INCLUDE_EXTERNAL:-FALSE}"
+REQUIRED_EXTERNAL_PACKAGE="${REQUIRED_EXTERNAL_PACKAGE:-}"
 INCLUDE_GPU_RESIDENT="${INCLUDE_GPU_RESIDENT:-TRUE}"
 RUN_REAL="${RUN_REAL:-TRUE}"
 RUN_MIPS="${RUN_MIPS:-FALSE}"
@@ -63,6 +64,9 @@ fi
 run_r -e 'library(faissR); stopifnot(faissR::faiss_available()); cat("faissR benchmark preflight OK\n")'
 if [[ "${BACKEND}" == "cuda" ]]; then
   run_r -e 'library(faissR); stopifnot(faissR::cuda_available()); cat("faissR CUDA preflight OK\n")'
+fi
+if [[ -n "${REQUIRED_EXTERNAL_PACKAGE}" ]]; then
+  run_r -e "pkg <- '${REQUIRED_EXTERNAL_PACKAGE}'; if (!requireNamespace(pkg, quietly = TRUE)) stop('Required external comparator is unavailable: ', pkg); cat('External comparator preflight OK: ', pkg, ' ', as.character(utils::packageVersion(pkg)), '\\n', sep = '')"
 fi
 
 if [[ ! -f "${REAL_MANIFEST}" && "${RUN_REAL}" == "TRUE" ]]; then

@@ -32,7 +32,7 @@
 Dalia Ahmed$^{1}$, Dupe Ojo$^{1}$\\
 Alessia Vignoli$^{3,4}$, Leonardo Tenori$^{3,4,\ast}$\\
 Stefano Cacciatore$^{1,2,\ast}$}
-\date{Evidence freeze: 30 July 2026}
+\date{Evidence freeze: 31 July 2026}
 
 \begin{document}
 \raggedbottom
@@ -90,7 +90,7 @@ or general performance superiority.
 
 \section{Software and public interface}
 
-The evaluated development snapshot is \pkg{faissR} 0.99.16. FAISS is a
+The evaluated development snapshot is \pkg{faissR} 0.99.17. FAISS is a
 mandatory system dependency. NVIDIA CUDA, FAISS GPU, and RAPIDS cuVS are
 optional for CPU-only builds and required when the corresponding GPU features
 are explicitly requested. The package uses compiled C++/CUDA interfaces and
@@ -453,20 +453,24 @@ across different methods or shapes are not valid ablation effects.
 
 CPU comparison scripts include applicable public interfaces from
 \pkg{Rnanoflann}, \pkg{RANN}, \pkg{RcppAnnoy}, \pkg{rnndescent},
-\pkg{BiocNeighbors}, and \pkg{uwot}. CUDA comparison includes
-\pkg{cuda.ml} when available. A comparator is included only when its public
-interface can express the same metric, $k$, and self-exclusion convention.
-CPU and CUDA are reported separately. Effective threads, conversion, index
-build inclusion, result residency, and failure/timeout state accompany elapsed
-time. Exact/Flat/brute-force routes are not counted as three independent
+\pkg{BiocNeighbors}, \pkg{FNN}, \pkg{nabor}, and \pkg{uwot}. The CUDA audit
+also records \pkg{cuda.ml}, but its current public KNN interface fits
+supervised prediction models and does not return self-KNN index and distance
+matrices (version 0.3.3 documentation); it is therefore marked non-standalone rather than
+timed as a different task. A comparator is timed only when its public interface
+can express the same metric, $k$, and self-exclusion convention. CPU and CUDA
+are reported separately. Allocated and requested threads, threading scope,
+conversion, index-build inclusion, result residency, and failure/timeout state
+accompany elapsed time. Exact/Flat/brute-force routes are not counted as three independent
 mathematical algorithms when they resolve to the same exhaustive provider;
 their user-visible wrappers may still be profiled to quantify interface and
 resource-reuse overhead.
 
 \begin{longtable}{P{0.20\linewidth}P{0.72\linewidth}}
 \caption{Frozen external-comparator call families. Exact argument values,
-package versions, and effective threads are written into each result row and
-the archived \code{sessionInfo()}.}\\
+package versions, allocated/requested threads, and threading scope are written
+into each result row; the archived \code{sessionInfo()} records the wider
+software environment.}\\
 \label{tab:supp-comparators}\\
 \toprule
 Package & Public interface and timing interpretation \\
@@ -480,6 +484,10 @@ Package & Public interface and timing interpretation \\
 and the allocated core count where supported; one-call cold timing. \\
 \pkg{RANN} & \code{nn2()} with \code{treetype = "kd"} and
 \code{treetype = "bd"}; one-call cold timing. \\
+\pkg{FNN} & \code{get.knn()} with \code{algorithm = "kd\_tree"},
+\code{"cover\_tree"}, and \code{"brute"}; one-call cold timing. \\
+\pkg{nabor} & \code{knn(data, query = data)} with
+\code{searchtype = "auto"} and \code{"brute"}; one-call cold timing. \\
 \pkg{RcppAnnoy} & \code{AnnoyEuclidean} construction, item insertion,
 \code{build()}, and iterative \code{getNNsByItemList()} calls because no
 matrix-batch query is exposed; cold build-plus-query and
@@ -493,9 +501,9 @@ index supplies a
 separately labeled warm comparison where the installed version exposes it. \\
 \pkg{uwot} & Exported nearest-neighbor interface only; embedding runtime is not
 misrepresented as a KNN benchmark. \\
-\pkg{cuda.ml} & A public nearest-neighbor export is included only when present
-and when the requested metric and $k$ are expressible; absence is recorded as
-unavailable rather than replaced by a CPU route. \\
+\pkg{cuda.ml} & \code{cuda\_ml\_knn()} is recorded as non-standalone because
+its public return value is a supervised prediction model, not neighbor index
+and distance matrices; no CPU substitute or guessed internal export is used. \\
 \bottomrule
 \end{longtable}
 
@@ -541,13 +549,13 @@ without launching Slurm. Full
 computation is reproduced separately with
 \path{benchmark_scripts/jmlr_mloss_publication/final_campaign/}%
 \path{submission_commands.txt};
-the campaign contains 256 independent jobs so one failure cannot erase the
+the campaign contains 261 independent jobs so one failure cannot erase the
 other method/backend evidence.
 The directory retains its historical \path{jmlr_mloss_publication} name, but
 the protocol and artifacts described here are the JSS submission campaign; the
 path is not a claim of simultaneous submission to another journal.
 
-The 256 jobs comprise 5 exact-reference, 105 calibration, 126 held-out,
+The 261 jobs comprise 5 exact-reference, 105 calibration, 131 held-out,
 7 reusable external-index, 2 systems-ablation, 2 installed-package route-QA,
 and 9 analysis/freeze jobs. The reusable-index diagnostic uses the same
 independent exact-reference query rows (up to 1,024), reports conversion,
@@ -563,7 +571,8 @@ The final archive groups the reproducibility metadata into five tables:
 (i) dataset source, release, dimensions, preprocessing, redistribution terms,
 and fingerprint; (ii) package, compiler, FAISS, CUDA, cuVS, driver, and
 container versions; (iii) requested and resolved method/provider/backend;
-(iv) timing protocol, repeat, allocation, effective threads, residency, and
+(iv) timing protocol, repeat, allocated/requested threads, threading scope,
+residency, and
 copy counts; and (v) failures, timeouts, unsupported contracts, and recall
 target attainment. MD5 is retained only for local row identity, while SHA-256
 protects submitted and externally distributed artifacts.
@@ -576,7 +585,7 @@ device pointer.
 
 \begin{table}[ht]
 \centering
-\caption{Evidence status at the July 30, 2026 freeze.}
+\caption{Evidence status at the July 31, 2026 freeze.}
 \label{tab:supp-evidence}
 \begin{tabularx}{\linewidth}{P{0.32\linewidth}P{0.18\linewidth}Y}
 \toprule
@@ -600,13 +609,11 @@ without each dataset and evaluate the omitted dataset without revision. \\
 
 \section{Interpretation}
 
-The completed evidence supports the package's metric and routing contracts on
-the deterministic CPU/CUDA fixtures and confirms successful execution of the
-planned systems-ablation arms. It does not yet establish that one method is
-fastest across the real-dataset collection or that \method{auto} approaches an
-empirical oracle. Those claims require the held-out benchmark, frozen aggregate,
-and selector sensitivity analysis. This boundary is maintained in both
-the manuscript and supplement so that calibration, correctness, and
-comparative performance are not conflated.
+The completed fixtures support the package's metric and routing contracts and
+confirm execution of the planned systems-ablation arms. They do not establish
+a real-dataset speed winner or that \method{auto} approaches an empirical
+oracle; those claims require the held-out benchmark, frozen aggregate, and
+selector sensitivity analysis. The article and supplement preserve this
+distinction between calibration, correctness, and comparative performance.
 
 \end{document}

@@ -93,6 +93,14 @@ configure_threads <- function(n_threads) {
 
 available_pkg <- function(pkg) requireNamespace(pkg, quietly = TRUE)
 
+package_version_string <- function(pkg) {
+  if (!available_pkg(pkg)) return(NA_character_)
+  tryCatch(
+    as.character(utils::packageVersion(pkg)),
+    error = function(e) NA_character_
+  )
+}
+
 read_peak_rss_gb <- function() {
   path <- "/proc/self/status"
   if (!file.exists(path)) return(NA_real_)
@@ -216,6 +224,7 @@ standardize_knn <- function(obj) {
   if (!is.null(obj$indices) && !is.null(obj$distances)) return(list(indices = obj$indices, distances = obj$distances))
   if (!is.null(obj$idx) && !is.null(obj$dist)) return(list(indices = obj$idx, distances = obj$dist))
   if (!is.null(obj$nn.idx) && !is.null(obj$nn.dists)) return(list(indices = obj$nn.idx, distances = obj$nn.dists))
+  if (!is.null(obj$nn.index) && !is.null(obj$nn.dist)) return(list(indices = obj$nn.index, distances = obj$nn.dist))
   if (!is.null(obj$index) && !is.null(obj$distance)) return(list(indices = obj$index, distances = obj$distance))
   list(indices = NULL, distances = NULL)
 }
@@ -260,8 +269,11 @@ external_methods <- function(backend) {
       implementation = "cuda.ml",
       backend = "cuda",
       public_method = NA_character_,
-      kind = "knn_search",
-      detail = "cuda.ml KNN when installed",
+      kind = "not_standalone",
+      detail = paste(
+        "The current cuda.ml public KNN API fits supervised models and does",
+        "not return self-KNN indices and distances."
+      ),
       stringsAsFactors = FALSE
     ))
   }
@@ -271,6 +283,8 @@ external_methods <- function(backend) {
       "rnndescent_rpf", "rnndescent_rnnd", "rnndescent_nnd", "rnndescent_bruteforce",
       "RcppAnnoy_euclidean",
       "BiocNeighbors_exhaustive", "BiocNeighbors_hnsw", "BiocNeighbors_annoy",
+      "FNN_kd", "FNN_cover", "FNN_brute",
+      "nabor_auto", "nabor_brute",
       "uwot_nearest_neighbors", "Rtsne_neighbors", "umap_umap"
     ),
     implementation = c(
@@ -278,17 +292,21 @@ external_methods <- function(backend) {
       "rnndescent", "rnndescent", "rnndescent", "rnndescent",
       "RcppAnnoy",
       "BiocNeighbors", "BiocNeighbors", "BiocNeighbors",
+      "FNN", "FNN", "FNN",
+      "nabor", "nabor",
       "uwot", "Rtsne", "umap"
     ),
     backend = "cpu",
     public_method = NA_character_,
-    kind = c(rep("knn_search", 11), "knn_search", "not_standalone", "embedding_consumer"),
+    kind = c(rep("knn_search", 17), "not_standalone", "embedding_consumer"),
     detail = c(
       "Rnanoflann standard KNN", "RANN kd tree", "RANN bd tree",
       "rnndescent random projection forest", "rnndescent random-pair NN-descent",
       "rnndescent NN-descent", "rnndescent brute force",
       "RcppAnnoy Euclidean Annoy",
       "BiocNeighbors exhaustive", "BiocNeighbors HNSW", "BiocNeighbors Annoy",
+      "FNN kd tree", "FNN cover tree", "FNN brute force",
+      "nabor automatic search", "nabor brute-force search",
       "uwot nearest_neighbors if exported", "Rtsne consumes precomputed neighbours",
       "umap package embedding, not standalone KNN"
     ),
@@ -442,6 +460,26 @@ run_external_method <- function(x_input, method, k, metric, threads, seed) {
       dist <- if (metric == "cosine") "Cosine" else "Euclidean"
       remove_self(BiocNeighbors::findKNN(x, k = k + 1L, BNPARAM = BiocNeighbors::AnnoyParam(distance = dist, ntrees = 50), num.threads = threads), k)
     },
+    FNN_kd = {
+      if (!available_pkg("FNN")) stop("FNN unavailable")
+      remove_self(FNN::get.knn(x, k = k + 1L, algorithm = "kd_tree"), k)
+    },
+    FNN_cover = {
+      if (!available_pkg("FNN")) stop("FNN unavailable")
+      remove_self(FNN::get.knn(x, k = k + 1L, algorithm = "cover_tree"), k)
+    },
+    FNN_brute = {
+      if (!available_pkg("FNN")) stop("FNN unavailable")
+      remove_self(FNN::get.knn(x, k = k + 1L, algorithm = "brute"), k)
+    },
+    nabor_auto = {
+      if (!available_pkg("nabor")) stop("nabor unavailable")
+      remove_self(nabor::knn(x, x, k = k + 1L, searchtype = "auto"), k)
+    },
+    nabor_brute = {
+      if (!available_pkg("nabor")) stop("nabor unavailable")
+      remove_self(nabor::knn(x, x, k = k + 1L, searchtype = "brute"), k)
+    },
     uwot_nearest_neighbors = {
       if (!available_pkg("uwot")) stop("uwot unavailable")
       if (!"nearest_neighbors" %in% getNamespaceExports("uwot")) {
@@ -450,14 +488,10 @@ run_external_method <- function(x_input, method, k, metric, threads, seed) {
       fn <- get("nearest_neighbors", envir = asNamespace("uwot"))
       remove_self(fn(x, n_neighbors = k + 1L, metric = metric, n_threads = threads, verbose = FALSE), k)
     },
-    cuda_ml_knn = {
-      if (!available_pkg("cuda.ml")) stop("cuda.ml unavailable")
-      exports <- getNamespaceExports("cuda.ml")
-      candidate <- intersect(c("knn", "nearest_neighbors", "cuda_ml_knn"), exports)
-      if (!length(candidate)) stop("cuda.ml is installed but no recognised KNN export was found")
-      fn <- get(candidate[[1L]], envir = asNamespace("cuda.ml"))
-      remove_self(fn(x, k = k + 1L), k)
-    },
+    cuda_ml_knn = stop(
+      "cuda.ml exposes supervised KNN model fitting, not a standalone self-KNN result.",
+      call. = FALSE
+    ),
     Rtsne_neighbors = stop("Rtsne::Rtsne_neighbors consumes precomputed neighbours and is not a standalone NN search.", call. = FALSE),
     umap_umap = stop("umap::umap is an embedding consumer, not a standalone NN search returning indices/distances.", call. = FALSE),
     stop("Unknown external method: ", method, call. = FALSE)
@@ -646,6 +680,140 @@ empty_metadata <- function() {
   )
 }
 
+method_thread_metadata <- function(method, threads) {
+  id <- as.character(method$method_id[[1L]])
+  implementation <- as.character(method$implementation[[1L]])
+  kind <- as.character(method$kind[[1L]])
+  if (identical(implementation, "faissR")) {
+    if (identical(kind, "gpu_resident_knn")) {
+      return(list(
+        requested = NA_integer_,
+        scope = "CUDA provider; nn_gpu() exposes no CPU thread argument"
+      ))
+    }
+    return(list(
+      requested = as.integer(threads),
+      scope = "faissR n_threads argument"
+    ))
+  }
+  if (id %in% c("RANN_kd", "RANN_bd", "FNN_kd", "FNN_cover", "FNN_brute",
+                "nabor_auto", "nabor_brute")) {
+    return(list(
+      requested = 1L,
+      scope = "public interface exposes no thread-count argument"
+    ))
+  }
+  if (identical(id, "RcppAnnoy_euclidean")) {
+    return(list(
+      requested = as.integer(threads),
+      scope = "serial build; item queries use parallel::mclapply"
+    ))
+  }
+  if (id %in% c("Rnanoflann_standard", "rnndescent_rpf", "rnndescent_rnnd",
+                "rnndescent_nnd", "rnndescent_bruteforce",
+                "BiocNeighbors_exhaustive", "BiocNeighbors_hnsw",
+                "BiocNeighbors_annoy", "uwot_nearest_neighbors")) {
+    return(list(
+      requested = as.integer(threads),
+      scope = "public package thread-count argument"
+    ))
+  }
+  list(requested = NA_integer_, scope = "not applicable")
+}
+
+method_parameter_string <- function(method, k, metric, target_recall, threads,
+                                    output, seed) {
+  id <- as.character(method$method_id[[1L]])
+  implementation <- as.character(method$implementation[[1L]])
+  if (identical(implementation, "faissR")) {
+    call_name <- if (identical(method$kind[[1L]], "gpu_resident_knn")) {
+      "nn_gpu"
+    } else {
+      "nn"
+    }
+    return(sprintf(
+      "%s(method=%s,backend=%s,metric=%s,k=%d,exclude_self=TRUE,tuning=auto,target_recall=%s,n_threads=%s,output=%s)",
+      call_name,
+      method$public_method[[1L]],
+      method$backend[[1L]],
+      metric,
+      as.integer(k),
+      format(target_recall, trim = TRUE),
+      if (identical(call_name, "nn_gpu")) "not_exposed" else as.integer(threads),
+      output
+    ))
+  }
+  switch(
+    id,
+    Rnanoflann_standard = sprintf(
+      "Rnanoflann::nn(query=data,k=%d,parallel=TRUE,cores=%d,sorted=TRUE);remove_self",
+      k + 1L, threads
+    ),
+    RANN_kd = sprintf(
+      "RANN::nn2(data,query=data,k=%d,treetype=kd);remove_self", k + 1L
+    ),
+    RANN_bd = sprintf(
+      "RANN::nn2(data,query=data,k=%d,treetype=bd);remove_self", k + 1L
+    ),
+    rnndescent_rpf = sprintf(
+      "rnndescent::rpf_knn(k=%d,n_threads=%d,include_self=TRUE,progress=none);remove_self",
+      k + 1L, threads
+    ),
+    rnndescent_rnnd = sprintf(
+      "rnndescent::rnnd_knn(k=%d,n_threads=%d,progress=none);remove_self",
+      k + 1L, threads
+    ),
+    rnndescent_nnd = sprintf(
+      "rnndescent::nnd_knn(k=%d,n_threads=%d,progress=none);remove_self",
+      k + 1L, threads
+    ),
+    rnndescent_bruteforce = sprintf(
+      "rnndescent::brute_force_knn(k=%d,n_threads=%d);remove_self",
+      k + 1L, threads
+    ),
+    RcppAnnoy_euclidean = sprintf(
+      "AnnoyEuclidean(build_trees=50,seed=%d,getNNsByItemList(k=%d));remove_self",
+      seed, k + 1L
+    ),
+    BiocNeighbors_exhaustive = sprintf(
+      "BiocNeighbors::findKNN(k=%d,ExhaustiveParam(distance=%s),num.threads=%d);remove_self",
+      k + 1L, if (metric == "cosine") "Cosine" else "Euclidean", threads
+    ),
+    BiocNeighbors_hnsw = sprintf(
+      "BiocNeighbors::findKNN(k=%d,HnswParam(nlinks=16,ef.construction=200,ef.search=%d,distance=%s),num.threads=%d);remove_self",
+      k + 1L, max(50L, 3L * k),
+      if (metric == "cosine") "Cosine" else "Euclidean", threads
+    ),
+    BiocNeighbors_annoy = sprintf(
+      "BiocNeighbors::findKNN(k=%d,AnnoyParam(ntrees=50,distance=%s),num.threads=%d);remove_self",
+      k + 1L, if (metric == "cosine") "Cosine" else "Euclidean", threads
+    ),
+    FNN_kd = sprintf(
+      "FNN::get.knn(k=%d,algorithm=kd_tree);remove_self", k + 1L
+    ),
+    FNN_cover = sprintf(
+      "FNN::get.knn(k=%d,algorithm=cover_tree);remove_self", k + 1L
+    ),
+    FNN_brute = sprintf(
+      "FNN::get.knn(k=%d,algorithm=brute);remove_self", k + 1L
+    ),
+    nabor_auto = sprintf(
+      "nabor::knn(data,query=data,k=%d,searchtype=auto);remove_self", k + 1L
+    ),
+    nabor_brute = sprintf(
+      "nabor::knn(data,query=data,k=%d,searchtype=brute);remove_self", k + 1L
+    ),
+    uwot_nearest_neighbors = sprintf(
+      "uwot::nearest_neighbors(n_neighbors=%d,metric=%s,n_threads=%d,verbose=FALSE);remove_self",
+      k + 1L, metric, threads
+    ),
+    cuda_ml_knn = "not_standalone: supervised model API; no neighbor matrices",
+    Rtsne_neighbors = "not_standalone: consumes precomputed neighbors",
+    umap_umap = "embedding consumer; no standalone neighbor result",
+    "unrecorded"
+  )
+}
+
 write_one <- function(path, row) {
   dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
   utils::write.csv(row, path, row.names = FALSE)
@@ -654,7 +822,8 @@ write_one <- function(path, row) {
 aggregate_success_rows <- function(success) {
   group_cols <- c(
     "dataset", "dataset_md5", "backend", "metric", "k", "target_recall",
-    "implementation", "method_id", "public_method", "kind", "n_threads"
+    "implementation", "implementation_version", "method_id", "public_method",
+    "kind", "n_threads", "threads_requested", "threading_scope"
   )
   key_frame <- lapply(success[group_cols], function(x) {
     value <- as.character(x)
@@ -796,6 +965,7 @@ worker_main <- function(args) {
   seed <- scalar_positive_int(args$seed, "1", "seed")
   repeat_id <- scalar_positive_int(args$repeat_id, "1", "repeat_id")
   reference_k <- scalar_positive_int(args$reference_k, as.character(k), "reference_k")
+  thread_meta <- method_thread_metadata(method, threads)
 
   base <- data.frame(
     dataset = args$dataset,
@@ -813,6 +983,7 @@ worker_main <- function(args) {
     backend = method$backend,
     method_id = method$method_id,
     implementation = method$implementation,
+    implementation_version = package_version_string(method$implementation[[1L]]),
     public_method = method$public_method,
     kind = method$kind,
     metric = metric,
@@ -822,6 +993,12 @@ worker_main <- function(args) {
     algorithm_seed = if (identical(method$method_id[[1L]], "RcppAnnoy_euclidean")) seed else NA_integer_,
     repeat_id = repeat_id,
     n_threads = threads,
+    threads_allocated = threads,
+    threads_requested = thread_meta$requested,
+    threading_scope = thread_meta$scope,
+    method_parameters = method_parameter_string(
+      method, k, metric, target_recall, threads, output, seed
+    ),
     output = output,
     status = "failed",
     time_sec = NA_real_,
@@ -1029,6 +1206,7 @@ summarize_results <- function(out_dir, methods, config) {
     "",
     "- Exact methods are still evaluated against the exact subset reference; exactness is also recorded in result metadata when faissR reports it.",
     "- External package rows are not assigned faissR target-recall tiers; they are run once per dataset/metric/k.",
+    "- Every raw row records the implementation version, exact call parameters, allocated threads, requested threads, and threading scope.",
     "- GPU-resident `nn_gpu()` rows record search time separately from `host_copy_sec`, so downstream CUDA pipelines can report no-copy timing while quality evaluation remains possible.",
     "- A low-recall fast method is not considered the best in the quality-aware ranking.",
     "- Unsupported metric/backend/provider combinations are failure evidence, not silent fallbacks."
@@ -1188,6 +1366,7 @@ main <- function() {
               stderr = file.path(out_dir, "worker_stderr.log")
             )
             if (!file.exists(result_path)) {
+              thread_meta <- method_thread_metadata(method, threads)
               row <- data.frame(
                 dataset = manifest_df$dataset[[di]],
                 data_path = manifest_df$path[[di]],
@@ -1204,6 +1383,9 @@ main <- function() {
                 backend = method$backend,
                 method_id = method$method_id,
                 implementation = method$implementation,
+                implementation_version = package_version_string(
+                  method$implementation[[1L]]
+                ),
                 public_method = method$public_method,
                 kind = method$kind,
                 metric = metric,
@@ -1215,6 +1397,12 @@ main <- function() {
                 )) validation_seed else NA_integer_,
                 repeat_id = repeat_id,
                 n_threads = threads,
+                threads_allocated = threads,
+                threads_requested = thread_meta$requested,
+                threading_scope = thread_meta$scope,
+                method_parameters = method_parameter_string(
+                  method, kk, metric, target, threads, output, validation_seed
+                ),
                 output = output,
                 status = if (identical(status, 124L)) "timeout" else "failed",
                 time_sec = if (identical(status, 124L)) timeout else NA_real_,

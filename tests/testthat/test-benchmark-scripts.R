@@ -2796,6 +2796,71 @@ test_that("publication external comparison enforces a common recall tier", {
   expect_false(any(grepl("getNNsByVectorList", source_text, fixed = TRUE)))
   expect_true(any(grepl("index$setSeed(as.integer(seed))", source_text, fixed = TRUE)))
   expect_true(any(grepl("algorithm_seed =", source_text, fixed = TRUE)))
+  expect_true(any(grepl("implementation_version =", source_text, fixed = TRUE)))
+  expect_true(any(grepl("method_parameters =", source_text, fixed = TRUE)))
+
+  cpu_external <- env$external_methods("cpu")
+  expect_true(all(c(
+    "FNN_kd", "FNN_cover", "FNN_brute", "nabor_auto", "nabor_brute"
+  ) %in% cpu_external$method_id))
+  cuda_external <- env$external_methods("cuda")
+  expect_identical(cuda_external$method_id, "cuda_ml_knn")
+  expect_identical(cuda_external$kind, "not_standalone")
+  expect_match(cuda_external$detail, "supervised models")
+
+  x <- matrix(seq_len(240) / 240, nrow = 40L, ncol = 6L)
+  routes <- c(
+    if (requireNamespace("FNN", quietly = TRUE)) "FNN_kd",
+    if (requireNamespace("nabor", quietly = TRUE)) "nabor_auto"
+  )
+  for (route in routes) {
+    result <- env$run_external_method(
+      x, route, k = 4L, metric = "euclidean", threads = 2L, seed = 17L
+    )
+    expect_identical(dim(result$indices), c(40L, 4L))
+    expect_identical(dim(result$distances), c(40L, 4L))
+    expect_false(any(result$indices == row(result$indices), na.rm = TRUE))
+  }
+})
+
+test_that("reusable external benchmark records its actual index seed", {
+  path <- test_path(
+    "../../benchmark_scripts/jmlr_mloss_publication/common/benchmark_reusable_external_indexes.R"
+  )
+  if (!file.exists(path)) {
+    skip("Publication scripts are not available in this installed-package test context.")
+  }
+  old <- Sys.getenv("FAISSR_JSS_REUSABLE_SOURCE_ONLY", unset = NA_character_)
+  on.exit({
+    if (is.na(old)) Sys.unsetenv("FAISSR_JSS_REUSABLE_SOURCE_ONLY") else
+      Sys.setenv(FAISSR_JSS_REUSABLE_SOURCE_ONLY = old)
+  }, add = TRUE)
+  Sys.setenv(FAISSR_JSS_REUSABLE_SOURCE_ONLY = "true")
+  env <- new.env(parent = globalenv())
+  sys.source(path, envir = env)
+
+  config <- list(
+    dataset = "synthetic",
+    data_path = "synthetic.RData",
+    dataset_md5 = "not-used",
+    route = "RcppAnnoy_euclidean",
+    metric = "euclidean",
+    k = 4L,
+    threads = 2L,
+    index_seed = 17L,
+    conversion_sec = 0
+  )
+  row <- env$base_row(
+    config, package_version = "test", n = 40L, p = 6L,
+    seed = 23L, phase = "warm_query", repeat_id = 1L
+  )
+  expect_identical(row$algorithm_seed, 17L)
+  expect_match(row$method_parameters, "index_seed=17")
+  expect_identical(row$threads_requested, 1L)
+
+  source_text <- readLines(path, warn = FALSE)
+  expect_true(any(grepl("index$setSeed(as.integer(index_seed))", source_text, fixed = TRUE)))
+  expect_false(any(grepl("index$setSeed(4L)", source_text, fixed = TRUE)))
 })
 
 test_that("publication systems-ablation scripts retain backend-specific headers", {

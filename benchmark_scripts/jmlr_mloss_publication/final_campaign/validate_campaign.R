@@ -15,7 +15,7 @@ expected <- c(
   "calibration/real/cuda" = 44L,
   "calibration/mips/cpu" = 10L,
   "calibration/mips/cuda" = 11L,
-  "held_out/cpu" = 60L,
+  "held_out/cpu" = 65L,
   "held_out/cuda" = 66L,
   "references" = 5L,
   "reusable_external" = 7L,

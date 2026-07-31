@@ -231,7 +231,9 @@ nanoflann-based search \citep{Rnanoflann}; \pkg{RcppAnnoy} provides Annoy
 indexes \citep{RcppAnnoy}; and \pkg{rnndescent} implements NN-descent-related
 methods \citep{rnndescent,DongMosesLi2011}. \pkg{BiocNeighbors} provides a
 common interface to multiple neighbor-search implementations used throughout
-Bioconductor \citep{BiocNeighbors,Bioconductor}. Embedding packages such as
+Bioconductor \citep{BiocNeighbors,Bioconductor}. \pkg{FNN} exposes kd-tree,
+cover-tree, and exhaustive routes \citep{FNN}, while \pkg{nabor} wraps
+low-dimensional libnabo search \citep{nabor}. Embedding packages such as
 \pkg{uwot} also contain internal nearest-neighbor machinery, but their primary
 public contribution is dimensionality reduction rather than a general
 vector-search result contract.
@@ -260,6 +262,10 @@ Package & Principal search family & Study metrics & Interface property \\
 object from \fct{nn2}. \\
 \pkg{Rnanoflann} & nanoflann kd tree & Euclidean & Lightweight compiled tree
 search. \\
+\pkg{FNN} & kd tree, cover tree, and exhaustive search & Euclidean & Multiple
+search families behind one direct KNN interface. \\
+\pkg{nabor} & libnabo kd tree and exhaustive search & Euclidean &
+Low-dimensional exact/approximate search interface. \\
 \pkg{RcppAnnoy} & Annoy projection forests & Euclidean & Reusable,
 disk-backed indexes. \\
 \pkg{rnndescent} & Projection and NN-descent routes & Euclidean &
@@ -268,6 +274,9 @@ Graph-construction alternatives. \\
 Euclidean, cosine & Reusable Bioconductor index abstraction. \\
 \pkg{uwot} & Embedding-oriented neighbor interface & Euclidean &
 Neighbor machinery supporting UMAP workflows. \\
+\pkg{cuda.ml} & Supervised cuML KNN models & Not timed as self-KNN &
+Public API returns fitted prediction models rather than neighbor matrices
+\citep{cudaML}. \\
 \pkg{faissR} & Exact, IVF/PQ, graph, and grid routes & Euclidean, cosine,
 correlation, inner product & Reusable indexes and exact-family GPU-resident
 output. \\
@@ -970,11 +979,16 @@ All applicable \pkg{faissR} methods in Table~\ref{tab:methods} are tested
 individually, including \method{auto}. CPU comparisons include
 \pkg{Rnanoflann}, \pkg{RANN} kd- and bd-tree routes, \pkg{RcppAnnoy}, four
 \pkg{rnndescent} routes, and exhaustive, HNSW, and Annoy routes available
-through \pkg{BiocNeighbors}. The public nearest-neighbor route in \pkg{uwot}
-is included where its metric contract is comparable. CUDA comparison includes
-\pkg{cuda.ml} when available. Embedding functions from t-SNE or UMAP packages
-are not reported as standalone nearest-neighbor algorithms unless they expose
-a comparable KNN result.
+through \pkg{BiocNeighbors}. \pkg{FNN} kd-tree, cover-tree, and brute-force
+routes and \pkg{nabor} automatic and brute-force routes are also included.
+The public nearest-neighbor route in \pkg{uwot} is included where its metric
+contract is comparable. We audited \pkg{cuda.ml}, but its current public
+\fct{cuda\_ml\_knn} interface requires supervised outcomes and returns a
+prediction model rather than self-KNN index and distance matrices
+\citep{cudaML}; the campaign therefore records it as non-standalone instead of
+timing a non-equivalent task. Embedding functions from t-SNE or UMAP packages
+are likewise not reported as standalone nearest-neighbor algorithms unless
+they expose a comparable KNN result.
 
 Comparators are admitted only when their public interface can express the same
 metric, self-exclusion convention, and requested $k$. CPU methods receive the
@@ -995,8 +1009,10 @@ as user-visible API performance, while the component timings diagnose whether
 it came from search mathematics, conversion, index construction, or result
 materialization.
 
-The supplement freezes the exact public call and package version used for every
-comparator. A warm result is reported only when that package exposes a public
+Each raw benchmark row freezes the exact public call, package version,
+allocated threads, requested threads, and threading scope for its comparator;
+\code{sessionInfo()} supplies the wider software environment. A warm result is
+reported only when that package exposes a public
 build-once/query-many interface; packages without such an interface contribute
 only a cold result. A warm fitted-index time is never compared with another
 package's cold one-call time. For \pkg{RcppAnnoy}, the public item-query method
@@ -1029,7 +1045,7 @@ and do not extrapolate minimum sampled recall into a population guarantee.
 
 \subsection{Pre-submission evidence audit}
 
-The benchmark archive was re-audited on July 30, 2026 before numerical results
+The benchmark archive was re-audited on July 31, 2026 before numerical results
 were admitted to this draft. Table~\ref{tab:evidenceaudit} records the status
 of each evidence stream. This audit prevents calibration rows and incomplete
 ablations from being presented as
@@ -1099,7 +1115,8 @@ routes, mean/median/minimum sampled-query recall, and target attainment.
 No numerical speed ranking is reported because the held-out method results are
 absent. The frozen analysis must identify the fastest and second-fastest method
 meeting each recall target, together with an exact baseline, median and
-interquartile range over repeats, cold/warm status, effective threads, build
+interquartile range over repeats, cold/warm status, allocated and requested
+threads plus threading scope, build
 inclusion, input conversion, result residency, and memory telemetry. CPU and
 CUDA appear in separate tables and exact and approximate frontiers are not
 collapsed into one unconditional league table.
@@ -1171,7 +1188,7 @@ development source uses the Bioconductor pre-release version convention and is
 mirrored to a Bioconductor staging repository, but this draft does not claim
 acceptance into Bioconductor.
 
-Version 0.99.16 is the development snapshot described here. An isolated build
+Version 0.99.17 is the development snapshot described here. An isolated build
 or backend smoke test is not treated as a clean package-check matrix. Before
 submission, the frozen software evidence must include complete install, load,
 unit-test, and package-check reports for every claimed CPU platform, together
@@ -1187,8 +1204,8 @@ messages. A single method failure therefore does not erase evidence or cause a
 different algorithm to be substituted.
 
 The complete campaign is generated rather than hand-maintained. Its validator
-checks 256 independent launchers: 5 exact-reference jobs, 105 calibration jobs,
-126 held-out jobs, 7 reusable external-index jobs, 2 systems-ablation jobs,
+checks 261 independent launchers: 5 exact-reference jobs, 105 calibration jobs,
+131 held-out jobs, 7 reusable external-index jobs, 2 systems-ablation jobs,
 2 installed-package route-QA jobs, and 9 analysis or freeze jobs. The
 requirement-to-script matrix maps each computational claim to its R program,
 Slurm launcher set, and expected archive location.

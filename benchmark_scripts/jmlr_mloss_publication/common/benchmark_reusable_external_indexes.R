@@ -165,7 +165,7 @@ query_index <- function(index, route, rows, k, threads) {
   ))
 }
 
-build_index <- function(x, route, metric, k, threads) {
+build_index <- function(x, route, metric, k, threads, index_seed) {
   if (identical(route, "RcppAnnoy_euclidean")) {
     if (!identical(metric, "euclidean")) {
       stop("RcppAnnoy_euclidean supports only Euclidean in this campaign.",
@@ -175,7 +175,7 @@ build_index <- function(x, route, metric, k, threads) {
       stop("RcppAnnoy is unavailable.", call. = FALSE)
     }
     index <- new(RcppAnnoy::AnnoyEuclidean, ncol(x))
-    index$setSeed(4L)
+    index$setSeed(as.integer(index_seed))
     index$setVerbose(0L)
     for (i in seq_len(nrow(x))) index$addItem(i - 1L, x[i, ])
     index$build(50L)
@@ -213,6 +213,43 @@ build_index <- function(x, route, metric, k, threads) {
   )
 }
 
+reusable_thread_metadata <- function(route, threads) {
+  if (identical(route, "RcppAnnoy_euclidean")) {
+    return(list(
+      requested = 1L,
+      scope = "serial public build and item-query API"
+    ))
+  }
+  list(
+    requested = as.integer(threads),
+    scope = "BiocNeighbors buildIndex/findKNN num.threads argument"
+  )
+}
+
+reusable_parameter_string <- function(route, metric, k, threads, index_seed) {
+  distance <- if (identical(metric, "cosine")) "Cosine" else "Euclidean"
+  switch(
+    route,
+    RcppAnnoy_euclidean = sprintf(
+      "AnnoyEuclidean(build_trees=50,index_seed=%d,getNNsByItemList(k=%d))",
+      index_seed, k + 1L
+    ),
+    BiocNeighbors_exhaustive = sprintf(
+      "buildIndex(ExhaustiveParam(distance=%s),num.threads=%d);findKNN(k=%d)",
+      distance, threads, k
+    ),
+    BiocNeighbors_hnsw = sprintf(
+      "buildIndex(HnswParam(distance=%s,nlinks=16,ef.construction=200,ef.search=%d),num.threads=%d);findKNN(k=%d)",
+      distance, max(50L, 3L * k), threads, k
+    ),
+    BiocNeighbors_annoy = sprintf(
+      "buildIndex(AnnoyParam(distance=%s,ntrees=50,search.mult=50),num.threads=%d);findKNN(k=%d)",
+      distance, threads, k
+    ),
+    "unrecorded"
+  )
+}
+
 quality <- function(result, reference, k) {
   result <- standardize(result)
   ref_i <- reference$indices[, seq_len(k), drop = FALSE]
@@ -235,6 +272,7 @@ quality <- function(result, reference, k) {
 }
 
 base_row <- function(config, package_version, n, p, seed, phase, repeat_id) {
+  thread_meta <- reusable_thread_metadata(config$route, config$threads)
   data.frame(
     dataset = config$dataset,
     data_path = config$data_path,
@@ -247,7 +285,17 @@ base_row <- function(config, package_version, n, p, seed, phase, repeat_id) {
     metric = config$metric,
     k = config$k,
     seed = seed,
+    algorithm_seed = if (identical(config$route, "RcppAnnoy_euclidean")) {
+      config$index_seed
+    } else {
+      NA_integer_
+    },
     threads_allocated = config$threads,
+    threads_requested = thread_meta$requested,
+    threading_scope = thread_meta$scope,
+    method_parameters = reusable_parameter_string(
+      config$route, config$metric, config$k, config$threads, config$index_seed
+    ),
     query_n = NA_integer_,
     phase = phase,
     repeat_id = repeat_id,
@@ -286,7 +334,10 @@ run_worker <- function(config) {
   )
 
   build_started <- proc.time()[["elapsed"]]
-  index <- build_index(x, config$route, config$metric, config$k, config$threads)
+  index <- build_index(
+    x, config$route, config$metric, config$k, config$threads,
+    config$index_seed
+  )
   build_sec <- proc.time()[["elapsed"]] - build_started
 
   rows <- list()
@@ -346,7 +397,23 @@ worker_main <- function(args) {
       package = sub("_.*$", "", config$route),
       package_version = NA_character_,
       route = config$route, metric = config$metric, k = config$k,
-      seed = NA_integer_, threads_allocated = config$threads,
+      seed = NA_integer_,
+      algorithm_seed = if (identical(config$route, "RcppAnnoy_euclidean")) {
+        config$index_seed
+      } else {
+        NA_integer_
+      },
+      threads_allocated = config$threads,
+      threads_requested = reusable_thread_metadata(
+        config$route, config$threads
+      )$requested,
+      threading_scope = reusable_thread_metadata(
+        config$route, config$threads
+      )$scope,
+      method_parameters = reusable_parameter_string(
+        config$route, config$metric, config$k, config$threads,
+        config$index_seed
+      ),
       query_n = NA_integer_, phase = "worker",
       repeat_id = NA_integer_, conversion_sec = NA_real_,
       build_sec = NA_real_, query_sec = NA_real_, elapsed_sec = NA_real_,
@@ -385,7 +452,23 @@ run_child <- function(config, timeout, script) {
     dataset_md5 = config$dataset_md5, n = NA_integer_, p = NA_integer_,
     package = sub("_.*$", "", config$route), package_version = NA_character_,
     route = config$route, metric = config$metric, k = config$k,
-    seed = NA_integer_, threads_allocated = config$threads,
+    seed = NA_integer_,
+    algorithm_seed = if (identical(config$route, "RcppAnnoy_euclidean")) {
+      config$index_seed
+    } else {
+      NA_integer_
+    },
+    threads_allocated = config$threads,
+    threads_requested = reusable_thread_metadata(
+      config$route, config$threads
+    )$requested,
+    threading_scope = reusable_thread_metadata(
+      config$route, config$threads
+    )$scope,
+    method_parameters = reusable_parameter_string(
+      config$route, config$metric, config$k, config$threads,
+      config$index_seed
+    ),
     query_n = NA_integer_, phase = "worker", repeat_id = NA_integer_,
     conversion_sec = NA_real_, build_sec = NA_real_, query_sec = NA_real_,
     elapsed_sec = if (identical(status, 124L)) timeout else NA_real_,
@@ -440,6 +523,7 @@ main <- function() {
   timeout <- positive_int(args$timeout, 2000L, "timeout")
   quality_n <- positive_int(args$quality_n, 1024L, "quality_n")
   reference_k <- positive_int(args$reference_k, 100L, "reference_k")
+  index_seed <- positive_int(args$index_seed, 4L, "index_seed")
   out_dir <- args$out_dir %||% file.path(getwd(), "reusable_external_indexes")
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
   results_path <- file.path(out_dir, "jss_reusable_external_index_results.csv")
@@ -462,7 +546,8 @@ main <- function() {
         repeats = repeats,
         timeout = timeout,
         quality_n = quality_n,
-        reference_k = reference_k
+        reference_k = reference_k,
+        index_seed = index_seed
       ), timeout, script)
       append_csv(result, results_path)
     }
@@ -471,4 +556,9 @@ main <- function() {
   message("DONE: ", results_path)
 }
 
-main()
+if (!identical(
+  Sys.getenv("FAISSR_JSS_REUSABLE_SOURCE_ONLY", unset = ""),
+  "true"
+)) {
+  main()
+}

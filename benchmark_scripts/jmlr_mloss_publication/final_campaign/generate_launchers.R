@@ -172,6 +172,7 @@ cpu_specs <- data.frame(
     paste0("faissR_cpu_", c("auto", cpu_tuning_methods, "grid")),
     "BiocNeighbors_annoy", "BiocNeighbors_exhaustive", "BiocNeighbors_hnsw",
     "RANN_bd", "RANN_kd", "RcppAnnoy_euclidean", "Rnanoflann_standard",
+    "FNN_kd", "FNN_cover", "FNN_brute", "nabor_auto", "nabor_brute",
     "rnndescent_bruteforce", "rnndescent_nnd", "rnndescent_rnnd",
     "rnndescent_rpf", "uwot_nearest_neighbors"
   ),
@@ -179,6 +180,7 @@ cpu_specs <- data.frame(
     paste0("faissR_", c("auto", cpu_tuning_methods, "grid")),
     "BiocNeighbors_annoy", "BiocNeighbors_exhaustive", "BiocNeighbors_hnsw",
     "RANN_bd", "RANN_kd", "RcppAnnoy_euclidean", "Rnanoflann_standard",
+    "FNN_kd", "FNN_cover", "FNN_brute", "nabor_auto", "nabor_brute",
     "rnndescent_bruteforce", "rnndescent_nnd", "rnndescent_rnnd",
     "rnndescent_rpf", "uwot_nearest_neighbors"
   ),
@@ -186,16 +188,16 @@ cpu_specs <- data.frame(
     rep(list(metrics), 1L + length(cpu_tuning_methods)),
     list("euclidean"),
     rep(list(c("euclidean", "cosine")), 3L),
-    rep(list("euclidean"), 9L)
+    rep(list("euclidean"), 14L)
   )),
   external = c(
     rep(FALSE, 2L + length(cpu_tuning_methods)),
-    rep(TRUE, 12L)
+    rep(TRUE, 17L)
   ),
   spatial = c(
     rep(FALSE, 1L + length(cpu_tuning_methods)),
     TRUE,
-    rep(FALSE, 12L)
+    rep(FALSE, 17L)
   ),
   stringsAsFactors = FALSE
 )
@@ -232,6 +234,22 @@ cuda_specs <- data.frame(
   stringsAsFactors = FALSE
 )
 
+external_package_for <- function(method_id) {
+  prefixes <- c(
+    BiocNeighbors = "BiocNeighbors",
+    RANN = "RANN",
+    RcppAnnoy = "RcppAnnoy",
+    Rnanoflann = "Rnanoflann",
+    FNN = "FNN",
+    nabor = "nabor",
+    rnndescent = "rnndescent",
+    uwot = "uwot"
+  )
+  matched <- names(prefixes)[startsWith(method_id, names(prefixes))]
+  if (!length(matched)) return("")
+  unname(prefixes[[matched[[1L]]]])
+}
+
 write_held_out <- function(backend, spec, metric) {
   is_cpu <- identical(backend, "cpu")
   suffix <- if (is_cpu) "cpu12" else "cuda"
@@ -244,6 +262,11 @@ write_held_out <- function(backend, spec, metric) {
   is_external <- isTRUE(spec$external)
   is_faiss <- startsWith(spec$method_id, "faissR_")
   run_mips <- is_faiss && identical(metric, "inner_product") && !is_spatial
+  required_external_package <- if (is_external && is_cpu) {
+    external_package_for(spec$method_id)
+  } else {
+    ""
+  }
   lines <- c(
     slurm_header(
       backend,
@@ -266,6 +289,10 @@ write_held_out <- function(backend, spec, metric) {
     'export REPEATS="${REPEATS:-3}"',
     'export TIMEOUT="${TIMEOUT:-2000}"',
     sprintf('export INCLUDE_EXTERNAL=%s', shell_quote(if (is_external) "TRUE" else "FALSE")),
+    sprintf(
+      'export REQUIRED_EXTERNAL_PACKAGE=%s',
+      shell_quote(required_external_package)
+    ),
     sprintf(
       'export INCLUDE_GPU_RESIDENT=%s',
       shell_quote(if (is_cpu) "FALSE" else "TRUE")
@@ -646,6 +673,11 @@ readme <- c(
   "- Calibration seed: 4. Held-out seeds: 20260706 and 20260807.",
   "- Three held-out timing repetitions; 2000-second timeout.",
   "- Input manifests point to float32 datasets.",
+  "- The frozen image must contain `Rnanoflann`, `RANN`, `RcppAnnoy`,",
+  "  `rnndescent`, `BiocNeighbors`, `FNN`, `nabor`, and `uwot`; each external",
+  "  CPU launcher fails during preflight when its required package is absent.",
+  "- `cuda.ml` is an API-audit row, not a timed self-KNN comparator, because",
+  "  its public interface returns supervised prediction models.",
   "",
   "## Required order",
   "",

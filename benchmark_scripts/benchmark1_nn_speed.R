@@ -990,6 +990,36 @@ run_method <- function(method, x, k, n_threads, dataset, out_dir, metric) {
       if (!available_pkg("BiocNeighbors")) stop("BiocNeighbors unavailable")
       BiocNeighbors::findKNN(x, k = k, BNPARAM = BiocNeighbors::AnnoyParam(distance = if (identical(metric, "cosine")) "Cosine" else "Euclidean", ntrees = 50), num.threads = n_threads)
     },
+    FNN_kd = {
+      if (!available_pkg("FNN")) stop("FNN unavailable")
+      out <- FNN::get.knn(x, k = k + 1L, algorithm = "kd_tree")
+      keep <- drop_self_if_first(out$nn.index, out$nn.dist, k)
+      list(indices = keep$indices, distances = keep$distances)
+    },
+    FNN_cover = {
+      if (!available_pkg("FNN")) stop("FNN unavailable")
+      out <- FNN::get.knn(x, k = k + 1L, algorithm = "cover_tree")
+      keep <- drop_self_if_first(out$nn.index, out$nn.dist, k)
+      list(indices = keep$indices, distances = keep$distances)
+    },
+    FNN_brute = {
+      if (!available_pkg("FNN")) stop("FNN unavailable")
+      out <- FNN::get.knn(x, k = k + 1L, algorithm = "brute")
+      keep <- drop_self_if_first(out$nn.index, out$nn.dist, k)
+      list(indices = keep$indices, distances = keep$distances)
+    },
+    nabor_auto = {
+      if (!available_pkg("nabor")) stop("nabor unavailable")
+      out <- nabor::knn(x, x, k = k + 1L, searchtype = "auto")
+      keep <- drop_self_if_first(out$nn.idx, out$nn.dists, k)
+      list(indices = keep$indices, distances = keep$distances)
+    },
+    nabor_brute = {
+      if (!available_pkg("nabor")) stop("nabor unavailable")
+      out <- nabor::knn(x, x, k = k + 1L, searchtype = "brute")
+      keep <- drop_self_if_first(out$nn.idx, out$nn.dists, k)
+      list(indices = keep$indices, distances = keep$distances)
+    },
     uwot_similarity_graph_fnn = {
       if (!available_pkg("uwot")) stop("uwot unavailable")
       uwot::similarity_graph(x, n_neighbors = k, metric = metric_arg_for_label(metric), nn_method = "fnn", n_threads = n_threads, verbose = FALSE)
@@ -1006,15 +1036,10 @@ run_method <- function(method, x, k, n_threads, dataset, out_dir, metric) {
       if (!available_pkg("uwot")) stop("uwot unavailable")
       uwot::similarity_graph(x, n_neighbors = k, metric = metric_arg_for_label(metric), nn_method = "nndescent", n_threads = n_threads, verbose = FALSE)
     },
-    cuda_ml_knn = {
-      if (!available_pkg("cuda.ml")) stop("cuda.ml unavailable")
-      exports <- getNamespaceExports("cuda.ml")
-      candidate <- intersect(c("knn", "nearest_neighbors", "cuda_ml_knn"), exports)
-      if (!length(candidate)) stop("cuda.ml is installed but no recognised KNN export was found")
-      fn <- get(candidate[[1L]], envir = asNamespace("cuda.ml"))
-      out <- fn(x, k = k)
-      standardize_knn(out)
-    },
+    cuda_ml_knn = stop(
+      "cuda.ml exposes supervised KNN model fitting, not a standalone self-KNN result.",
+      call. = FALSE
+    ),
     umap_umap_knn_from_cuvs = {
       if (!available_pkg("umap")) stop("umap unavailable")
       if (!available_pkg("faissR")) stop("faissR unavailable")
@@ -1087,11 +1112,16 @@ method_table <- function() {
     row("BiocNeighbors_exhaustive", "BiocNeighbors", "CPU"),
     row("BiocNeighbors_hnsw", "BiocNeighbors", "CPU"),
     row("BiocNeighbors_annoy", "BiocNeighbors", "CPU"),
+    row("FNN_kd", "FNN", "CPU"),
+    row("FNN_cover", "FNN", "CPU"),
+    row("FNN_brute", "FNN", "CPU"),
+    row("nabor_auto", "nabor", "CPU"),
+    row("nabor_brute", "nabor", "CPU"),
     row("uwot_similarity_graph_fnn", "uwot", "CPU", "knn_graph"),
     row("uwot_similarity_graph_annoy", "uwot", "CPU", "knn_graph"),
     row("uwot_similarity_graph_hnsw", "uwot", "CPU", "knn_graph"),
     row("uwot_similarity_graph_nndescent", "uwot", "CPU", "knn_graph"),
-    row("cuda_ml_knn", "cuda.ml", "CUDA"),
+    row("cuda_ml_knn", "cuda.ml", "CUDA", "not_applicable"),
     row("umap_umap_knn_from_cuvs", "umap", "CPU", "knn_consumer"),
     row("Rtsne_neighbors", "Rtsne", "CPU", "not_applicable")
   ))
@@ -1449,7 +1479,16 @@ if (worker) {
   tryCatch({
     if (identical(mm$kind, "not_applicable")) {
       row$status <- "not_applicable"
-      row$error <- "Rtsne::Rtsne_neighbors is not a standalone KNN search method."
+      row$error <- if (identical(method, "cuda_ml_knn")) {
+        paste(
+          "cuda.ml::cuda_ml_knn fits a supervised prediction model and does",
+          "not return standalone self-KNN index and distance matrices."
+        )
+      } else {
+        "Rtsne::Rtsne_neighbors is not a standalone KNN search method."
+      }
+      row$quality_status <- "not_applicable"
+      row$quality_error <- row$error
       write_csv_one(result_path, row)
       quit(status = 0L)
     }
@@ -1817,7 +1856,7 @@ materials <- c(
   paste0("Datasets were read from `", data_root, "`. The required datasets were COIL20, USPS, FashionMNIST, FlowRepository_FR-FCM-ZYRM_files, flow18, MNIST, imagenet, MetRef, and mass41. Each dataset file was loaded from its dataset folder as an `.RData` object named `dataset` containing `dataset$data` and `dataset$labels`. Two simulated reference datasets were generated as `matrix(runif(2000000), ncol = 2)` and `matrix(runif(3000000), ncol = 3)`, giving 1,000,000 observations with 2 and 3 variables, respectively."),
   paste0("This run used Benchmark #1 method group `", method_group, "`, with faissR methods included = ", include_faissr, ", external R packages included = ", include_external, ", and non-KNN graph/consumer rows included = ", include_non_knn, ". The selected method table is written to `benchmark1_methods.csv`."),
   paste0("Selected methods were tested over k = ", paste(k_values, collapse = ", "), " and metrics = ", paste(metric_values, collapse = ", "), ". CPU methods were run with n_threads/cores = ", n_threads, " when the package exposed a thread argument. Each dataset-method-parameter combination was executed in a separate R process with GNU `timeout` set to ", timeout_sec, " seconds."),
-  "For Euclidean speed comparisons, use separate CPU and CUDA launches so CPU-only external R packages are compared with faissR CPU methods, and CUDA methods are compared only with faissR CUDA/cuVS/FAISS-GPU routes plus CUDA-capable external packages such as cuda.ml when installed.",
+  "For Euclidean speed comparisons, use separate CPU and CUDA launches so CPU-only external R packages are compared with faissR CPU methods and CUDA methods are compared only with faissR CUDA/cuVS/FAISS-GPU routes. cuda.ml is recorded as non-standalone because its current public KNN interface returns supervised prediction models rather than self-KNN index and distance matrices.",
     "Workers were launched with the configured FAISS/cuVS/CUDA library paths before system library paths when those variables were supplied.",
   paste0("Nearest-neighbour quality was evaluated against an exact subset reference where feasible. The reference subset used at most ", quality_eval_max_n, " rows and was automatically reduced when the estimated operation count exceeded ", format(quality_eval_max_ops, scientific = TRUE), ". Reported quality metrics are recall@k, median recall@k, minimum recall@k, mean relative distance error, and Spearman rank correlation of neighbour ranks. Invalid or non-finite distance/rank quality summaries are recorded as `NA`."),
   "`benchmark1_best_by_dataset.csv` and `benchmark1_ranked_speed_quality_memory.csv` rank successful KNN-search rows by recall@k, neighbour-rank correlation, mean relative distance error, elapsed time, and peak memory. This keeps fast but low-recall rows from being reported as the best method.",
@@ -1831,7 +1870,7 @@ materials <- c(
   "Successful faissR rows also record `result_backend`, `result_requested_backend`, `result_requested_method`, `result_tuning`, `resolved_backend`, `implementation_backend`, `auto_predicted_method`, `auto_predicted_device`, `auto_explicit_backend`, `auto_explicit_method`, `auto_backend_decision`, `auto_method_decision`, compact `route_parameters`, and `tuning_status`. These fields make deterministic no-pilot tuning choices, explicit backend/method requests, and concrete FAISS/cuVS/native routes explicit in the Benchmark #1 result table.",
   "The benchmark result table includes `backend_detail` to distinguish FAISS GPU indexes that use NVIDIA cuVS internally from direct RAPIDS cuVS API calls.",
   "`benchmark1_runtime_capabilities.csv` records the faissR Benchmark #1 method/metric preflight table, including legacy Benchmark #1 method labels, equivalent public `nn()` routes where available, execution backends, metric support, `public_runtime_reason`, `runtime_available`, `runtime_reason`, and current runtime availability notes.",
-  "External R package methods tested when selected: Rnanoflann, RANN kd-tree and bd-tree, rnndescent RPF/RNND/NND/brute-force, RcppAnnoy, BiocNeighbors exhaustive/HNSW/Annoy, and cuda.ml KNN if an installed cuda.ml package exposes a recognised KNN routine. uwot::similarity_graph rows are retained as optional graph-construction rows (`kind = \"knn_graph\"`) but are excluded from the CPU/CUDA KNN-search comparison launchers by default.",
+  "External R package methods tested when selected: Rnanoflann, RANN kd-tree and bd-tree, FNN kd-tree/cover-tree/brute-force, nabor automatic/brute-force, rnndescent RPF/RNND/NND/brute-force, RcppAnnoy, and BiocNeighbors exhaustive/HNSW/Annoy. cuda.ml is retained as an explicit non-standalone API-audit row. uwot::similarity_graph rows are optional graph-construction rows (`kind = \"knn_graph\"`) and are excluded from the CPU/CUDA KNN-search comparison launchers by default.",
   "umap::umap.knn was included as a precomputed-neighbour consumer test, not as a standalone KNN search algorithm. Rtsne::Rtsne_neighbors was marked not applicable because it consumes precomputed neighbours and optimizes t-SNE rather than exporting a standalone KNN search.",
   "",
   "The benchmark records elapsed method time, load/conversion time, peak resident memory when available from `/proc/self/status`, output dimensions where an index matrix is returned, quality metrics, status, and error messages."

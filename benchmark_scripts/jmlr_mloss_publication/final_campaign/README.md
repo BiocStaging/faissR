@@ -14,6 +14,11 @@ CPU or CUDA header.
 - Calibration seed: 4. Held-out seeds: 20260706 and 20260807.
 - Three held-out timing repetitions; 2000-second timeout.
 - Input manifests point to float32 datasets.
+- The frozen image must contain `Rnanoflann`, `RANN`, `RcppAnnoy`,
+  `rnndescent`, `BiocNeighbors`, `FNN`, `nabor`, and `uwot`; each external
+  CPU launcher fails during preflight when its required package is absent.
+- `cuda.ml` is an API-audit row, not a timed self-KNN comparator, because
+  its public interface returns supervised prediction models.
 
 ## Required order
 

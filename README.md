@@ -164,10 +164,12 @@ headers and libraries discovered by `configure`.
 - Benchmark #1 comparison launchers for Euclidean speed tests are split into
   CPU and CUDA runs:
   `benchmark_scripts/run_benchmark1_compare_cpu_euclidean.sh` compares faissR
-  CPU methods with CPU external R KNN packages, while
+  CPU methods with CPU external R KNN packages, including `FNN` and `nabor`,
+  while
   `benchmark_scripts/run_benchmark1_compare_cuda_euclidean.sh` compares faissR
-  CUDA/FAISS-GPU/cuVS methods with CUDA-capable external packages such as
-  `cuda.ml` when available. HPC/SLURM equivalents are
+  CUDA/FAISS-GPU/cuVS methods. `cuda.ml` is recorded as non-standalone because
+  its public KNN API fits supervised models rather than returning self-KNN
+  index and distance matrices. HPC/SLURM equivalents are
   `benchmark_scripts/run_hpc_benchmark1_compare_cpu12_euclidean.sh` and
   `benchmark_scripts/run_hpc_benchmark1_compare_cuda_euclidean.sh`; both force
   Euclidean distance and write `benchmark1_faissr_vs_external_speed.csv`.
@@ -340,14 +342,14 @@ tarball:
 
 ```sh
 R CMD build .
-R CMD check faissR_0.99.16.tar.gz
+R CMD check faissR_0.99.17.tar.gz
 ```
 
 and then:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.16.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.17.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA and cuVS are
