@@ -63,7 +63,12 @@ main <- function() {
     row.names = FALSE
   )
 
-  keys <- c("dataset", "package", "package_version", "route", "metric", "k")
+  keys <- c(
+    "dataset", "package", "package_version", "faissR_version",
+    "faissR_package_commit",
+    "faissR_image_commit", "route", "metric", "k"
+  )
+  for (name in setdiff(keys, names(all))) all[[name]] <- NA
   group_key <- do.call(
     paste,
     c(

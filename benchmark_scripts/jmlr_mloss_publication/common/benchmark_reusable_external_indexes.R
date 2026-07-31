@@ -348,6 +348,9 @@ base_row <- function(config, package_version, n, p, seed, phase, repeat_id) {
     p = p,
     package = sub("_.*$", "", config$route),
     package_version = package_version,
+    faissR_version = as.character(utils::packageVersion("faissR")),
+    faissR_package_commit = Sys.getenv("FAISSR_PACKAGE_COMMIT", unset = "UNSET"),
+    faissR_image_commit = Sys.getenv("FAISSR_IMAGE_COMMIT", unset = "UNSET"),
     route = config$route,
     metric = config$metric,
     k = config$k,
@@ -460,6 +463,13 @@ worker_main <- function(args) {
       dataset = config$dataset,
       data_path = config$data_path,
       dataset_md5 = config$dataset_md5,
+      faissR_package_commit = Sys.getenv(
+        "FAISSR_PACKAGE_COMMIT", unset = "UNSET"
+      ),
+      faissR_image_commit = Sys.getenv(
+        "FAISSR_IMAGE_COMMIT", unset = "UNSET"
+      ),
+      faissR_version = as.character(utils::packageVersion("faissR")),
       n = NA_integer_, p = NA_integer_,
       package = sub("_.*$", "", config$route),
       package_version = NA_character_,
@@ -517,6 +527,13 @@ run_child <- function(config, timeout, script) {
   data.frame(
     dataset = config$dataset, data_path = config$data_path,
     dataset_md5 = config$dataset_md5, n = NA_integer_, p = NA_integer_,
+    faissR_package_commit = Sys.getenv(
+      "FAISSR_PACKAGE_COMMIT", unset = "UNSET"
+    ),
+    faissR_image_commit = Sys.getenv(
+      "FAISSR_IMAGE_COMMIT", unset = "UNSET"
+    ),
+    faissR_version = as.character(utils::packageVersion("faissR")),
     package = sub("_.*$", "", config$route), package_version = NA_character_,
     route = config$route, metric = config$metric, k = config$k,
     seed = NA_integer_,
@@ -616,6 +633,15 @@ main <- function() {
         reference_k = reference_k,
         index_seed = index_seed
       ), timeout, script)
+      result$faissR_package_commit <- rep(
+        Sys.getenv("FAISSR_PACKAGE_COMMIT", unset = "UNSET"), nrow(result)
+      )
+      result$faissR_image_commit <- rep(
+        Sys.getenv("FAISSR_IMAGE_COMMIT", unset = "UNSET"), nrow(result)
+      )
+      result$faissR_version <- rep(
+        as.character(utils::packageVersion("faissR")), nrow(result)
+      )
       append_csv(result, results_path)
     }
   }

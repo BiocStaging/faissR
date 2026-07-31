@@ -60,8 +60,11 @@ latest_dataset_runs <- function(x) {
 median_summary <- function(x) {
   columns <- c(
     "dataset", "dataset_md5", "n", "p", "backend", "method", "metric", "k",
-    "input_type", "experiment", "phase"
+    "faissR_version", "faissR_package_commit", "faissR_image_commit",
+    "input_type", "experiment",
+    "phase"
   )
+  for (name in setdiff(columns, names(x))) x[[name]] <- NA
   key <- interaction(
     lapply(x[columns], function(value) {
       value <- as.character(value)
@@ -109,7 +112,10 @@ paired_ratio <- function(summary, arm_column, numerator, denominator, contrast) 
   id_columns <- id_columns[
     !vapply(x[id_columns], function(value) length(unique(value)) == 1L, logical(1))
   ]
-  fixed_columns <- c("dataset", "dataset_md5", "n", "p", "backend", "method", "metric", "k")
+  fixed_columns <- c(
+    "dataset", "dataset_md5", "n", "p", "backend", "method", "metric", "k",
+    "faissR_version", "faissR_package_commit", "faissR_image_commit"
+  )
   id_columns <- unique(c(fixed_columns, id_columns))
   key <- interaction(
     lapply(x[id_columns], function(value) {

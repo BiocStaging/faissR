@@ -653,8 +653,12 @@ package-check reports.
 Every generated launcher rejects a same-version image when its embedded
 \code{FAISSR\_IMAGE\_COMMIT} differs from the required 40-character source
 commit. The strict freeze audit additionally rejects held-out \pkg{faissR} rows
-from an unknown or different package version and requires canonical
-40-character package-commit and 64-character container SHA-256 identifiers.
+from an unknown or different package version, requires the package and image
+commit columns on every raw result row, and verifies that both canonical
+40-character values equal the requested campaign commit. It also loads every
+referenced exact-neighbor object and applies the same identity check before
+accepting the archive. A canonical 64-character container SHA-256 identifier is
+required separately.
 The final archive groups the reproducibility metadata into five tables:
 (i) dataset source, release, dimensions, preprocessing, redistribution terms,
 and fingerprint; (ii) package, compiler, FAISS, CUDA, cuVS, driver, and

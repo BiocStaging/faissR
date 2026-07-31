@@ -43,6 +43,60 @@ command_output <- function(command, args = character()) {
            error = function(e) paste("unavailable:", conditionMessage(e)))
 }
 
+canonical_commit <- function(x) {
+  !is.na(x) & grepl("^[[:xdigit:]]{40}$", x)
+}
+
+audit_reference_identity <- function(paths, expected_commit, expected_version) {
+  paths <- unique(as.character(paths))
+  paths <- paths[!is.na(paths) & nzchar(paths)]
+  if (!length(paths)) {
+    return(data.frame(
+      reference_path = character(), file_exists = logical(),
+      faissR_version = character(),
+      faissR_package_commit = character(), faissR_image_commit = character(),
+      identity_pass = logical(), error = character(),
+      stringsAsFactors = FALSE
+    ))
+  }
+  rows <- lapply(paths, function(path) {
+    exists <- file.exists(path)
+    version_ref <- package_ref <- image_ref <- NA_character_
+    error <- ""
+    if (exists) {
+      tryCatch({
+        env <- new.env(parent = emptyenv())
+        loaded <- load(path, envir = env)
+        candidates <- mget(loaded, envir = env, inherits = FALSE)
+        candidates <- Filter(is.list, candidates)
+        if (!length(candidates)) {
+          stop("reference file contains no list object")
+        }
+        reference <- candidates[[1L]]
+        version_ref <- as.character(reference$faissR_version %||% NA_character_)
+        package_ref <- as.character(reference$faissR_package_commit %||% NA_character_)
+        image_ref <- as.character(reference$faissR_image_commit %||% NA_character_)
+      }, error = function(e) {
+        error <<- conditionMessage(e)
+      })
+    } else {
+      error <- "reference file does not exist"
+    }
+    pass <- exists && !nzchar(error) && identical(version_ref, expected_version) &&
+      canonical_commit(package_ref) &&
+      canonical_commit(image_ref) && identical(package_ref, expected_commit) &&
+      identical(image_ref, expected_commit)
+    data.frame(
+      reference_path = path, file_exists = exists,
+      faissR_version = version_ref,
+      faissR_package_commit = package_ref, faissR_image_commit = image_ref,
+      identity_pass = pass, error = error,
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}
+
 main <- function() {
   args <- parse_args()
   manifest_path <- normalizePath(args$manifest, mustWork = TRUE)
@@ -87,13 +141,12 @@ main <- function() {
     as.character(utils::packageVersion("faissR")),
     error = function(e) NA_character_
   )
-  faissr_rows <- results$implementation == "faissR"
-  result_version <- if ("implementation_version" %in% names(results)) {
-    as.character(results$implementation_version)
+  result_version <- if ("faissR_version" %in% names(results)) {
+    as.character(results$faissR_version)
   } else {
     rep(NA_character_, nrow(results))
   }
-  version_mismatch <- faissr_rows & (
+  version_mismatch <- (
     is.na(result_version) | !nzchar(result_version) |
       is.na(package_version) | result_version != package_version
   )
@@ -102,7 +155,7 @@ main <- function() {
     intersect(
       c(
         "dataset", "backend", "method_id", "metric", "k",
-        "implementation_version", "archive_file"
+        "faissR_version", "implementation_version", "archive_file"
       ),
       names(results)
     ),
@@ -113,6 +166,52 @@ main <- function() {
     file.path(out_dir, "mismatched_faissR_result_versions.csv"),
     row.names = FALSE
   )
+
+  package_commit <- Sys.getenv("FAISSR_PACKAGE_COMMIT", unset = "UNSET")
+  image_commit <- Sys.getenv("FAISSR_IMAGE_COMMIT", unset = "UNSET")
+  result_package_commit <- if ("faissR_package_commit" %in% names(results)) {
+    as.character(results$faissR_package_commit)
+  } else {
+    rep(NA_character_, nrow(results))
+  }
+  result_image_commit <- if ("faissR_image_commit" %in% names(results)) {
+    as.character(results$faissR_image_commit)
+  } else {
+    rep(NA_character_, nrow(results))
+  }
+  commit_mismatch <- !canonical_commit(result_package_commit) |
+    !canonical_commit(result_image_commit) |
+    result_package_commit != package_commit |
+    result_image_commit != package_commit |
+    result_package_commit != result_image_commit
+  commit_mismatch[is.na(commit_mismatch)] <- TRUE
+  stale_commits <- unique(results[
+    commit_mismatch,
+    intersect(
+      c(
+        "dataset", "backend", "method_id", "metric", "k",
+        "faissR_package_commit", "faissR_image_commit", "archive_file"
+      ),
+      names(results)
+    ),
+    drop = FALSE
+  ])
+  write.csv(
+    stale_commits,
+    file.path(out_dir, "mismatched_faissR_result_commits.csv"),
+    row.names = FALSE
+  )
+
+  reference_audit <- audit_reference_identity(
+    if ("reference_path" %in% names(results)) results$reference_path else character(),
+    package_commit, package_version
+  )
+  write.csv(
+    reference_audit,
+    file.path(out_dir, "exact_reference_identity_audit.csv"),
+    row.names = FALSE
+  )
+  bad_references <- reference_audit[!reference_audit$identity_pass, , drop = FALSE]
 
   provenance <- if (nzchar(provenance_path) && file.exists(provenance_path)) {
     read.csv(provenance_path, stringsAsFactors = FALSE, check.names = FALSE)
@@ -130,13 +229,13 @@ main <- function() {
 
   backend <- tryCatch(paste(capture.output(print(faissR::backend_info())), collapse = "\n"),
                       error = function(e) paste("unavailable:", conditionMessage(e)))
-  package_commit <- Sys.getenv("FAISSR_PACKAGE_COMMIT", unset = "UNSET")
   container_sha256 <- Sys.getenv("FAISSR_CONTAINER_SHA256", unset = "UNSET")
   freeze <- data.frame(
-    field = c("audit_timestamp_utc", "faissR_version", "package_git_commit", "container_path",
+    field = c("audit_timestamp_utc", "faissR_version", "package_git_commit",
+              "image_git_commit", "container_path",
               "container_sha256", "slurm_job_id", "hostname", "R", "OS"),
     value = c(format(Sys.time(), tz = "UTC", usetz = TRUE), package_version,
-              package_commit,
+              package_commit, image_commit,
               Sys.getenv("FAISSR_CONTAINER_PATH", unset = "UNSET"),
               container_sha256,
               Sys.getenv("SLURM_JOB_ID", unset = "manual"), Sys.info()[["nodename"]],
@@ -156,8 +255,12 @@ main <- function() {
     if (any(!manifest$file_exists)) paste(sum(!manifest$file_exists), "dataset files missing") else NULL,
     if (nrow(stale)) paste(nrow(stale), "stale/unverifiable result groups") else NULL,
     if (nrow(stale_versions)) paste(nrow(stale_versions), "faissR result rows from another or unknown package version") else NULL,
+    if (nrow(stale_commits)) paste(nrow(stale_commits), "result groups with missing or mismatched package/image commits") else NULL,
+    if (nrow(bad_references)) paste(nrow(bad_references), "exact-reference files with missing or mismatched package/image commits") else NULL,
     if (any(!provenance$provenance_complete)) paste(sum(!provenance$provenance_complete), "incomplete provenance rows") else NULL,
     if (!grepl("^[[:xdigit:]]{40}$", package_commit)) "package commit is not a 40-character hexadecimal hash" else NULL,
+    if (!grepl("^[[:xdigit:]]{40}$", image_commit)) "image commit is not a 40-character hexadecimal hash" else NULL,
+    if (!identical(package_commit, image_commit)) "package and image commits differ" else NULL,
     if (!grepl("^[[:xdigit:]]{64}$", container_sha256)) "container SHA-256 is not a 64-character hexadecimal digest" else NULL
   )
   writeLines(c("# Publication freeze audit", "", if (length(problems)) paste0("- ", problems) else "All checks passed."),

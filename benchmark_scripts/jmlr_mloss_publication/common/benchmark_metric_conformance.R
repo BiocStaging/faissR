@@ -100,6 +100,9 @@ run_case <- function(x, backend, method, metric, k, threads, target_recall) {
   started <- proc.time()[["elapsed"]]
   base <- data.frame(
     backend = backend, method = method, metric = metric, n = nrow(x), p = ncol(x), k = k,
+    faissR_version = as.character(utils::packageVersion("faissR")),
+    faissR_package_commit = Sys.getenv("FAISSR_PACKAGE_COMMIT", unset = "UNSET"),
+    faissR_image_commit = Sys.getenv("FAISSR_IMAGE_COMMIT", unset = "UNSET"),
     target_recall = target_recall, status = "failed", elapsed_sec = NA_real_,
     recall_at_k = NA_real_, target_recall_pass = NA,
     invariant_recall = NA_real_, dimensions_pass = FALSE,
@@ -187,6 +190,9 @@ run_degenerate_case <- function(backend, method, metric, k, threads, target_reca
   base <- data.frame(
     backend = backend, method = method, metric = metric, edge_kind = edge_kind,
     n = nrow(x), p = ncol(x), k = k, target_recall = target_recall,
+    faissR_version = as.character(utils::packageVersion("faissR")),
+    faissR_package_commit = Sys.getenv("FAISSR_PACKAGE_COMMIT", unset = "UNSET"),
+    faissR_image_commit = Sys.getenv("FAISSR_IMAGE_COMMIT", unset = "UNSET"),
     status = "failed", behavior = NA_character_, dimensions_pass = FALSE,
     finite_distance_pass = FALSE, route_pass = FALSE,
     resolved_backend = NA_character_, explicit_no_cpu_repair_error = FALSE,

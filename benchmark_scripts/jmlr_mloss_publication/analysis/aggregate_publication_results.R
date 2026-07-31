@@ -77,9 +77,12 @@ robust_summary <- function(x, expected_seeds, expected_repeats) {
   if (!"result_backend" %in% names(x)) x$result_backend <- NA_character_
   columns <- c(
     "dataset", "dataset_md5", "dataset_suite", "backend", "metric", "k", "target_recall",
-    "implementation", "method_id", "public_method", "kind", "n_threads",
+    "implementation", "implementation_version", "faissR_version",
+    "faissR_package_commit",
+    "faissR_image_commit", "method_id", "public_method", "kind", "n_threads",
     "result_backend"
   )
+  for (name in setdiff(columns, names(x))) x[[name]] <- NA
   group_apply(x, columns, function(part) {
     success <- part$status == "success"
     times <- suppressWarnings(as.numeric(part$time_sec[success]))

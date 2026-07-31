@@ -180,6 +180,9 @@ base_row <- function(args, x) data.frame(
   method = args$method,
   metric = args$metric,
   k = as.integer(args$k),
+  faissR_version = as.character(utils::packageVersion("faissR")),
+  faissR_package_commit = Sys.getenv("FAISSR_PACKAGE_COMMIT", unset = "UNSET"),
+  faissR_image_commit = Sys.getenv("FAISSR_IMAGE_COMMIT", unset = "UNSET"),
   input_type = args$input_type,
   experiment = args$experiment,
   phase = NA_character_,
@@ -436,6 +439,13 @@ driver_main <- function(args) {
       write.csv(data.frame(
         dataset = job[["dataset"]], dataset_md5 = job[["dataset_md5"]],
         backend = backend, method = job[["method"]],
+        faissR_version = as.character(utils::packageVersion("faissR")),
+        faissR_package_commit = Sys.getenv(
+          "FAISSR_PACKAGE_COMMIT", unset = "UNSET"
+        ),
+        faissR_image_commit = Sys.getenv(
+          "FAISSR_IMAGE_COMMIT", unset = "UNSET"
+        ),
         input_type = job[["input_type"]], experiment = job[["experiment"]],
         status = if (identical(status, 124L)) "timeout" else "failed",
         error = paste0("worker exit status ", status,
@@ -447,6 +457,15 @@ driver_main <- function(args) {
   }
   files <- list.files(file.path(out_dir, "worker_results"), pattern = "[.]csv$", full.names = TRUE)
   result <- read_union(files)
+  result$faissR_version <- rep(
+    as.character(utils::packageVersion("faissR")), nrow(result)
+  )
+  result$faissR_package_commit <- rep(
+    Sys.getenv("FAISSR_PACKAGE_COMMIT", unset = "UNSET"), nrow(result)
+  )
+  result$faissR_image_commit <- rep(
+    Sys.getenv("FAISSR_IMAGE_COMMIT", unset = "UNSET"), nrow(result)
+  )
   write.csv(result, file.path(out_dir, "jss_systems_ablation_results.csv"), row.names = FALSE)
   write.csv(result[result$status != "success", , drop = FALSE], file.path(out_dir, "jss_systems_ablation_failures.csv"), row.names = FALSE)
   writeLines(capture.output(sessionInfo()), file.path(out_dir, "sessionInfo.txt"))

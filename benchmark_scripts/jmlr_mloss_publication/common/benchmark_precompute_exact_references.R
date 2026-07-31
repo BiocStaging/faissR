@@ -172,9 +172,23 @@ reference_is_valid <- function(path, k, dataset_md5) {
     load(path, envir = env)
     if (!exists("faissR_reference", envir = env, inherits = FALSE)) return(FALSE)
     ref <- get("faissR_reference", envir = env, inherits = FALSE)
+    frozen <- tolower(Sys.getenv(
+      "FAISSR_REQUIRE_FROZEN_IDENTITY", unset = "false"
+    )) %in% c("true", "t", "1", "yes")
+    identity_ok <- !frozen || (
+      identical(
+        as.character(ref$faissR_package_commit %||% NA_character_),
+        Sys.getenv("FAISSR_PACKAGE_COMMIT", unset = "UNSET")
+      ) &&
+      identical(
+        as.character(ref$faissR_image_commit %||% NA_character_),
+        Sys.getenv("FAISSR_IMAGE_COMMIT", unset = "UNSET")
+      )
+    )
     is.list(ref) &&
       identical(ref$status %||% "success", "success") &&
       identical(as.character(ref$dataset_md5 %||% NA_character_), as.character(dataset_md5)) &&
+      identity_ok &&
       is.matrix(ref$indices) &&
       ncol(ref$indices) >= as.integer(k)
   }, error = function(e) FALSE)
@@ -281,6 +295,9 @@ compute_reference <- function(config) {
     metric = config$metric,
     backend = "cpu",
     method = ref_run$method,
+    faissR_version = as.character(utils::packageVersion("faissR")),
+    faissR_package_commit = Sys.getenv("FAISSR_PACKAGE_COMMIT", unset = "UNSET"),
+    faissR_image_commit = Sys.getenv("FAISSR_IMAGE_COMMIT", unset = "UNSET"),
     exact = TRUE,
     backend_used = ref$backend_used %||% attr(ref, "backend") %||% NA_character_,
     resolved_backend = attr(ref, "resolved_backend") %||% NA_character_,
@@ -304,6 +321,9 @@ compute_reference <- function(config) {
     dataset_md5 = config$dataset_md5,
     metric = config$metric,
     k = reference_k,
+    faissR_version = as.character(utils::packageVersion("faissR")),
+    faissR_package_commit = Sys.getenv("FAISSR_PACKAGE_COMMIT", unset = "UNSET"),
+    faissR_image_commit = Sys.getenv("FAISSR_IMAGE_COMMIT", unset = "UNSET"),
     status = "success",
     reference_path = config$output_path,
     reference_method = ref_run$method,
@@ -327,6 +347,9 @@ run_child <- function() {
         dataset_md5 = config$dataset_md5,
         metric = config$metric,
         k = as.integer(config$k),
+        faissR_version = as.character(utils::packageVersion("faissR")),
+        faissR_package_commit = Sys.getenv("FAISSR_PACKAGE_COMMIT", unset = "UNSET"),
+        faissR_image_commit = Sys.getenv("FAISSR_IMAGE_COMMIT", unset = "UNSET"),
         status = classify_error(conditionMessage(e)),
         reference_path = config$output_path,
         reference_method = NA_character_,
@@ -368,6 +391,9 @@ run_task <- function(config, timeout, bench_script) {
     dataset_md5 = config$dataset_md5,
     metric = config$metric,
     k = as.integer(config$k),
+    faissR_version = as.character(utils::packageVersion("faissR")),
+    faissR_package_commit = Sys.getenv("FAISSR_PACKAGE_COMMIT", unset = "UNSET"),
+    faissR_image_commit = Sys.getenv("FAISSR_IMAGE_COMMIT", unset = "UNSET"),
     status = if (identical(as.integer(exit_status), 124L)) "timeout" else classify_error(paste(status, collapse = "\n")),
     reference_path = config$output_path,
     reference_method = NA_character_,
@@ -419,6 +445,13 @@ main <- function() {
         append_csv(data.frame(
           dataset = ds$dataset[[1L]], dataset_md5 = dataset_md5,
           metric = metric, k = as.integer(reference_k),
+          faissR_version = as.character(utils::packageVersion("faissR")),
+          faissR_package_commit = Sys.getenv(
+            "FAISSR_PACKAGE_COMMIT", unset = "UNSET"
+          ),
+          faissR_image_commit = Sys.getenv(
+            "FAISSR_IMAGE_COMMIT", unset = "UNSET"
+          ),
           status = "already_exists",
           reference_path = ref_path,
           reference_method = NA_character_, reference_backend_used = NA_character_,

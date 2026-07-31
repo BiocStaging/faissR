@@ -3059,6 +3059,9 @@ test_that("JSS reviewer-response scripts are parseable and preserve HPC contract
 
   freeze <- readLines(r_files[[4L]], warn = FALSE)
   expect_true(any(grepl("mismatched_faissR_result_versions.csv", freeze, fixed = TRUE)))
+  expect_true(any(grepl("mismatched_faissR_result_commits.csv", freeze, fixed = TRUE)))
+  expect_true(any(grepl("exact_reference_identity_audit.csv", freeze, fixed = TRUE)))
+  expect_true(any(grepl("faissR_image_commit", freeze, fixed = TRUE)))
   expect_true(any(grepl("^[[:xdigit:]]{40}$", freeze, fixed = TRUE)))
   expect_true(any(grepl("^[[:xdigit:]]{64}$", freeze, fixed = TRUE)))
 
@@ -3099,6 +3102,14 @@ test_that("final JSS campaign rejects a stale faissR Singularity image", {
     'FAISSR_IMAGE_COMMIT:-',
     generator,
     fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    'export FAISSR_REQUIRE_FROZEN_IDENTITY=1',
+    generator, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    'SINGULARITYENV_FAISSR_PACKAGE_COMMIT',
+    generator, fixed = TRUE
   )))
   expect_true(any(grepl(
     'packageVersion("faissR")',
@@ -3222,6 +3233,30 @@ test_that("final JSS campaign rejects a stale faissR Singularity image", {
     'Frozen campaign requires faissR commit ${FAISSR_PACKAGE_COMMIT}',
     generated, fixed = TRUE
   )))
+  expect_true(any(grepl(
+    'export FAISSR_REQUIRE_FROZEN_IDENTITY=1',
+    generated, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    'SINGULARITYENV_FAISSR_PACKAGE_COMMIT',
+    generated, fixed = TRUE
+  )))
+  identity_sources <- c(
+    "benchmark_jmlr_tuned_methods.R",
+    "benchmark_method_tuning_from_reference.R",
+    "benchmark_jss_systems_ablations.R",
+    "benchmark_metric_conformance.R",
+    "benchmark_precompute_exact_references.R",
+    "benchmark_precompute_exact_references_cuda.R",
+    "benchmark_reusable_external_indexes.R"
+  )
+  for (name in identity_sources) {
+    source_text <- readLines(file.path(root, "common", name), warn = FALSE)
+    expect_true(any(grepl("faissR_package_commit", source_text, fixed = TRUE)),
+                info = name)
+    expect_true(any(grepl("faissR_image_commit", source_text, fixed = TRUE)),
+                info = name)
+  }
   generated_qa_cpu <- readLines(
     file.path(campaign, "qa", "run_package_route_qa_cpu12.sh"),
     warn = FALSE

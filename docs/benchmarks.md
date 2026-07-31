@@ -861,10 +861,11 @@ explicitly requested faissR method that the selector could have chosen. It also
 records recall differences and resolved-provider agreement, recall-compliance counts,
 failure evidence, and successful route mismatches. CPU and CUDA have separate
 Slurm aggregation files and are never pooled into one ranking.
-The strict freeze audit rejects dataset-fingerprint mismatches, held-out
-`faissR` rows produced by another package version, incomplete provenance,
-noncanonical 40-character package commit hashes, and invalid 64-character
-container SHA-256 digests.
+The strict freeze audit rejects dataset-fingerprint mismatches, result rows
+produced by another package version, incomplete provenance, and missing or
+noncanonical package/image commits. Both 40-character commits must equal the
+campaign commit. Referenced exact-neighbor objects are loaded and checked under
+the same rule; the container must also have a valid 64-character SHA-256 digest.
 
 The CPU and CUDA systems-ablation jobs compare double and float32 input,
 disabled and warm fitted-index/transformation caches, compiled and R-side

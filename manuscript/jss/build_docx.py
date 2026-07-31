@@ -235,8 +235,6 @@ def polish_docx(path: Path) -> None:
         if in_correspondence:
             paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
             paragraph.paragraph_format.space_after = Pt(3)
-        if stripped == "Results":
-            paragraph.paragraph_format.page_break_before = True
         if stripped.startswith(("R> ", "+ ", "[1]")):
             paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
             paragraph.paragraph_format.space_before = Pt(2)

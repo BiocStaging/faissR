@@ -881,9 +881,12 @@ write_one <- function(path, row) {
 aggregate_success_rows <- function(success) {
   group_cols <- c(
     "dataset", "dataset_md5", "backend", "metric", "k", "target_recall",
-    "implementation", "implementation_version", "method_id", "public_method",
+    "implementation", "implementation_version", "faissR_version",
+    "faissR_package_commit",
+    "faissR_image_commit", "method_id", "public_method",
     "kind", "n_threads", "threads_requested", "threading_scope"
   )
+  for (name in setdiff(group_cols, names(success))) success[[name]] <- NA
   key_frame <- lapply(success[group_cols], function(x) {
     value <- as.character(x)
     value[is.na(value)] <- "<NA>"
@@ -1042,7 +1045,10 @@ worker_main <- function(args) {
     backend = method$backend,
     method_id = method$method_id,
     implementation = method$implementation,
+    faissR_version = as.character(utils::packageVersion("faissR")),
     implementation_version = package_version_string(method$implementation[[1L]]),
+    faissR_package_commit = Sys.getenv("FAISSR_PACKAGE_COMMIT", unset = "UNSET"),
+    faissR_image_commit = Sys.getenv("FAISSR_IMAGE_COMMIT", unset = "UNSET"),
     public_method = method$public_method,
     kind = method$kind,
     metric = metric,
@@ -1184,6 +1190,15 @@ summarize_results <- function(out_dir, methods, config) {
   files <- list.files(file.path(out_dir, "worker_results"), pattern = "[.]csv$", full.names = TRUE)
   if (!length(files)) stop("No worker result files were produced.", call. = FALSE)
   res <- read_rows(files)
+  res$faissR_version <- rep(
+    as.character(utils::packageVersion("faissR")), nrow(res)
+  )
+  res$faissR_package_commit <- rep(
+    Sys.getenv("FAISSR_PACKAGE_COMMIT", unset = "UNSET"), nrow(res)
+  )
+  res$faissR_image_commit <- rep(
+    Sys.getenv("FAISSR_IMAGE_COMMIT", unset = "UNSET"), nrow(res)
+  )
   res <- res[order(res$dataset, res$backend, res$metric, res$k, res$target_recall, res$implementation, res$method_id), , drop = FALSE]
   utils::write.csv(res, file.path(out_dir, "jmlr_tuned_benchmark_results.csv"), row.names = FALSE)
   utils::write.csv(res[res$status != "success", , drop = FALSE], file.path(out_dir, "jmlr_tuned_benchmark_failures.csv"), row.names = FALSE)
@@ -1457,8 +1472,15 @@ main <- function() {
                 backend = method$backend,
                 method_id = method$method_id,
                 implementation = method$implementation,
+                faissR_version = as.character(utils::packageVersion("faissR")),
                 implementation_version = package_version_string(
                   method$implementation[[1L]]
+                ),
+                faissR_package_commit = Sys.getenv(
+                  "FAISSR_PACKAGE_COMMIT", unset = "UNSET"
+                ),
+                faissR_image_commit = Sys.getenv(
+                  "FAISSR_IMAGE_COMMIT", unset = "UNSET"
                 ),
                 public_method = method$public_method,
                 kind = method$kind,

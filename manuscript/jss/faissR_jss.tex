@@ -968,9 +968,11 @@ Benchmark jobs are generated from a manifest and test one method, backend, and
 metric per launcher. They record failures rather than substituting another
 route. Before loading data, every launcher checks both the package version and
 the 40-character source commit embedded in the image; a same-version image from
-a different commit is rejected. Every reference and result row carries a
-dataset fingerprint, package version, source commit, route metadata, seed,
-repetition, and environment record. CUDA QA also
+a different commit is rejected. Every raw timed-result row and exact-reference
+object carries the dataset fingerprint, package version, required package
+commit, embedded image commit, route metadata, seed, repetition, and environment
+record. Aggregation preserves these identity fields and the strict freeze audit
+rejects missing, malformed, or unequal package/image commits. CUDA QA also
 checks that GPU-resident results own device pointers and report zero
 device-to-host result copies.
 
