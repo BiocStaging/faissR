@@ -634,6 +634,11 @@ computation is reproduced separately with
 \path{submission_commands.txt};
 the campaign contains 277 independent jobs so one failure cannot erase the
 other method/backend evidence.
+The companion \path{submit_campaign.R} program is the single commented HPC
+entry point. It preflights the image, submits those unchanged launchers one at
+a time for an explicitly named phase, and saves the returned Slurm identifiers
+with the package/image identity. Phase advancement remains manual so failed QA,
+reference, calibration, or aggregation gates cannot be bypassed accidentally.
 The directory retains its historical \path{jmlr_mloss_publication} name, but
 the protocol and artifacts described here are the JSS submission campaign; the
 path is not a claim of simultaneous submission to another journal.

@@ -4,6 +4,11 @@ This directory contains separate Slurm launchers. Do not submit the whole
 tree blindly. Each `.sh` file is an independent job with the established
 CPU or CUDA header.
 
+`submit_campaign.R` is the single commented HPC submission entry point. It
+does not replace or merge launchers: it validates the image identity and
+submits one existing `.sh` file at a time for one explicitly selected phase.
+It never advances automatically to the next phase.
+
 ## Fixed campaign
 
 - Real datasets: `COIL20`, `USPS`, `FashionMNIST`, `FlowRepository_FR-FCM-ZYRM_files`, `flow18`, `MNIST`, `imagenet`, `MetRef`, `mass41`.
@@ -75,6 +80,20 @@ export EXPECTED_FAISSR_VERSION='0.99.20'
 sbatch benchmark_scripts/jmlr_mloss_publication/final_campaign/qa/run_package_route_qa_cpu12.sh
 sbatch benchmark_scripts/jmlr_mloss_publication/final_campaign/qa/run_package_route_qa_cuda.sh
 ```
+
+The equivalent guarded entry point is:
+
+```bash
+Rscript benchmark_scripts/jmlr_mloss_publication/final_campaign/submit_campaign.R --phase=list
+Rscript benchmark_scripts/jmlr_mloss_publication/final_campaign/submit_campaign.R --phase=qa
+```
+
+After inspecting a phase's reports, submit the next phase explicitly in this
+order: `references`, `calibration`, `calibration_audit`, `held_out`,
+`diagnostics`, `aggregate`, and `freeze`. Use `--dry-run` to print every
+`sbatch` command without accessing the image or submitting work. Every live
+submission writes a CSV ledger containing the launcher, Slurm job identifier,
+image path, package version, and embedded package commit.
 
 The image filename is a deployment label and is not accepted as package
 identity. The preflight reads `packageVersion("faissR")` inside the image

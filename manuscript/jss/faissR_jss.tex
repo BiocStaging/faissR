@@ -1007,6 +1007,12 @@ also verifies schemas and fingerprints and regenerates article tables without
 rerunning the HPC campaign. SHA-256 digests identify the package source,
 container, distributed data, and frozen result archive. Detailed launcher,
 eligibility, rerun-selection, and freeze rules are provided in the supplement.
+The full special-hardware campaign has a single commented submission program,
+\path{final_campaign/submit_campaign.R}. It validates the installed package
+version and embedded source commit, then submits each existing CPU/CUDA Slurm
+launcher separately for one explicitly requested phase. It records a CSV job
+ledger and never advances to a later phase automatically, so report inspection
+and policy-freeze gates remain enforceable.
 
 \section{Limitations} \label{sec:limitations}
 

@@ -17,6 +17,12 @@ The study does not need another broad calibration pass unless the audit finds a
 missing calibration cell used by the compiled policy. TabulaMuris is excluded
 from the manuscript campaign.
 
+The phase-aware `final_campaign/submit_campaign.R` program is the single
+commented HPC submission entry point. It validates the frozen image and then
+submits the existing independent launchers one by one for only the requested
+phase, preserving their CPU/CUDA headers and writing a submission ledger. It
+never advances to a later phase without an explicit command.
+
 ## Frozen design
 
 - Datasets: COIL20, USPS, FashionMNIST, FlowRepository FR-FCM-ZYRM, flow18,

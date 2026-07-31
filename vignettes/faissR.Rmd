@@ -461,6 +461,9 @@ The publication benchmark launchers additionally pin the package version and
 40-character source commit. Raw timing rows and exact-reference objects record
 both the required package commit and the commit embedded in the container; the
 freeze audit rejects missing or unequal identities before aggregation.
+The repository's phase-aware HPC submitter preserves one method/backend/metric
+per Slurm launcher and records every submitted job. The compact JSS replication
+script remains a separate CPU path that can be run on an ordinary computer.
 
 `faissR` is MIT licensed. FAISS, CUDA, and cuVS remain external system
 libraries under their own licenses. The package includes a small adaptation of

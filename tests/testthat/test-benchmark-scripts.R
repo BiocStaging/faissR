@@ -3587,6 +3587,50 @@ test_that("final JSS campaign rejects a stale faissR Singularity image", {
   )))
 })
 
+test_that("final JSS campaign submitter preserves explicit phase gates", {
+  campaign <- test_path(
+    "../../benchmark_scripts/jmlr_mloss_publication/final_campaign"
+  )
+  submitter <- file.path(campaign, "submit_campaign.R")
+  if (!file.exists(submitter)) {
+    skip("Final campaign submitter is unavailable after installation.")
+  }
+  old <- Sys.getenv("FAISSR_JSS_SOURCE_ONLY", unset = NA_character_)
+  on.exit({
+    if (is.na(old)) Sys.unsetenv("FAISSR_JSS_SOURCE_ONLY") else
+      Sys.setenv(FAISSR_JSS_SOURCE_ONLY = old)
+  }, add = TRUE)
+  Sys.setenv(FAISSR_JSS_SOURCE_ONLY = "true")
+  env <- new.env(parent = globalenv())
+  sys.source(submitter, envir = env)
+
+  contract <- env$phase_contract()
+  expect_identical(
+    contract$phase,
+    c(
+      "qa", "references", "calibration", "calibration_audit",
+      "held_out", "diagnostics", "aggregate", "freeze"
+    )
+  )
+  expect_identical(
+    contract$expected_jobs,
+    c(2L, 5L, 105L, 1L, 142L, 16L, 4L, 2L)
+  )
+  expect_equal(sum(contract$expected_jobs), 277L)
+  for (i in seq_len(nrow(contract))) {
+    launchers <- env$phase_launchers(campaign, contract$phase[[i]])
+    expect_length(launchers, contract$expected_jobs[[i]])
+    expect_true(all(file.exists(launchers)), info = contract$phase[[i]])
+  }
+
+  env$script_path <- function() submitter
+  output <- capture.output(env$submit_phase("qa", dry_run = TRUE))
+  expect_length(output, 2L)
+  expect_true(all(grepl("^sbatch --export=ALL", output)))
+  expect_true(any(grepl("run_package_route_qa_cpu12.sh", output, fixed = TRUE)))
+  expect_true(any(grepl("run_package_route_qa_cuda.sh", output, fixed = TRUE)))
+})
+
 test_that("JSS compact replication report is executed and error-free", {
   jss <- test_path("../../manuscript/jss")
   code_path <- file.path(jss, "code.R")

@@ -875,6 +875,13 @@ noncanonical package/image commits. Both 40-character commits must equal the
 campaign commit. Referenced exact-neighbor objects are loaded and checked under
 the same rule; the container must also have a valid 64-character SHA-256 digest.
 
+For the frozen JSS campaign,
+`final_campaign/submit_campaign.R` provides a guarded, phase-aware submission
+entry point. It verifies the installed package version and embedded commit,
+submits each existing CPU/CUDA launcher separately, and records Slurm job IDs
+in a CSV ledger. It deliberately requires the user to advance between phases
+after inspecting the preceding reports.
+
 The CPU and CUDA systems-ablation jobs compare double and float32 input,
 disabled and warm fitted-index/transformation caches, compiled and R-side
 self-neighbour removal, and GPU-resident exact output with explicit host-copy
