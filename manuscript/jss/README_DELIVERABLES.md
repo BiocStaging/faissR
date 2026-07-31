@@ -1,6 +1,6 @@
 # faissR JSS deliverables
 
-Package snapshot: faissR 0.99.17
+Package snapshot: faissR 0.99.18
 
 ## Tracked source
 

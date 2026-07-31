@@ -813,6 +813,11 @@ reference construction, held-out CPU methods, held-out CUDA methods, systems
 ablations, and cross-method analysis. Each Slurm launcher tests one method and
 backend. Held-out runs use two validation seeds, three repetitions, metric-
 matched exact references, and a 2,000-second per-combination timeout.
+Campaign generation freezes the faissR version from `DESCRIPTION` into the
+launchers. Calibration, reference, held-out, and reusable-index routes stop
+before loading benchmark data when the Singularity image contains another
+version, preventing a stale image from producing evidence for the wrong
+package snapshot.
 
 After all one-method jobs finish,
 `analysis/aggregate_publication_results.R` selects the newest run for each

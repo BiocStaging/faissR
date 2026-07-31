@@ -21,6 +21,7 @@ QUALITY_N="${QUALITY_N:-1024}"
 CALIBRATION_SEED="${CALIBRATION_SEED:-4}"
 GRID_LEVEL="${GRID_LEVEL:-wide}"
 OUTPUT_VALUES="${OUTPUT_VALUES:-double}"
+EXPECTED_FAISSR_VERSION="${EXPECTED_FAISSR_VERSION:-}"
 REAL_MANIFEST="${REAL_MANIFEST:-${DATA_ROOT}/float32_dataset_manifest_jmlr.csv}"
 SINGULARITY_IMAGE="${SINGULARITY_IMAGE:-${BASE_DIR}/singularity/fastembedr_cuda.sif}"
 SINGULARITY_GPU_FLAG="${SINGULARITY_GPU_FLAG:-$(if [[ "${BACKEND}" == "cuda" ]]; then echo --nv; fi)}"
@@ -33,6 +34,7 @@ export OPENBLAS_NUM_THREADS="${THREADS}"
 export MKL_NUM_THREADS="${THREADS}"
 export VECLIB_MAXIMUM_THREADS="${THREADS}"
 export RCPP_PARALLEL_NUM_THREADS="${THREADS}"
+export EXPECTED_FAISSR_VERSION
 
 mkdir -p "${OUT_DIR}" "${BASE_DIR}/benchmark_logs"
 cd "${BASE_DIR}"
@@ -58,7 +60,7 @@ if [[ ! -f "${REAL_MANIFEST}" ]]; then
     --data_root="${DATA_ROOT}" --out="${REAL_MANIFEST}"
 fi
 
-run_r -e 'library(faissR); stopifnot(faissR::faiss_available()); cat("faissR tuning preflight OK\n")'
+run_r -e 'expected <- Sys.getenv("EXPECTED_FAISSR_VERSION"); installed <- as.character(utils::packageVersion("faissR")); if (nzchar(expected) && !identical(installed, expected)) stop("Frozen campaign requires faissR ", expected, ", but the Singularity image contains ", installed); library(faissR); stopifnot(faissR::faiss_available()); cat("faissR tuning preflight OK: ", installed, "\n", sep = "")'
 if [[ "${BACKEND}" == "cuda" ]]; then
   run_r -e 'library(faissR); stopifnot(faissR::cuda_available()); cat("faissR CUDA tuning preflight OK\n")'
 fi

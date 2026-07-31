@@ -1188,13 +1188,16 @@ development source uses the Bioconductor pre-release version convention and is
 mirrored to a Bioconductor staging repository, but this draft does not claim
 acceptance into Bioconductor.
 
-Version 0.99.17 is the development snapshot described here. An isolated build
+Version 0.99.18 is the development snapshot described here. An isolated build
 or backend smoke test is not treated as a clean package-check matrix. Before
 submission, the frozen software evidence must include complete install, load,
 unit-test, and package-check reports for every claimed CPU platform, together
 with separate CUDA route tests on the NVIDIA host. The replication archive
 records compiler, provider, device, package, container, and session metadata;
 failed checks remain visible rather than being summarized as successful.
+Generated calibration, reference, held-out, and reusable-index launchers embed
+the package version read from \code{DESCRIPTION} and stop before loading
+benchmark data when the Singularity image contains a different version.
 
 The benchmark archive is organized so that every Slurm launcher tests exactly
 one method and backend. Exact references are stored beside dataset files and

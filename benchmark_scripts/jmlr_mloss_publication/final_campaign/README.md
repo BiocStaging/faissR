@@ -14,6 +14,9 @@ CPU or CUDA header.
 - Calibration seed: 4. Held-out seeds: 20260706 and 20260807.
 - Three held-out timing repetitions; 2000-second timeout.
 - Input manifests point to float32 datasets.
+- Generated calibration, reference, held-out, and reusable-index computation
+  launchers require the exact faissR version read from `DESCRIPTION` and stop
+  before loading data if the Singularity image contains another version.
 - The frozen image must contain `Rnanoflann`, `RANN`, `RcppAnnoy`,
   `rnndescent`, `BiocNeighbors`, `FNN`, `nabor`, and `uwot`; each external
   CPU launcher fails during preflight when its required package is absent.

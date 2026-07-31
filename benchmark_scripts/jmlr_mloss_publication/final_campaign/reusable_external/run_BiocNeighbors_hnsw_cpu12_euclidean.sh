@@ -15,6 +15,7 @@ set -euo pipefail
 BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
 SUITE_ROOT="${SUITE_ROOT:-${BASE_DIR}/benchmark_scripts/jmlr_mloss_publication}"
 SINGULARITY_IMAGE="${SINGULARITY_IMAGE:-${BASE_DIR}/singularity/fastembedr_cuda.sif}"
+export EXPECTED_FAISSR_VERSION='0.99.18'
 mkdir -p "${BASE_DIR}/benchmark_logs"
 
 MANIFEST="${BASE_DIR}/Data/float32_dataset_manifest_jmlr.csv"
@@ -23,6 +24,7 @@ METRIC='euclidean'
 DATASETS='COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41'
 OUT_DIR="${BASE_DIR}/faissR_JMLR_MLOSS/final_campaign/reusable_external/${ROUTE}_${METRIC}_${SLURM_JOB_ID:-manual}_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "${OUT_DIR}"
+singularity exec --bind "${BASE_DIR}:${BASE_DIR}" "${SINGULARITY_IMAGE}" Rscript -e 'expected <- Sys.getenv("EXPECTED_FAISSR_VERSION"); installed <- as.character(utils::packageVersion("faissR")); if (!identical(installed, expected)) stop("Frozen campaign requires faissR ", expected, ", but the Singularity image contains ", installed); cat("faissR reusable-index preflight OK: ", installed, "\n", sep = "")'
 singularity exec --bind "${BASE_DIR}:${BASE_DIR}" "${SINGULARITY_IMAGE}" Rscript \
   "${SUITE_ROOT}/common/benchmark_reusable_external_indexes.R" \
   --manifest="${MANIFEST}" --out_dir="${OUT_DIR}" \

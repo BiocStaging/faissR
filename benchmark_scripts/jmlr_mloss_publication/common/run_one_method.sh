@@ -23,6 +23,7 @@ REPEATS="${REPEATS:-3}"
 OUTPUT="${OUTPUT:-double}"
 INCLUDE_EXTERNAL="${INCLUDE_EXTERNAL:-FALSE}"
 REQUIRED_EXTERNAL_PACKAGE="${REQUIRED_EXTERNAL_PACKAGE:-}"
+EXPECTED_FAISSR_VERSION="${EXPECTED_FAISSR_VERSION:-}"
 INCLUDE_GPU_RESIDENT="${INCLUDE_GPU_RESIDENT:-TRUE}"
 RUN_REAL="${RUN_REAL:-TRUE}"
 RUN_MIPS="${RUN_MIPS:-FALSE}"
@@ -41,6 +42,7 @@ export OPENBLAS_NUM_THREADS="${THREADS}"
 export MKL_NUM_THREADS="${THREADS}"
 export VECLIB_MAXIMUM_THREADS="${THREADS}"
 export RCPP_PARALLEL_NUM_THREADS="${THREADS}"
+export EXPECTED_FAISSR_VERSION
 
 mkdir -p "${OUT_DIR}" "${LOG_DIR}"
 cd "${BASE_DIR}"
@@ -61,7 +63,7 @@ else
   run_r() { "${R_BIN}" "$@"; }
 fi
 
-run_r -e 'library(faissR); stopifnot(faissR::faiss_available()); cat("faissR benchmark preflight OK\n")'
+run_r -e 'expected <- Sys.getenv("EXPECTED_FAISSR_VERSION"); installed <- as.character(utils::packageVersion("faissR")); if (nzchar(expected) && !identical(installed, expected)) stop("Frozen campaign requires faissR ", expected, ", but the Singularity image contains ", installed); library(faissR); stopifnot(faissR::faiss_available()); cat("faissR benchmark preflight OK: ", installed, "\n", sep = "")'
 if [[ "${BACKEND}" == "cuda" ]]; then
   run_r -e 'library(faissR); stopifnot(faissR::cuda_available()); cat("faissR CUDA preflight OK\n")'
 fi

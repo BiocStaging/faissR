@@ -2985,3 +2985,51 @@ test_that("JSS reviewer-response scripts are parseable and preserve HPC contract
   expect_true(any(grepl("nvidia-smi_process_sampled_100ms", ablation, fixed = TRUE)))
   expect_true(any(grepl("nvidia-smi_process_sampled_100ms", held_out, fixed = TRUE)))
 })
+
+test_that("final JSS campaign rejects a stale faissR Singularity image", {
+  root <- test_path("../../benchmark_scripts/jmlr_mloss_publication")
+  campaign <- file.path(root, "final_campaign")
+  if (!dir.exists(campaign)) {
+    skip("Final publication campaign is not available in this installed-package context.")
+  }
+
+  generator <- readLines(file.path(campaign, "generate_launchers.R"), warn = FALSE)
+  held_out <- readLines(file.path(root, "common", "run_one_method.sh"), warn = FALSE)
+  calibration <- readLines(
+    file.path(root, "common", "run_one_inner_product_tuning.sh"),
+    warn = FALSE
+  )
+  expect_true(any(grepl(
+    'read.dcf(description_path)[1L, "Version"]',
+    generator, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "export EXPECTED_FAISSR_VERSION",
+    generator, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    'packageVersion("faissR")',
+    held_out, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "Frozen campaign requires faissR",
+    held_out, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "Frozen campaign requires faissR",
+    calibration, fixed = TRUE
+  )))
+
+  generated <- readLines(
+    file.path(
+      campaign, "held_out", "cpu",
+      "run_faissR_hnsw_cpu12_euclidean.sh"
+    ),
+    warn = FALSE
+  )
+  expected <- as.character(packageVersion("faissR"))
+  expect_true(any(grepl(
+    sprintf("export EXPECTED_FAISSR_VERSION='%s'", expected),
+    generated, fixed = TRUE
+  )))
+})
