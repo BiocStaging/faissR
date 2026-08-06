@@ -51,6 +51,6 @@ echo "submit_campaign.R SHA-256: ${target_submitter_sha}"
 echo
 echo "On the HPC, start with:"
 echo "  cd /scratch/firenze/NN"
-echo "  export SINGULARITY_IMAGE=/scratch/firenze/NN/singularity/fastembedr_cuda_faissR_0.99.20.sif"
+echo "  export SINGULARITY_IMAGE=/scratch/firenze/NN/singularity/fastembedr_cuda_faissR_0.99.21.sif"
 echo "  Rscript benchmark_scripts/jmlr_mloss_publication/final_campaign/submit_campaign.R --phase=list"
 echo "  Rscript benchmark_scripts/jmlr_mloss_publication/final_campaign/submit_campaign.R --phase=qa"
