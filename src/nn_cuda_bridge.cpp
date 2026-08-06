@@ -44,6 +44,10 @@ List cuda_grid_self_knn_impl(NumericMatrix data,
                              int k,
                              int bins_per_dim,
                              bool include_self);
+List cuda_grid_self_knn_float32_impl(SEXP data,
+                                     int k,
+                                     int bins_per_dim,
+                                     bool include_self);
 
 namespace {
 
@@ -198,4 +202,12 @@ List cuda_grid_self_knn_cpp(NumericMatrix data,
                             int bins_per_dim,
                             bool include_self) {
   return cuda_grid_self_knn_impl(data, k, bins_per_dim, include_self);
+}
+
+// [[Rcpp::export]]
+List cuda_grid_self_knn_float32_cpp(SEXP data,
+                                    int k,
+                                    int bins_per_dim,
+                                    bool include_self) {
+  return cuda_grid_self_knn_float32_impl(data, k, bins_per_dim, include_self);
 }

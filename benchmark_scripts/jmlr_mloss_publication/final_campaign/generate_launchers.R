@@ -119,7 +119,7 @@ slurm_header <- function(backend, job_name, log_stem) {
 common_environment <- c(
   'BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"',
   'SUITE_ROOT="${SUITE_ROOT:-${BASE_DIR}/benchmark_scripts/jmlr_mloss_publication}"',
-  'SINGULARITY_IMAGE="${SINGULARITY_IMAGE:-${BASE_DIR}/singularity/fastembedr_cuda_faissR_0.99.20.sif}"',
+  'SINGULARITY_IMAGE="${SINGULARITY_IMAGE:-${BASE_DIR}/singularity/fastembedr_cuda_faissR_0.99.21.sif}"',
   sprintf(
     "export EXPECTED_FAISSR_VERSION=%s",
     shell_quote(publication_version)
@@ -790,7 +790,7 @@ readme <- c(
   "",
   "```bash",
   "cd /scratch/firenze/NN",
-  "export SINGULARITY_IMAGE=/scratch/firenze/NN/singularity/fastembedr_cuda_faissR_0.99.20.sif",
+  "export SINGULARITY_IMAGE=/scratch/firenze/NN/singularity/fastembedr_cuda_faissR_0.99.21.sif",
   sprintf("export EXPECTED_FAISSR_VERSION=%s", shell_quote(publication_version)),
   "",
   "# Run the preflight block at the top of submission_commands.txt. It defines",
@@ -875,7 +875,7 @@ sbatch_commands <- function(section) {
 commands <- c(
   "# Run from /scratch/firenze/NN.",
   "BASE_DIR=\"${BASE_DIR:-/scratch/firenze/NN}\"",
-  "export SINGULARITY_IMAGE=\"${SINGULARITY_IMAGE:-${BASE_DIR}/singularity/fastembedr_cuda_faissR_0.99.20.sif}\"",
+  "export SINGULARITY_IMAGE=\"${SINGULARITY_IMAGE:-${BASE_DIR}/singularity/fastembedr_cuda_faissR_0.99.21.sif}\"",
   sprintf("export EXPECTED_FAISSR_VERSION=%s", shell_quote(publication_version)),
   "# The filename is only a deployment label; installed version and embedded commit are authoritative.",
   "IMAGE_FAISSR_VERSION=\"$(singularity exec --cleanenv \"${SINGULARITY_IMAGE}\" Rscript -e 'cat(as.character(utils::packageVersion(\"faissR\")))')\"",

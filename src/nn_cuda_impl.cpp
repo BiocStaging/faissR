@@ -84,6 +84,14 @@ int faissr_cuda_grid_self_knn(const double* data,
                                   int* out_indices,
                                   double* out_distances,
                                   int* out_n_cells);
+int faissr_cuda_grid_self_knn_float32(const float* data,
+                                      int n,
+                                      int n_features,
+                                      int k,
+                                      int bins_per_dim,
+                                      int* out_indices,
+                                      double* out_distances,
+                                      int* out_n_cells);
 }
 
 namespace {
@@ -906,6 +914,105 @@ List cuda_grid_self_knn_impl(NumericMatrix data,
     Rcpp::Named("gpu_index_resident") = true,
     Rcpp::Named("gpu_index_persistent") = false,
     Rcpp::Named("host_to_device_transfer_strategy") = "native_cuda_grid_device_buffers",
+    Rcpp::Named("host_to_device_data_copies") = search_k > 0 ? 1 : 0,
+    Rcpp::Named("host_to_device_copies_known") = true,
+    Rcpp::Named("device_to_host_result_copies") = search_k > 0 ? 2 : 0,
+    Rcpp::Named("device_to_host_result_copies_known") = true,
+    Rcpp::Named("query_reuses_device_data") = true,
+    Rcpp::Named("result_residency") = "host",
+    Rcpp::Named("cpu_fallback") = false,
+    Rcpp::Named("cpu_side_result_repair") = false
+  );
+  result.attr("cuda_kernel") = n_features == 3 ? "grid3d_self_knn" : "grid2d_self_knn";
+  return result;
+}
+
+List cuda_grid_self_knn_float32_impl(SEXP data,
+                                     int k,
+                                     int bins_per_dim,
+                                     bool include_self) {
+  CudaMatrixViewF32 view = make_column_major_float32_view(data, "data");
+  const int n = view.nrow;
+  const int n_features = view.ncol;
+  if (n_features != 2 && n_features != 3) {
+    Rcpp::stop("CUDA grid KNN requires a two- or three-column matrix");
+  }
+  if (n < 2) Rcpp::stop("data must have at least two rows");
+  if (k < 1 || k > n) Rcpp::stop("k must be in [1, nrow(data)]");
+  if (!include_self && k >= n) {
+    Rcpp::stop("k must be in [1, nrow(data) - 1] when excluding self");
+  }
+  if (k > kMaxCudaK) Rcpp::stop("CUDA backend currently supports k <= %d", kMaxCudaK);
+  if (bins_per_dim < 1) Rcpp::stop("bins_per_dim must be positive");
+  if (!faissr_cuda_available()) Rcpp::stop("No CUDA device is available.");
+
+  IntegerMatrix indices(n, k);
+  NumericMatrix distances(n, k);
+  int* indices_ptr = indices.begin();
+  double* distances_ptr = distances.begin();
+  if (include_self) {
+    for (int i = 0; i < n; ++i) {
+      indices_ptr[static_cast<std::size_t>(i)] = i + 1;
+      distances_ptr[static_cast<std::size_t>(i)] = 0.0;
+    }
+  }
+
+  const int search_k = include_self ? k - 1 : k;
+  int n_cells = 0;
+  if (search_k > 0) {
+    IntegerMatrix search_indices(n, search_k);
+    NumericMatrix search_distances(n, search_k);
+    const int status = faissr_cuda_grid_self_knn_float32(
+      view.data,
+      n,
+      n_features,
+      search_k,
+      bins_per_dim,
+      search_indices.begin(),
+      search_distances.begin(),
+      &n_cells
+    );
+    if (status != 0) {
+      Rcpp::stop("CUDA float32 grid KNN failed: %s", cuda_error_message());
+    }
+    const int col_offset = include_self ? 1 : 0;
+    for (int col = 0; col < search_k; ++col) {
+      for (int row = 0; row < n; ++row) {
+        const std::size_t src = static_cast<std::size_t>(col) * n + row;
+        const std::size_t dst = static_cast<std::size_t>(col + col_offset) * n + row;
+        indices_ptr[dst] = search_indices.begin()[src];
+        distances_ptr[dst] = search_distances.begin()[src];
+      }
+    }
+  } else {
+    const long long n_cells_ll = n_features == 3 ?
+      static_cast<long long>(bins_per_dim) * bins_per_dim * bins_per_dim :
+      static_cast<long long>(bins_per_dim) * bins_per_dim;
+    if (n_cells_ll > 2147483647LL) {
+      Rcpp::stop("CUDA grid KNN requested too many grid cells");
+    }
+    n_cells = static_cast<int>(n_cells_ll);
+  }
+
+  List result = List::create(
+    Rcpp::Named("indices") = indices,
+    Rcpp::Named("distances") = distances,
+    Rcpp::Named("bins_per_dim") = bins_per_dim,
+    Rcpp::Named("n_cells") = n_cells,
+    Rcpp::Named("self_column_included") = include_self,
+    Rcpp::Named("output_layout") = "knn_matrix_final",
+    Rcpp::Named("r_side_reshaping") = false,
+    Rcpp::Named("input_type") = "float32",
+    Rcpp::Named("input_layout") = view.layout,
+    Rcpp::Named("input_owns_data") = view.owns_data,
+    Rcpp::Named("float32_compatibility_conversion") = view.compatibility_conversion,
+    Rcpp::Named("accelerator") = "cuda",
+    Rcpp::Named("gpu_provider") = "native_cuda_grid",
+    Rcpp::Named("device_residency") = "cuda",
+    Rcpp::Named("index_residency") = "gpu_grid_offsets_rows",
+    Rcpp::Named("gpu_index_resident") = true,
+    Rcpp::Named("gpu_index_persistent") = false,
+    Rcpp::Named("host_to_device_transfer_strategy") = "direct_float32_cuda_grid_device_buffers",
     Rcpp::Named("host_to_device_data_copies") = search_k > 0 ? 1 : 0,
     Rcpp::Named("host_to_device_copies_known") = true,
     Rcpp::Named("device_to_host_result_copies") = search_k > 0 ? 2 : 0,

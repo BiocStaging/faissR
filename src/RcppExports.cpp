@@ -553,6 +553,38 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// grid2d_self_knn_float32_cpp
+List grid2d_self_knn_float32_cpp(SEXP data, int k, bool parallel, int cores, int bins_per_dim, bool include_self);
+RcppExport SEXP _faissR_grid2d_self_knn_float32_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP parallelSEXP, SEXP coresSEXP, SEXP bins_per_dimSEXP, SEXP include_selfSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< bool >::type parallel(parallelSEXP);
+    Rcpp::traits::input_parameter< int >::type cores(coresSEXP);
+    Rcpp::traits::input_parameter< int >::type bins_per_dim(bins_per_dimSEXP);
+    Rcpp::traits::input_parameter< bool >::type include_self(include_selfSEXP);
+    rcpp_result_gen = Rcpp::wrap(grid2d_self_knn_float32_cpp(data, k, parallel, cores, bins_per_dim, include_self));
+    return rcpp_result_gen;
+END_RCPP
+}
+// grid3d_self_knn_float32_cpp
+List grid3d_self_knn_float32_cpp(SEXP data, int k, bool parallel, int cores, int bins_per_dim, bool include_self);
+RcppExport SEXP _faissR_grid3d_self_knn_float32_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP parallelSEXP, SEXP coresSEXP, SEXP bins_per_dimSEXP, SEXP include_selfSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< bool >::type parallel(parallelSEXP);
+    Rcpp::traits::input_parameter< int >::type cores(coresSEXP);
+    Rcpp::traits::input_parameter< int >::type bins_per_dim(bins_per_dimSEXP);
+    Rcpp::traits::input_parameter< bool >::type include_self(include_selfSEXP);
+    rcpp_result_gen = Rcpp::wrap(grid3d_self_knn_float32_cpp(data, k, parallel, cores, bins_per_dim, include_self));
+    return rcpp_result_gen;
+END_RCPP
+}
 // candidate_knn_cpp
 List candidate_knn_cpp(NumericMatrix data, NumericMatrix points, IntegerMatrix candidate_indices, int k, std::string method, bool square, bool exclude_self, bool parallel, int cores);
 RcppExport SEXP _faissR_candidate_knn_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP candidate_indicesSEXP, SEXP kSEXP, SEXP methodSEXP, SEXP squareSEXP, SEXP exclude_selfSEXP, SEXP parallelSEXP, SEXP coresSEXP) {
@@ -1140,6 +1172,20 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type bins_per_dim(bins_per_dimSEXP);
     Rcpp::traits::input_parameter< bool >::type include_self(include_selfSEXP);
     rcpp_result_gen = Rcpp::wrap(cuda_grid_self_knn_cpp(data, k, bins_per_dim, include_self));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cuda_grid_self_knn_float32_cpp
+List cuda_grid_self_knn_float32_cpp(SEXP data, int k, int bins_per_dim, bool include_self);
+RcppExport SEXP _faissR_cuda_grid_self_knn_float32_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP bins_per_dimSEXP, SEXP include_selfSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type bins_per_dim(bins_per_dimSEXP);
+    Rcpp::traits::input_parameter< bool >::type include_self(include_selfSEXP);
+    rcpp_result_gen = Rcpp::wrap(cuda_grid_self_knn_float32_cpp(data, k, bins_per_dim, include_self));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2086,6 +2132,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_ivf_self_knn_cpp", (DL_FUNC) &_faissR_ivf_self_knn_cpp, 7},
     {"_faissR_grid2d_self_knn_cpp", (DL_FUNC) &_faissR_grid2d_self_knn_cpp, 6},
     {"_faissR_grid3d_self_knn_cpp", (DL_FUNC) &_faissR_grid3d_self_knn_cpp, 6},
+    {"_faissR_grid2d_self_knn_float32_cpp", (DL_FUNC) &_faissR_grid2d_self_knn_float32_cpp, 6},
+    {"_faissR_grid3d_self_knn_float32_cpp", (DL_FUNC) &_faissR_grid3d_self_knn_float32_cpp, 6},
     {"_faissR_candidate_knn_cpp", (DL_FUNC) &_faissR_candidate_knn_cpp, 9},
     {"_faissR_candidate_knn_float32_cpp", (DL_FUNC) &_faissR_candidate_knn_float32_cpp, 9},
     {"_faissR_nn_auto_select_backend_cpp", (DL_FUNC) &_faissR_nn_auto_select_backend_cpp, 28},
@@ -2121,6 +2169,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_row_candidate_knn_cuda_cpp", (DL_FUNC) &_faissR_row_candidate_knn_cuda_cpp, 4},
     {"_faissR_row_candidate_knn_cuda_float32_cpp", (DL_FUNC) &_faissR_row_candidate_knn_cuda_float32_cpp, 4},
     {"_faissR_cuda_grid_self_knn_cpp", (DL_FUNC) &_faissR_cuda_grid_self_knn_cpp, 4},
+    {"_faissR_cuda_grid_self_knn_float32_cpp", (DL_FUNC) &_faissR_cuda_grid_self_knn_float32_cpp, 4},
     {"_faissR_cuvs_available_cpp", (DL_FUNC) &_faissR_cuvs_available_cpp, 0},
     {"_faissR_cuvs_info_json_cpp", (DL_FUNC) &_faissR_cuvs_info_json_cpp, 0},
     {"_faissR_nn_cuvs_bruteforce_cpp", (DL_FUNC) &_faissR_nn_cuvs_bruteforce_cpp, 4},

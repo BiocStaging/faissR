@@ -1925,6 +1925,92 @@ nn_compute <- function(data,
       result <- append_nn_tuning_metadata(result, params)
       return(result)
     }
+    grid_backends <- c(
+      "grid", "cpu_grid", "grid2d", "cpu_grid2d", "grid3d", "cpu_grid3d",
+      "cuda_grid", "cuda_grid_auto", "gpu_grid", "cuda_grid2d", "cuda_grid3d"
+    )
+    if (backend %in% grid_backends) {
+      if (!isTRUE(self_query)) {
+        stop("Grid nearest-neighbour search is currently available for self-KNN searches only.", call. = FALSE)
+      }
+      if (identical(metric, "inner_product")) {
+        stop("Grid nearest-neighbour search does not support `metric = \"inner_product\"`.", call. = FALSE)
+      }
+      if (!data_dim[[2L]] %in% c(2L, 3L)) {
+        stop("Grid nearest-neighbour search supports only two- or three-column matrices.", call. = FALSE)
+      }
+      use_cuda <- backend %in% c(
+        "cuda_grid", "cuda_grid_auto", "gpu_grid", "cuda_grid2d", "cuda_grid3d"
+      )
+      if (isTRUE(use_cuda) && !isTRUE(cuda_available())) {
+        stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
+      }
+      metric_inputs <- NULL
+      search_data <- data
+      if (metric %in% c("cosine", "correlation")) {
+        metric_inputs <- normalized_euclidean_metric_inputs(
+          data, points, self_query, metric, storage = "float"
+        )
+        search_data <- metric_inputs$data
+      }
+      search_dim <- float32_matrix_dims(search_data, "data")
+      include_self <- !isTRUE(exclude_self)
+      nonself_k <- if (include_self) k - 1L else k
+      bins <- grid_bins_per_dim(
+        search_dim[[1L]], max(1L, nonself_k), search_dim[[2L]]
+      )
+      if (isTRUE(use_cuda)) {
+        out <- cuda_grid_self_knn_float32_cpp(
+          search_data,
+          as.integer(k),
+          as.integer(bins),
+          isTRUE(include_self)
+        )
+        resolved <- if (search_dim[[2L]] == 3L) "cuda_grid3d" else "cuda_grid2d"
+      } else if (search_dim[[2L]] == 3L) {
+        out <- grid3d_self_knn_float32_cpp(
+          search_data,
+          as.integer(k),
+          n_threads > 1L,
+          as.integer(n_threads),
+          as.integer(bins),
+          isTRUE(include_self)
+        )
+        resolved <- "cpu_grid3d"
+      } else {
+        out <- grid2d_self_knn_float32_cpp(
+          search_data,
+          as.integer(k),
+          n_threads > 1L,
+          as.integer(n_threads),
+          as.integer(bins),
+          isTRUE(include_self)
+        )
+        resolved <- "cpu_grid2d"
+      }
+      result <- finish_nn_result(
+        out, resolved, k, self_query, exact = TRUE, metric = metric
+      )
+      if (!is.null(metric_inputs)) {
+        result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
+      }
+      attr(result, "spatial_index") <- list(
+        strategy = paste0(
+          if (isTRUE(use_cuda)) "native_cuda" else "native_cpu",
+          "_exact_uniform_grid_", search_dim[[2L]], "d"
+        ),
+        backend = resolved,
+        exact = TRUE,
+        metric_transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
+        bins_per_dim = as.integer(out$bins_per_dim),
+        n_cells = as.integer(out$n_cells),
+        self_column_included = isTRUE(out$self_column_included),
+        output_layout = out$output_layout %||% "knn_matrix_final",
+        r_side_reshaping = FALSE,
+        input_type = "float32"
+      )
+      return(finish_float32_direct_result(result, out))
+    }
     direct_float32_backend <- backend %in% c(
       "faiss", "cpu_faiss", "cpu_faiss_flat", "faiss_flat",
       "faiss_flat_l2", "faiss_flat_ip",

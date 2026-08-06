@@ -160,11 +160,11 @@ submit_phase <- function(
   image <- Sys.getenv(
     "SINGULARITY_IMAGE",
     unset = file.path(
-      base_dir, "singularity", "fastembedr_cuda_faissR_0.99.20.sif"
+      base_dir, "singularity", "fastembedr_cuda_faissR_0.99.21.sif"
     )
   )
   expected_version <- Sys.getenv(
-    "EXPECTED_FAISSR_VERSION", unset = "0.99.20"
+    "EXPECTED_FAISSR_VERSION", unset = "0.99.21"
   )
 
   if (dry_run) {

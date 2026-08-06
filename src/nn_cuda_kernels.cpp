@@ -9,6 +9,7 @@
 #include <cstring>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace {
@@ -806,7 +807,8 @@ int host_grid_cell(int ix, int iy, int iz, int bins, int n_features) {
   return n_features == 3 ? (iz * bins + iy) * bins + ix : iy * bins + ix;
 }
 
-HostCudaGrid build_host_cuda_grid(const double* data,
+template <typename Scalar>
+HostCudaGrid build_host_cuda_grid(const Scalar* data,
                                   int n,
                                   int n_features,
                                   int bins) {
@@ -1497,14 +1499,15 @@ extern "C" void faissr_cuda_free_device(void* ptr) {
   if (ptr != nullptr) cudaFree(ptr);
 }
 
-extern "C" int faissr_cuda_grid_self_knn(const double* data,
-                                  int n,
-                                  int n_features,
-                                             int k,
-                                             int bins_per_dim,
-                                             int* out_indices,
-                                             double* out_distances,
-                                             int* out_n_cells) {
+template <typename Scalar>
+int faissr_cuda_grid_self_knn_typed(const Scalar* data,
+                                    int n,
+                                    int n_features,
+                                    int k,
+                                    int bins_per_dim,
+                                    int* out_indices,
+                                    double* out_distances,
+                                    int* out_n_cells) {
   last_error.clear();
   if (data == nullptr || out_indices == nullptr || out_distances == nullptr) {
     set_error("null host pointer");
@@ -1569,9 +1572,18 @@ extern "C" int faissr_cuda_grid_self_knn(const double* data,
     cleanup();
     return 1;
   }
-  if (copy_double_to_float_device(data, d_data, data_size, "cudaMemcpy(grid data H2D)")) {
-    cleanup();
-    return 1;
+  if constexpr (std::is_same<Scalar, float>::value) {
+    if (check_cuda(
+          cudaMemcpy(d_data, data, data_bytes, cudaMemcpyHostToDevice),
+          "cudaMemcpy(grid float32 data H2D)")) {
+      cleanup();
+      return 1;
+    }
+  } else {
+    if (copy_double_to_float_device(data, d_data, data_size, "cudaMemcpy(grid data H2D)")) {
+      cleanup();
+      return 1;
+    }
   }
   if (check_cuda(cudaMemcpy(d_offsets, grid.offsets.data(), offsets_bytes, cudaMemcpyHostToDevice), "cudaMemcpy(grid offsets H2D)")) {
     cleanup();
@@ -1623,6 +1635,34 @@ extern "C" int faissr_cuda_grid_self_knn(const double* data,
 
   cleanup();
   return 0;
+}
+
+extern "C" int faissr_cuda_grid_self_knn(const double* data,
+                                           int n,
+                                           int n_features,
+                                           int k,
+                                           int bins_per_dim,
+                                           int* out_indices,
+                                           double* out_distances,
+                                           int* out_n_cells) {
+  return faissr_cuda_grid_self_knn_typed(
+    data, n, n_features, k, bins_per_dim,
+    out_indices, out_distances, out_n_cells
+  );
+}
+
+extern "C" int faissr_cuda_grid_self_knn_float32(const float* data,
+                                                   int n,
+                                                   int n_features,
+                                                   int k,
+                                                   int bins_per_dim,
+                                                   int* out_indices,
+                                                   double* out_distances,
+                                                   int* out_n_cells) {
+  return faissr_cuda_grid_self_knn_typed(
+    data, n, n_features, k, bins_per_dim,
+    out_indices, out_distances, out_n_cells
+  );
 }
 
 extern "C" int faissr_cuda_row_candidate_knn(const double* data,

@@ -81,8 +81,8 @@ checksum, and parses every copied shell file before reporting success.
 
 ```bash
 cd /scratch/firenze/NN
-export SINGULARITY_IMAGE=/scratch/firenze/NN/singularity/fastembedr_cuda_faissR_0.99.20.sif
-export EXPECTED_FAISSR_VERSION='0.99.20'
+export SINGULARITY_IMAGE=/scratch/firenze/NN/singularity/fastembedr_cuda_faissR_0.99.21.sif
+export EXPECTED_FAISSR_VERSION='0.99.21'
 
 # Run the preflight block at the top of submission_commands.txt. It defines
 # FAISSR_PACKAGE_COMMIT only after checking the installed version and embedded

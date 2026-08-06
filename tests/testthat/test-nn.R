@@ -2141,6 +2141,39 @@ test_that("grid self KNN supports normalized cosine and correlation metrics", {
   }
 })
 
+test_that("grid self KNN accepts direct float32 input", {
+  skip_if_not_installed("float")
+  set.seed(12141)
+
+  for (p in c(2L, 3L)) {
+    x <- matrix(rnorm(900L * p), ncol = p)
+    xf <- float::fl(x)
+    for (metric in c("euclidean", "cosine", "correlation")) {
+      grid <- nn(
+        xf,
+        k = 12L,
+        exclude_self = TRUE,
+        backend = "cpu",
+        method = "grid",
+        metric = metric,
+        n_threads = 2L
+      )
+      expect_identical(
+        attr(grid, "backend"), paste0("cpu_grid", p, "d"),
+        info = paste(p, metric)
+      )
+      expect_identical(grid$input_type, "float32", info = paste(p, metric))
+      expect_false(grid$float32_compatibility_conversion, info = paste(p, metric))
+      expect_identical(dim(grid$indices), c(nrow(x), 12L), info = paste(p, metric))
+      expect_true(all(is.finite(grid$distances)), info = paste(p, metric))
+      expect_true(
+        all(apply(grid$distances, 1L, function(row) all(diff(row) >= -1e-6))),
+        info = paste(p, metric)
+      )
+    }
+  }
+})
+
 test_that("public grid method rejects higher-dimensional data explicitly", {
   set.seed(12130)
   x <- matrix(runif(600L), nrow = 120L)

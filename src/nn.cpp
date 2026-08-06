@@ -1117,8 +1117,9 @@ inline int grid2d_coord(const double value,
   return out;
 }
 
-Grid2DIndex build_grid2d_index(const std::vector<double>& x,
-                               const std::vector<double>& y,
+template <typename Scalar>
+Grid2DIndex build_grid2d_index(const std::vector<Scalar>& x,
+                               const std::vector<Scalar>& y,
                                const int bins_per_dim) {
   const int n = static_cast<int>(x.size());
   Grid2DIndex grid;
@@ -1126,10 +1127,10 @@ Grid2DIndex build_grid2d_index(const std::vector<double>& x,
   grid.bins_y = std::max(1, bins_per_dim);
   auto mmx = std::minmax_element(x.begin(), x.end());
   auto mmy = std::minmax_element(y.begin(), y.end());
-  grid.min_x = *mmx.first;
-  grid.min_y = *mmy.first;
-  const double max_x = *mmx.second;
-  const double max_y = *mmy.second;
+  grid.min_x = static_cast<double>(*mmx.first);
+  grid.min_y = static_cast<double>(*mmy.first);
+  const double max_x = static_cast<double>(*mmx.second);
+  const double max_y = static_cast<double>(*mmy.second);
   const double span_x = std::max(max_x - grid.min_x, std::numeric_limits<double>::epsilon());
   const double span_y = std::max(max_y - grid.min_y, std::numeric_limits<double>::epsilon());
   grid.cell_w = std::nextafter(span_x, std::numeric_limits<double>::infinity()) /
@@ -1159,9 +1160,10 @@ Grid2DIndex build_grid2d_index(const std::vector<double>& x,
   return grid;
 }
 
-Grid3DIndex build_grid3d_index(const std::vector<double>& x,
-                               const std::vector<double>& y,
-                               const std::vector<double>& z,
+template <typename Scalar>
+Grid3DIndex build_grid3d_index(const std::vector<Scalar>& x,
+                               const std::vector<Scalar>& y,
+                               const std::vector<Scalar>& z,
                                const int bins_per_dim) {
   const int n = static_cast<int>(x.size());
   Grid3DIndex grid;
@@ -1171,12 +1173,12 @@ Grid3DIndex build_grid3d_index(const std::vector<double>& x,
   auto mmx = std::minmax_element(x.begin(), x.end());
   auto mmy = std::minmax_element(y.begin(), y.end());
   auto mmz = std::minmax_element(z.begin(), z.end());
-  grid.min_x = *mmx.first;
-  grid.min_y = *mmy.first;
-  grid.min_z = *mmz.first;
-  const double max_x = *mmx.second;
-  const double max_y = *mmy.second;
-  const double max_z = *mmz.second;
+  grid.min_x = static_cast<double>(*mmx.first);
+  grid.min_y = static_cast<double>(*mmy.first);
+  grid.min_z = static_cast<double>(*mmz.first);
+  const double max_x = static_cast<double>(*mmx.second);
+  const double max_y = static_cast<double>(*mmy.second);
+  const double max_z = static_cast<double>(*mmz.second);
   const double span_x = std::max(max_x - grid.min_x, std::numeric_limits<double>::epsilon());
   const double span_y = std::max(max_y - grid.min_y, std::numeric_limits<double>::epsilon());
   const double span_z = std::max(max_z - grid.min_z, std::numeric_limits<double>::epsilon());
@@ -1210,8 +1212,9 @@ Grid3DIndex build_grid3d_index(const std::vector<double>& x,
   return grid;
 }
 
-void add_grid2d_cell_candidates(const std::vector<double>& x,
-                                const std::vector<double>& y,
+template <typename Scalar>
+void add_grid2d_cell_candidates(const std::vector<Scalar>& x,
+                                const std::vector<Scalar>& y,
                                 const Grid2DIndex& grid,
                                 const int query,
                                 const int ix,
@@ -1277,9 +1280,10 @@ double grid3d_lower_bound_outside_cube(const double x,
   return best;
 }
 
-void add_grid3d_cell_candidates(const std::vector<double>& x,
-                                const std::vector<double>& y,
-                                const std::vector<double>& z,
+template <typename Scalar>
+void add_grid3d_cell_candidates(const std::vector<Scalar>& x,
+                                const std::vector<Scalar>& y,
+                                const std::vector<Scalar>& z,
                                 const Grid3DIndex& grid,
                                 const int query,
                                 const int ix,
@@ -1307,8 +1311,9 @@ void add_grid3d_cell_candidates(const std::vector<double>& x,
   }
 }
 
-void search_grid2d_exact(const std::vector<double>& x,
-                         const std::vector<double>& y,
+template <typename Scalar>
+void search_grid2d_exact(const std::vector<Scalar>& x,
+                         const std::vector<Scalar>& y,
                          const Grid2DIndex& grid,
                          const int query,
                          const int k,
@@ -1361,9 +1366,10 @@ void search_grid2d_exact(const std::vector<double>& x,
   }
 }
 
-void search_grid3d_exact(const std::vector<double>& x,
-                         const std::vector<double>& y,
-                         const std::vector<double>& z,
+template <typename Scalar>
+void search_grid3d_exact(const std::vector<Scalar>& x,
+                         const std::vector<Scalar>& y,
+                         const std::vector<Scalar>& z,
                          const Grid3DIndex& grid,
                          const int query,
                          const int k,
@@ -3500,6 +3506,201 @@ List grid3d_self_knn_cpp(NumericMatrix data,
     Rcpp::Named("self_column_included") = include_self,
     Rcpp::Named("output_layout") = "knn_matrix_final",
     Rcpp::Named("r_side_reshaping") = false
+  );
+}
+
+// [[Rcpp::export]]
+List grid2d_self_knn_float32_cpp(SEXP data,
+                                 int k,
+                                 bool parallel,
+                                 int cores,
+                                 int bins_per_dim,
+                                 bool include_self) {
+  MatrixViewF32 view = make_row_major_float32_view(data, "data");
+  const int n = view.nrow;
+  if (view.ncol != 2) {
+    Rcpp::stop("grid2d_self_knn_float32_cpp requires exactly two columns");
+  }
+  if (n < 2) Rcpp::stop("data must have at least two rows");
+  if (k < 1 || k > n) Rcpp::stop("k must be in [1, nrow(data)]");
+  if (!include_self && k >= n) {
+    Rcpp::stop("k must be in [1, nrow(data) - 1] when excluding self");
+  }
+  if (bins_per_dim < 1) Rcpp::stop("bins_per_dim must be positive");
+  const int search_k = include_self ? k - 1 : k;
+
+  std::vector<float> x(static_cast<std::size_t>(n));
+  std::vector<float> y(static_cast<std::size_t>(n));
+  for (int i = 0; i < n; ++i) {
+    x[static_cast<std::size_t>(i)] = view.data[static_cast<std::size_t>(i) * 2];
+    y[static_cast<std::size_t>(i)] = view.data[static_cast<std::size_t>(i) * 2 + 1];
+  }
+
+  Grid2DIndex grid = build_grid2d_index(x, y, bins_per_dim);
+  IntegerMatrix indices(n, k);
+  NumericMatrix distances(n, k);
+  int* indices_ptr = indices.begin();
+  double* distances_ptr = distances.begin();
+  const int n_threads = requested_threads(parallel, cores, n);
+
+  auto query_rows = [&](const int row_start, const int row_end) {
+    std::vector<Neighbor> top;
+    top.reserve(static_cast<std::size_t>(search_k));
+    for (int q = row_start; q < row_end; ++q) {
+      if (include_self) {
+        indices_ptr[static_cast<std::size_t>(q)] = q + 1;
+        distances_ptr[static_cast<std::size_t>(q)] = 0.0;
+      }
+      if (search_k == 0) continue;
+      search_grid2d_exact(x, y, grid, q, search_k, top);
+      if (static_cast<int>(top.size()) < search_k) {
+        for (int candidate = 0; candidate < n; ++candidate) {
+          if (candidate == q) continue;
+          const float dx = x[static_cast<std::size_t>(q)] - x[static_cast<std::size_t>(candidate)];
+          const float dy = y[static_cast<std::size_t>(q)] - y[static_cast<std::size_t>(candidate)];
+          insert_heap_top_double(candidate, static_cast<double>(dx * dx + dy * dy), search_k, top);
+        }
+      }
+      if (static_cast<int>(top.size()) == search_k) {
+        std::sort_heap(top.begin(), top.end(), neighbor_less);
+      } else {
+        std::sort(top.begin(), top.end(), neighbor_less);
+      }
+      const int col_offset = include_self ? 1 : 0;
+      for (int j = 0; j < search_k; ++j) {
+        const std::size_t dst = static_cast<std::size_t>(j + col_offset) * n + q;
+        indices_ptr[dst] = top[static_cast<std::size_t>(j)].index + 1;
+        distances_ptr[dst] = std::sqrt(std::max(top[static_cast<std::size_t>(j)].distance, 0.0));
+      }
+    }
+  };
+
+  if (n_threads == 1) {
+    query_rows(0, n);
+  } else {
+    std::vector<std::thread> workers;
+    workers.reserve(static_cast<std::size_t>(n_threads));
+    for (int t = 0; t < n_threads; ++t) {
+      workers.emplace_back(query_rows, (n * t) / n_threads, (n * (t + 1)) / n_threads);
+    }
+    for (auto& worker : workers) worker.join();
+  }
+
+  return List::create(
+    Rcpp::Named("indices") = indices,
+    Rcpp::Named("distances") = distances,
+    Rcpp::Named("bins_per_dim") = bins_per_dim,
+    Rcpp::Named("n_cells") = grid.bins_x * grid.bins_y,
+    Rcpp::Named("n_threads") = n_threads,
+    Rcpp::Named("self_column_included") = include_self,
+    Rcpp::Named("output_layout") = "knn_matrix_final",
+    Rcpp::Named("r_side_reshaping") = false,
+    Rcpp::Named("input_type") = "float32",
+    Rcpp::Named("input_layout") = view.layout,
+    Rcpp::Named("input_owns_data") = view.owns_data,
+    Rcpp::Named("float32_compatibility_conversion") = view.compatibility_conversion
+  );
+}
+
+// [[Rcpp::export]]
+List grid3d_self_knn_float32_cpp(SEXP data,
+                                 int k,
+                                 bool parallel,
+                                 int cores,
+                                 int bins_per_dim,
+                                 bool include_self) {
+  MatrixViewF32 view = make_row_major_float32_view(data, "data");
+  const int n = view.nrow;
+  if (view.ncol != 3) {
+    Rcpp::stop("grid3d_self_knn_float32_cpp requires exactly three columns");
+  }
+  if (n < 2) Rcpp::stop("data must have at least two rows");
+  if (k < 1 || k > n) Rcpp::stop("k must be in [1, nrow(data)]");
+  if (!include_self && k >= n) {
+    Rcpp::stop("k must be in [1, nrow(data) - 1] when excluding self");
+  }
+  if (bins_per_dim < 1) Rcpp::stop("bins_per_dim must be positive");
+  const int search_k = include_self ? k - 1 : k;
+
+  std::vector<float> x(static_cast<std::size_t>(n));
+  std::vector<float> y(static_cast<std::size_t>(n));
+  std::vector<float> z(static_cast<std::size_t>(n));
+  for (int i = 0; i < n; ++i) {
+    const std::size_t offset = static_cast<std::size_t>(i) * 3;
+    x[static_cast<std::size_t>(i)] = view.data[offset];
+    y[static_cast<std::size_t>(i)] = view.data[offset + 1];
+    z[static_cast<std::size_t>(i)] = view.data[offset + 2];
+  }
+
+  Grid3DIndex grid = build_grid3d_index(x, y, z, bins_per_dim);
+  IntegerMatrix indices(n, k);
+  NumericMatrix distances(n, k);
+  int* indices_ptr = indices.begin();
+  double* distances_ptr = distances.begin();
+  const int n_threads = requested_threads(parallel, cores, n);
+
+  auto query_rows = [&](const int row_start, const int row_end) {
+    std::vector<Neighbor> top;
+    top.reserve(static_cast<std::size_t>(search_k));
+    for (int q = row_start; q < row_end; ++q) {
+      if (include_self) {
+        indices_ptr[static_cast<std::size_t>(q)] = q + 1;
+        distances_ptr[static_cast<std::size_t>(q)] = 0.0;
+      }
+      if (search_k == 0) continue;
+      search_grid3d_exact(x, y, z, grid, q, search_k, top);
+      if (static_cast<int>(top.size()) < search_k) {
+        for (int candidate = 0; candidate < n; ++candidate) {
+          if (candidate == q) continue;
+          const float dx = x[static_cast<std::size_t>(q)] - x[static_cast<std::size_t>(candidate)];
+          const float dy = y[static_cast<std::size_t>(q)] - y[static_cast<std::size_t>(candidate)];
+          const float dz = z[static_cast<std::size_t>(q)] - z[static_cast<std::size_t>(candidate)];
+          insert_heap_top_double(
+            candidate,
+            static_cast<double>(dx * dx + dy * dy + dz * dz),
+            search_k,
+            top
+          );
+        }
+      }
+      if (static_cast<int>(top.size()) == search_k) {
+        std::sort_heap(top.begin(), top.end(), neighbor_less);
+      } else {
+        std::sort(top.begin(), top.end(), neighbor_less);
+      }
+      const int col_offset = include_self ? 1 : 0;
+      for (int j = 0; j < search_k; ++j) {
+        const std::size_t dst = static_cast<std::size_t>(j + col_offset) * n + q;
+        indices_ptr[dst] = top[static_cast<std::size_t>(j)].index + 1;
+        distances_ptr[dst] = std::sqrt(std::max(top[static_cast<std::size_t>(j)].distance, 0.0));
+      }
+    }
+  };
+
+  if (n_threads == 1) {
+    query_rows(0, n);
+  } else {
+    std::vector<std::thread> workers;
+    workers.reserve(static_cast<std::size_t>(n_threads));
+    for (int t = 0; t < n_threads; ++t) {
+      workers.emplace_back(query_rows, (n * t) / n_threads, (n * (t + 1)) / n_threads);
+    }
+    for (auto& worker : workers) worker.join();
+  }
+
+  return List::create(
+    Rcpp::Named("indices") = indices,
+    Rcpp::Named("distances") = distances,
+    Rcpp::Named("bins_per_dim") = bins_per_dim,
+    Rcpp::Named("n_cells") = grid.bins_x * grid.bins_y * grid.bins_z,
+    Rcpp::Named("n_threads") = n_threads,
+    Rcpp::Named("self_column_included") = include_self,
+    Rcpp::Named("output_layout") = "knn_matrix_final",
+    Rcpp::Named("r_side_reshaping") = false,
+    Rcpp::Named("input_type") = "float32",
+    Rcpp::Named("input_layout") = view.layout,
+    Rcpp::Named("input_owns_data") = view.owns_data,
+    Rcpp::Named("float32_compatibility_conversion") = view.compatibility_conversion
   );
 }
 

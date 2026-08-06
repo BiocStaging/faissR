@@ -1,3 +1,12 @@
+# faissR 0.99.21
+
+* Adds direct float32 adapters for exact CPU and CUDA grid search in two and
+  three dimensions. Euclidean, cosine, and correlation self-KNN searches now
+  consume `float::fl()` inputs without a compatibility conversion to R double,
+  while preserving the requested grid method and device.
+* Extends route-contract tests to cover float32 grid searches in two and three
+  dimensions across all supported grid metrics.
+
 # faissR 0.99.20
 
 * Uses the direct-difference CUDA exact kernel for 2D/3D Euclidean

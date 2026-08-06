@@ -145,6 +145,14 @@ grid3d_self_knn_cpp <- function(data, k, parallel, cores, bins_per_dim, include_
     .Call(`_faissR_grid3d_self_knn_cpp`, data, k, parallel, cores, bins_per_dim, include_self)
 }
 
+grid2d_self_knn_float32_cpp <- function(data, k, parallel, cores, bins_per_dim, include_self) {
+    .Call(`_faissR_grid2d_self_knn_float32_cpp`, data, k, parallel, cores, bins_per_dim, include_self)
+}
+
+grid3d_self_knn_float32_cpp <- function(data, k, parallel, cores, bins_per_dim, include_self) {
+    .Call(`_faissR_grid3d_self_knn_float32_cpp`, data, k, parallel, cores, bins_per_dim, include_self)
+}
+
 candidate_knn_cpp <- function(data, points, candidate_indices, k, method, square, exclude_self, parallel, cores) {
     .Call(`_faissR_candidate_knn_cpp`, data, points, candidate_indices, k, method, square, exclude_self, parallel, cores)
 }
@@ -283,6 +291,10 @@ row_candidate_knn_cuda_float32_cpp <- function(data, candidate_indices, k, metri
 
 cuda_grid_self_knn_cpp <- function(data, k, bins_per_dim, include_self) {
     .Call(`_faissR_cuda_grid_self_knn_cpp`, data, k, bins_per_dim, include_self)
+}
+
+cuda_grid_self_knn_float32_cpp <- function(data, k, bins_per_dim, include_self) {
+    .Call(`_faissR_cuda_grid_self_knn_float32_cpp`, data, k, bins_per_dim, include_self)
 }
 
 cuvs_available_cpp <- function() {

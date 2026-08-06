@@ -62,3 +62,10 @@ List cuda_grid_self_knn_impl(NumericMatrix,
                              bool) {
   Rcpp::stop("CUDA grid KNN is available only when the package is built with CUDA support.");
 }
+
+List cuda_grid_self_knn_float32_impl(SEXP,
+                                     int,
+                                     int,
+                                     bool) {
+  Rcpp::stop("CUDA float32 grid KNN is available only when the package is built with CUDA support.");
+}
