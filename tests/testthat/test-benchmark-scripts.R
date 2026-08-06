@@ -3430,6 +3430,18 @@ test_that("final JSS campaign rejects a stale faissR Singularity image", {
     route_qa, fixed = TRUE
   )))
   expect_true(any(grepl(
+    "if (!self_query)", route_qa, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "nn_args$points <- float::fl(", route_qa, fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "do.call(faissR::nn, nn_args)", route_qa, fixed = TRUE
+  )))
+  expect_false(any(grepl(
+    "points = route_points", route_qa, fixed = TRUE
+  )))
+  expect_true(any(grepl(
     "route_x <- float::fl(route_source)",
     route_qa, fixed = TRUE
   )))
@@ -3803,4 +3815,54 @@ test_that("publication rnndescent routes use their current public APIs", {
     x, "rnndescent_rpf", 5L, "euclidean", 2L, 20260730L
   )
   expect_identical(first$indices, second$indices)
+})
+
+test_that("synthetic exact-reference paths are dataset-specific", {
+  root <- test_path("../../benchmark_scripts/jmlr_mloss_publication")
+  if (!dir.exists(root)) {
+    skip("Publication scripts are not available in this installed-package test context.")
+  }
+
+  old <- Sys.getenv("FAISSR_CUDA_REFERENCE_SOURCE_ONLY", unset = NA_character_)
+  on.exit({
+    if (is.na(old)) Sys.unsetenv("FAISSR_CUDA_REFERENCE_SOURCE_ONLY") else
+      Sys.setenv(FAISSR_CUDA_REFERENCE_SOURCE_ONLY = old)
+  }, add = TRUE)
+  Sys.setenv(FAISSR_CUDA_REFERENCE_SOURCE_ONLY = "true")
+
+  env <- new.env(parent = globalenv())
+  sys.source(
+    file.path(root, "common", "benchmark_precompute_exact_references_cuda.R"),
+    envir = env
+  )
+  p2 <- env$reference_file(
+    "/tmp/synthetic_spatial_n10000_p2_unit_float32.RData",
+    "euclidean", 100L, 1024L, 4L
+  )
+  p3 <- env$reference_file(
+    "/tmp/synthetic_spatial_n10000_p3_unit_float32.RData",
+    "euclidean", 100L, 1024L, 4L
+  )
+  real <- env$reference_file(
+    "/tmp/MNIST_float32.RData", "euclidean", 100L, 1024L, 4L
+  )
+
+  expect_false(identical(p2, p3))
+  expect_match(basename(p2), "^synthetic_spatial_n10000_p2_unit_float32__")
+  expect_match(basename(p3), "^synthetic_spatial_n10000_p3_unit_float32__")
+  expect_identical(
+    basename(real),
+    "faissR_exact_reference_euclidean_k100_q1024_seed4.RData"
+  )
+
+  consumers <- c(
+    "benchmark_jmlr_tuned_methods.R",
+    "benchmark_method_tuning_from_reference.R",
+    "benchmark_reusable_external_indexes.R"
+  )
+  for (name in consumers) {
+    source_text <- readLines(file.path(root, "common", name), warn = FALSE)
+    expect_true(any(grepl('startsWith(dataset_file, "synthetic_")', source_text,
+                          fixed = TRUE)), info = name)
+  }
 })

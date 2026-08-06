@@ -910,6 +910,28 @@ and do not extrapolate minimum sampled recall into a population guarantee.
 
 \section{Results} \label{sec:results}
 
+\subsection{Exact-reference validation}
+
+The corrected frozen synthetic-reference run generated 42 independent
+metric-matched reference objects: 36 maximum-inner-product cells spanning 12
+norm-stress datasets and six Euclidean cells spanning the 2D/3D spatial
+datasets. The design crossed 14 datasets with three query seeds. All 42 GPU
+results passed an independent CPU FAISS Flat audit with mean and minimum
+sampled-query recall equal to 1.0. The largest identifier-matched distance
+discrepancy was 0.0007324219. Every object recorded \pkg{faissR} 0.99.20 and
+the same package and image commit
+\code{7e183557d26acef33151b0ccadb67b158b368637}.
+
+This run also exposed and corrected an artifact-design issue before timing:
+synthetic datasets shared one directory while the original reference filename
+did not contain dataset identity. The revised builder prefixes every synthetic
+reference with the dataset filename and the audit requires one unique path per
+dataset--metric--seed cell. Earlier colliding synthetic files are excluded.
+The numerical audits of the 108 cached real-data reference cells pass, but
+those older objects predate the frozen package/image commit fields and are not
+eligible for the final archive until regenerated. This provenance distinction
+is enforced before calibration rather than repaired during aggregation.
+
 \subsection{Calibration-policy outcome}
 
 The completed calibration establishes three facts without substituting for

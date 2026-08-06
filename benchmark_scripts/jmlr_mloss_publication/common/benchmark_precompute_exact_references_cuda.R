@@ -121,9 +121,18 @@ remove_self <- function(x, original_rows, k) {
 }
 
 reference_file <- function(dataset_path, metric, k, quality_n, seed) {
+  dataset_file <- tools::file_path_sans_ext(basename(dataset_path))
+  prefix <- if (startsWith(dataset_file, "synthetic_")) {
+    paste0(dataset_file, "__")
+  } else {
+    ""
+  }
   file.path(
     dirname(dataset_path),
-    sprintf("faissR_exact_reference_%s_k%d_q%d_seed%d.RData", metric, k, quality_n, seed)
+    sprintf(
+      "%sfaissR_exact_reference_%s_k%d_q%d_seed%d.RData",
+      prefix, metric, k, quality_n, seed
+    )
   )
 }
 

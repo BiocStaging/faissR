@@ -687,11 +687,17 @@ choose_quality_rows <- function(n, p, max_n, max_ops, seed) {
 
 load_precomputed_reference <- function(data_path, reference_k, quality_n, seed, metric, k,
                                        dataset_md5) {
+  dataset_file <- tools::file_path_sans_ext(basename(data_path))
+  prefix <- if (startsWith(dataset_file, "synthetic_")) {
+    paste0(dataset_file, "__")
+  } else {
+    ""
+  }
   path <- file.path(
     dirname(data_path),
     sprintf(
-      "faissR_exact_reference_%s_k%d_q%d_seed%d.RData",
-      metric, as.integer(reference_k), as.integer(quality_n), as.integer(seed)
+      "%sfaissR_exact_reference_%s_k%d_q%d_seed%d.RData",
+      prefix, metric, as.integer(reference_k), as.integer(quality_n), as.integer(seed)
     )
   )
   if (!file.exists(path)) return(NULL)

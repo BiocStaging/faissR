@@ -81,7 +81,7 @@ checksum, and parses every copied shell file before reporting success.
 
 ```bash
 cd /scratch/firenze/NN
-export SINGULARITY_IMAGE=/scratch/firenze/NN/singularity/fastembedr_cuda_faissR_0.99.19.sif
+export SINGULARITY_IMAGE=/scratch/firenze/NN/singularity/fastembedr_cuda_faissR_0.99.20.sif
 export EXPECTED_FAISSR_VERSION='0.99.20'
 
 # Run the preflight block at the top of submission_commands.txt. It defines

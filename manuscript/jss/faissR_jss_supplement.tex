@@ -721,9 +721,12 @@ CPU/CUDA metric conformance & Pre-freeze complete & Re-run in the validated
 image and preserve outputs and checksums. \\
 CPU/CUDA systems-ablation measurement sets & Pre-freeze complete & Re-run or
 identity-validate rows, then freeze paired contrast aggregation. \\
-Exact references for all nine real datasets & Historical set complete &
-Regenerate or identity-validate metric-matched files under the final package
-and image commit. \\
+Exact references for all nine real datasets & Numerical audit complete;
+provenance refresh required & Regenerate all four metric-specific sets because
+the cached RData objects predate mandatory package/image commit fields. \\
+Synthetic MIPS and spatial references & Final frozen set complete & Job
+1184476 produced 42 unique objects; all CPU audits passed and all objects carry
+the frozen package and image commit. \\
 Held-out explicit-method benchmark & Missing from synchronized archive & Run
 separate CPU and CUDA jobs for both validation seeds. \\
 Automatic selector versus oracle & Pending held-out aggregate & Run only after

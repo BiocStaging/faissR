@@ -83,11 +83,17 @@ as_double_matrix <- function(x) {
 }
 
 reference_path <- function(data_path, metric, k, quality_n, seed) {
+  dataset_file <- tools::file_path_sans_ext(basename(data_path))
+  prefix <- if (startsWith(dataset_file, "synthetic_")) {
+    paste0(dataset_file, "__")
+  } else {
+    ""
+  }
   file.path(
     dirname(data_path),
     sprintf(
-      "faissR_exact_reference_%s_k%d_q%d_seed%d.RData",
-      metric, as.integer(k), as.integer(quality_n), as.integer(seed)
+      "%sfaissR_exact_reference_%s_k%d_q%d_seed%d.RData",
+      prefix, metric, as.integer(k), as.integer(quality_n), as.integer(seed)
     )
   )
 }

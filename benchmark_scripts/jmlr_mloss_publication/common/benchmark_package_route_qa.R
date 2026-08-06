@@ -434,26 +434,26 @@ main <- function() {
         )
         next
       }
-      route_points <- if (self_query) {
-        NULL
-      } else {
-        float::fl(route_source[rows, , drop = FALSE])
+      nn_args <- list(
+        data = route_x,
+        k = 15L,
+        exclude_self = self_query,
+        backend = backend,
+        method = method,
+        metric = metric,
+        tuning = "auto",
+        target_recall = 0.99,
+        n_threads = if (backend == "cpu") 12L else 2L,
+        output = "double"
+      )
+      if (!self_query) {
+        nn_args$points <- float::fl(
+          route_source[rows, , drop = FALSE]
+        )
       }
       started <- proc.time()[["elapsed"]]
       answer <- tryCatch(
-        faissR::nn(
-          route_x,
-          points = route_points,
-          k = 15L,
-          exclude_self = self_query,
-          backend = backend,
-          method = method,
-          metric = metric,
-          tuning = "auto",
-          target_recall = 0.99,
-          n_threads = if (backend == "cpu") 12L else 2L,
-          output = "double"
-        ),
+        do.call(faissR::nn, nn_args),
         error = function(e) e
       )
       elapsed <- proc.time()[["elapsed"]] - started

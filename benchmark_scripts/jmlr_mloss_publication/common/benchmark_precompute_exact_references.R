@@ -156,11 +156,17 @@ dataset_path_column <- function(manifest) {
 
 reference_file <- function(dataset_path, k, quality_n, seed, metric = "euclidean") {
   metric <- normalize_metric_arg(metric)
+  dataset_file <- tools::file_path_sans_ext(basename(dataset_path))
+  prefix <- if (startsWith(dataset_file, "synthetic_")) {
+    paste0(dataset_file, "__")
+  } else {
+    ""
+  }
   file.path(
     dirname(dataset_path),
     sprintf(
-      "faissR_exact_reference_%s_k%d_q%d_seed%d.RData",
-      metric, as.integer(k), as.integer(quality_n), as.integer(seed)
+      "%sfaissR_exact_reference_%s_k%d_q%d_seed%d.RData",
+      prefix, metric, as.integer(k), as.integer(quality_n), as.integer(seed)
     )
   )
 }
