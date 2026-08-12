@@ -161,6 +161,10 @@ headers and libraries discovered by `configure`.
   compiled/runtime backend support.
 - `nn_capabilities()` to report supported nearest-neighbour
   method/backend/metric combinations for benchmark preflight checks.
+- Set the session default shared by faissR, KODAMA, fastPLS, and fastEmbedR
+  with `options(backend = "cuda")`, or use `Sys.setenv(BACKEND = "cuda")`.
+  An explicit function argument always takes precedence. faissR supports CPU
+  and CUDA; a shared `"metal"` setting is rejected clearly.
 - Benchmark #1 comparison launchers for Euclidean speed tests are split into
   CPU and CUDA runs:
   `benchmark_scripts/run_benchmark1_compare_cpu_euclidean.sh` compares faissR

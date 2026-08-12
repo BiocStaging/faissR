@@ -1,8 +1,9 @@
 #' Configure the default faissR execution backend
 #'
-#' Explicit function arguments take precedence over `options(faissR.backend)`,
-#' then `FAISSR_BACKEND`; CPU is the final default. The current faissR source
-#' supports CPU and CUDA. `"metal"` is rejected explicitly.
+#' Explicit function arguments take precedence over `options(backend)`, then
+#' `BACKEND`; CPU is the final default. Package-specific settings remain
+#' supported as compatibility fallbacks. The current faissR source supports
+#' CPU and CUDA. `"metal"` is rejected explicitly.
 #'
 #' @param backend Optional backend: `"cpu"` or `"cuda"`.
 #' @return The active backend. Setting returns the previous option invisibly.
@@ -10,8 +11,8 @@
 faissR_backend <- function(backend = NULL) {
   if (is.null(backend)) return(resolve_faissr_environment_backend(NULL))
   backend <- validate_faissr_environment_backend(backend, "backend")
-  old <- getOption("faissR.backend", NULL)
-  options(faissR.backend = backend)
+  old <- getOption("backend", NULL)
+  options(backend = backend)
   invisible(old)
 }
 
@@ -35,9 +36,13 @@ resolve_faissr_environment_backend <- function(backend = NULL, allow_auto = TRUE
     if (allow_auto && identical(value, "auto")) return("auto")
     return(validate_faissr_environment_backend(value))
   }
-  option <- getOption("faissR.backend", NULL)
-  if (!is.null(option)) return(validate_faissr_environment_backend(option, "option faissR.backend"))
-  environment <- Sys.getenv("FAISSR_BACKEND", unset = "")
-  if (nzchar(environment)) return(validate_faissr_environment_backend(environment, "FAISSR_BACKEND"))
+  option <- getOption("backend", NULL)
+  if (!is.null(option)) return(validate_faissr_environment_backend(option, "option backend"))
+  legacy_option <- getOption("faissR.backend", NULL)
+  if (!is.null(legacy_option)) return(validate_faissr_environment_backend(legacy_option, "option faissR.backend"))
+  environment <- Sys.getenv("BACKEND", unset = "")
+  if (nzchar(environment)) return(validate_faissr_environment_backend(environment, "BACKEND"))
+  legacy_environment <- Sys.getenv("FAISSR_BACKEND", unset = "")
+  if (nzchar(legacy_environment)) return(validate_faissr_environment_backend(legacy_environment, "FAISSR_BACKEND"))
   "cpu"
 }

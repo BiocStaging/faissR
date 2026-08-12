@@ -13,7 +13,8 @@ faissR_backend(backend = NULL)
 The active backend. Setting returns the previous option invisibly.
 }
 \description{
-Explicit function arguments take precedence over `options(faissR.backend)`,
-then `FAISSR_BACKEND`; CPU is the final default. The current faissR source
-supports CPU and CUDA. `"metal"` is rejected explicitly.
+Explicit function arguments take precedence over \code{options(backend = ...)},
+then \code{BACKEND}; CPU is the final default. The former faissR-specific
+option and environment variable remain compatibility fallbacks. The current
+faissR source supports CPU and CUDA. \code{"metal"} is rejected explicitly.
 }

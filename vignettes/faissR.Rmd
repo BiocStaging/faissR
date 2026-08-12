@@ -41,7 +41,7 @@ clearly when CUDA support is not available.
 faissR uses CPU unless a backend is selected for the R session:
 
 ```r
-options(faissR.backend = "cuda")
+options(backend = "cuda")
 # Equivalent: faissR_backend("cuda")
 
 g <- nn(x, k = 30)                  # CUDA
@@ -49,7 +49,7 @@ g.cpu <- nn(x, k = 30, backend = "cpu")
 g.auto <- nn(x, k = 30, backend = "auto")
 ```
 
-For batch jobs, `FAISSR_BACKEND=cpu|cuda` is used when the R option is unset.
+For batch jobs, `BACKEND=cpu|cuda` is used when the R option is unset.
 Precedence is explicit argument, R option, environment variable, then CPU.
 Explicit `backend = "auto"` retains faissR's shape-aware routing. The current
 faissR implementation does not contain a Metal backend, so selecting `metal`
