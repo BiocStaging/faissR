@@ -9,7 +9,7 @@ candidate_knn(
   candidates,
   points = data,
   k,
-  backend = c("auto", "cpu", "cuda"),
+  backend = NULL,
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   n_threads = NULL,
   exclude_self = FALSE

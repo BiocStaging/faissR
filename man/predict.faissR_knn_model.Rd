@@ -8,7 +8,7 @@
   object,
   newdata,
   k = NULL,
-  backend = c("auto", "cpu", "cuda"),
+  backend = NULL,
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   target_recall = NULL,
   cagra_implementation = NULL,

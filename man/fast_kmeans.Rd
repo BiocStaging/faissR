@@ -7,7 +7,7 @@
 fast_kmeans(
   data,
   centers,
-  backend = c("auto", "cpu", "cuda"),
+  backend = NULL,
   max_iter = "auto",
   n_init = "auto",
   tol = "auto",

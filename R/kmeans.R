@@ -96,7 +96,7 @@
 #' @export
 fast_kmeans <- function(data,
                         centers,
-                        backend = c("auto", "cpu", "cuda"),
+                        backend = NULL,
                         max_iter = "auto",
                         n_init = "auto",
                         tol = "auto",

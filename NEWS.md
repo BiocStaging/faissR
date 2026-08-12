@@ -1,5 +1,9 @@
 # faissR 0.99.21
 
+* Adds a session-wide backend selector through `faissR_backend()`,
+  `options(faissR.backend = ...)`, and `FAISSR_BACKEND`. Explicit function
+  arguments retain precedence and CPU remains the default. Metal requests
+  fail explicitly because faissR currently provides CPU and CUDA backends.
 * Adds direct float32 adapters for exact CPU and CUDA grid search in two and
   three dimensions. Euclidean, cosine, and correlation self-KNN searches now
   consume `float::fl()` inputs without a compatibility conversion to R double,

@@ -5027,6 +5027,7 @@ normalize_public_compute_backend <- function(backend, arg = "backend") {
 }
 
 normalize_public_backend_arg <- function(backend, arg = "backend") {
+  backend <- resolve_faissr_environment_backend(backend, allow_auto = TRUE)
   backend <- normalize_scalar_choice_arg(
     backend,
     arg = arg,
@@ -5042,6 +5043,7 @@ normalize_public_backend_arg <- function(backend, arg = "backend") {
 }
 
 normalize_nn_backend_arg <- function(backend, arg = "backend") {
+  backend <- resolve_faissr_environment_backend(backend, allow_auto = TRUE)
   backend <- normalize_scalar_choice_arg(
     backend,
     arg = arg,
@@ -10418,7 +10420,7 @@ nn <- function(data,
                points = data,
                k = NULL,
                exclude_self = FALSE,
-               backend = c("auto", "cpu", "cuda"),
+               backend = NULL,
                method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"),
                metric = c("euclidean", "cosine", "correlation", "inner_product"),
                tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),

@@ -8,7 +8,7 @@ knn(
   Xtrain,
   Ytrain,
   Xtest = NULL,
-  backend = c("auto", "cpu", "cuda"),
+  backend = NULL,
   method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq",
     "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
