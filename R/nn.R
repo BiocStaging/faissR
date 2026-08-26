@@ -12,6 +12,7 @@ finish_float32_direct_result <- function(result, out) {
 
 .faissR_fitted_nn_index_cache <- new.env(parent = emptyenv())
 .faissR_fitted_nn_index_cache$.keys <- character()
+.faissR_auto_hardware_cache <- new.env(parent = emptyenv())
 
 fitted_nn_index_cache_enabled <- function() {
   isTRUE(faissr_option("cache_fitted_nn_indexes", TRUE)) &&
@@ -5070,16 +5071,24 @@ normalize_nn_method <- function(method) {
     method,
     arg = "method",
     default = "auto",
-    formal_choices = nn_method_labels()
+    formal_choices = nn_method_request_labels()
   )
   if (is.na(method) || !nzchar(method)) method <- "auto"
   method <- trimws(method)
+  style_aliases <- c(
+    nsg_style = "nsg",
+    vamana_style = "vamana",
+    nndescent_style = "nndescent"
+  )
+  if (method %in% names(style_aliases)) method <- unname(style_aliases[[method]])
   labels <- nn_method_labels()
   if (!method %in% labels) {
       stop(
         "`method` must be one of \"auto\", \"exact\", \"flat\", \"bruteforce\", ",
-        "\"grid\", \"hnsw\", \"ivf\", \"ivfpq\", \"vamana\", ",
-        "\"nsg\", \"nndescent\", \"ivfpq_fastscan\", or \"cagra\".",
+        "\"grid\", \"hnsw\", \"ivf\", \"ivfpq\", \"vamana_style\", ",
+        "\"nsg_style\", \"nndescent_style\", \"ivfpq_fastscan\", or \"cagra\". ",
+        "The shorter \"vamana\", \"nsg\", and \"nndescent\" spellings are ",
+        "retained as compatibility aliases.",
         " Use these canonical lowercase method labels; internal backend route ",
         "labels such as \"faiss_hnsw\" are not public `method` values.",
         call. = FALSE
@@ -5103,14 +5112,19 @@ validate_public_nn_method_shape <- function(data, method) {
 }
 
 nn_metric_labels <- function() {
-  c("euclidean", "cosine", "correlation", "inner_product")
+  c("euclidean", "cosine", "correlation")
 }
 
 nn_method_labels <- function() {
   c(
     "auto", "exact", "flat", "bruteforce", "grid",
-    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"
+    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent",
+    "ivfpq_fastscan", "cagra"
   )
+}
+
+nn_method_request_labels <- function() {
+  c(nn_method_labels(), "vamana_style", "nsg_style", "nndescent_style")
 }
 
 faissr_option <- function(name, default = NULL) {
@@ -5346,14 +5360,7 @@ cuda_cagra_route_available <- function(faiss_gpu_available_value = faiss_gpu_ava
 #' supported by design from combinations that should be treated as expected
 #' skips in benchmarks.
 #'
-#' faissR treats `metric = "inner_product"` as raw-dot-product ranking while
-#' keeping returned `distances` in the usual smaller-is-better orientation via
-#' per-query shifted dot-product distances.
-#' Direct cuVS NNDescent does not expose raw inner-product search, so public
-#' CUDA `method = "nndescent", metric = "inner_product"` is an expected
-#' unsupported combination. Public CUDA CAGRA supports raw inner product through
-#' the same maximum-inner-product-to-L2 transform used by direct cuVS brute-force
-#' and IVF/PQ routes. Public CUDA HNSW uses RAPIDS cuVS HNSW from
+#' Public CUDA HNSW uses RAPIDS cuVS HNSW from
 #' a CAGRA seed graph; metadata records that this is the cuVS wrapper design
 #' rather than a pure all-GPU HNSW search implementation.
 #' Public CUDA `method = "cagra"` can resolve to FAISS GPU CAGRA or direct cuVS
@@ -5462,30 +5469,6 @@ nn_cuda_auto_runtime_available <- function(metric,
         "CUDA auto Euclidean route is available through native CUDA, FAISS GPU, or cuVS."
       } else {
         "CUDA auto Euclidean route requires native CUDA, FAISS GPU, or cuVS support."
-      }
-    ))
-  }
-  if (identical(metric, "inner_product")) {
-    ok <- isTRUE(faiss_gpu_available_value) ||
-      isTRUE(cuvs_available_value)
-    return(list(
-      available = ok,
-      reason = if (ok) "available" else "missing_cuda_route",
-      notes = if (isTRUE(faiss_gpu_available_value)) {
-        paste(
-          "CUDA auto raw-inner-product route is shape-dependent on this runtime:",
-          "exact small/query searches can use FAISS GPU Flat IP, while large",
-          "self-KNN can use transformed FAISS GPU or direct cuVS CAGRA graph search."
-        )
-      } else if (isTRUE(cuvs_available_value)) {
-        paste(
-          "CUDA auto raw-inner-product route is shape-dependent on this runtime:",
-          "large self-KNN graph searches can use transformed direct cuVS CAGRA,",
-          "while small/query inner-product search needs FAISS GPU Flat IP or",
-          "an explicit transformed cuVS brute-force route."
-        )
-      } else {
-        "CUDA auto raw-inner-product search requires FAISS GPU Flat IP or transformed cuVS CAGRA/brute force."
       }
     ))
   }
@@ -5652,14 +5635,14 @@ nn_capability_row <- function(method, backend, metric) {
     exact <- TRUE
     if (identical(backend, "cpu")) {
       implementation <- "FAISS CPU Flat"
-      notes <- "CPU exact search supports all public metrics through FAISS Flat L2/IP routes, with cosine and correlation using normalized Flat IP transforms."
+      notes <- "CPU exact search supports all public metrics through FAISS Flat routes, with cosine and correlation using normalized Flat IP internally."
     } else {
       if (euclidean) {
         implementation <- "FAISS GPU Flat or cuVS brute force"
         notes <- "Euclidean CUDA exact/brute-force search can use FAISS GPU Flat when available, otherwise direct cuVS brute force when cuVS is available."
       } else {
         implementation <- "FAISS GPU Flat or transformed cuVS brute force"
-        notes <- "CUDA cosine, correlation, and inner-product exact/brute-force search can use FAISS GPU Flat metric-aware routes or direct cuVS brute force with exact metric transforms."
+        notes <- "CUDA cosine and correlation exact/brute-force search can use FAISS GPU Flat metric-aware routes or direct cuVS brute force with exact metric transforms."
       }
     }
   } else if (identical(method, "flat")) {
@@ -5698,16 +5681,12 @@ nn_capability_row <- function(method, backend, metric) {
       if (identical(method, "ivf")) "FAISS GPU IVF-Flat" else "FAISS GPU IVF-PQ"
     }
     notes <- if (identical(method, "ivf")) {
-      "FAISS IVF-Flat supports Euclidean/L2 and raw inner product; cosine/correlation use row transforms followed by IVF inner-product search."
+      "FAISS IVF-Flat supports Euclidean/L2; cosine/correlation use row transforms followed by IVF search."
     } else {
-      "FAISS IVFPQ supports Euclidean/L2 and raw inner product; cosine/correlation use row transforms followed by IVFPQ inner-product search."
+      "FAISS IVFPQ supports Euclidean/L2; cosine/correlation use row transforms followed by IVFPQ search."
     }
   } else if (identical(method, "ivfpq_fastscan")) {
-    supported <- if (identical(backend, "cpu")) {
-      metric %in% c("euclidean", "cosine", "correlation", "inner_product")
-    } else {
-      metric %in% c("euclidean", "cosine", "correlation", "inner_product")
-    }
+    supported <- all_metrics
     exact <- if (supported) FALSE else NA
     implementation <- if (identical(backend, "cpu")) {
       "FAISS CPU IVFPQ FastScan with Flat refinement"
@@ -5716,14 +5695,14 @@ nn_capability_row <- function(method, backend, metric) {
     }
     notes <- if (!supported) {
       if (identical(backend, "cpu")) {
-        "CPU IVFPQ FastScan supports Euclidean/L2, cosine, correlation, and raw inner product."
+        "CPU IVFPQ FastScan supports Euclidean/L2, cosine, and correlation."
       } else {
-        "CUDA IVFPQ FastScan supports Euclidean/L2, cosine, correlation, and raw inner-product search."
+        "CUDA IVFPQ FastScan supports Euclidean/L2, cosine, and correlation."
       }
     } else if (identical(backend, "cpu")) {
-      "Uses FAISS IndexIVFPQFastScan with 4-bit PQ lookup tables and optional Flat reranking; cosine normalizes rows and correlation centers/normalizes rows before FastScan L2, while raw inner product uses FastScan IP."
+      "Uses FAISS IndexIVFPQFastScan with 4-bit PQ lookup tables and optional Flat reranking; cosine normalizes rows and correlation centers/normalizes rows before FastScan L2."
     } else {
-      "Uses direct cuVS IVF-PQ with 4-bit compressed codes; cosine row-normalizes, correlation row-centers plus row-normalizes, and raw inner product applies a maximum-inner-product-to-L2 transform before cuVS L2 search and distance conversion. The route does not silently fall back to CPU FAISS FastScan."
+      "Uses direct cuVS IVF-PQ with 4-bit compressed codes; cosine row-normalizes, correlation row-centers plus row-normalizes. The route does not silently fall back to CPU FAISS FastScan."
     }
   } else if (identical(method, "nsg")) {
     supported <- all_metrics
@@ -5736,7 +5715,7 @@ nn_capability_row <- function(method, backend, metric) {
     notes <- if (identical(backend, "cpu")) {
       "Public CPU NSG uses faissR's native NSG-style candidate graph for all metrics to avoid unsafe linked-FAISS graph construction; large high-dimensional CPU inputs use a deterministic FAISS HNSW seed before compiled C++ NSG/MRNG-style pruning over compact candidate storage."
     } else if (supported) {
-      "CUDA NSG builds an NSG-style candidate graph, prunes it in compiled C++ over compact candidate storage, and refines candidates with the native CUDA row-candidate kernel; cosine/correlation use normalized Euclidean search and raw inner product uses shifted dot-product distances."
+      "CUDA NSG builds an NSG-style candidate graph, prunes it in compiled C++ over compact candidate storage, and refines candidates with the native CUDA row-candidate kernel; cosine/correlation use normalized Euclidean search."
     } else {
       "Unsupported CUDA NSG metric."
     }
@@ -5749,12 +5728,12 @@ nn_capability_row <- function(method, backend, metric) {
       "native Vamana candidate graph with CUDA refinement"
     }
     notes <- if (identical(backend, "cpu")) {
-      "Builds a DiskANN/Vamana-style robust-pruned candidate graph using compiled C++ pruning over compact candidate storage and refines top-k within candidate rows on CPU; large high-dimensional CPU inputs use a deterministic FAISS HNSW seed before robust pruning. Cosine/correlation use normalized Euclidean search and raw inner product uses shifted dot-product distances."
+      "Builds a DiskANN/Vamana-style robust-pruned candidate graph using compiled C++ pruning over compact candidate storage and refines top-k within candidate rows on CPU; large high-dimensional CPU inputs use a deterministic FAISS HNSW seed before robust pruning. Cosine/correlation use normalized Euclidean search."
     } else {
       "Builds a Vamana-style candidate graph using compiled C++ pruning over compact candidate storage and refines candidate rows with the native CUDA row-candidate kernel; cuVS Vamana currently builds/serializes DiskANN-compatible indexes but does not expose KNN search."
     }
   } else if (identical(method, "nndescent")) {
-    supported <- if (identical(backend, "cpu")) all_metrics else !identical(metric, "inner_product")
+    supported <- all_metrics
     exact <- if (supported) FALSE else NA
     implementation <- if (identical(backend, "cpu")) {
       "native CPU NNDescent"
@@ -5764,11 +5743,9 @@ nn_capability_row <- function(method, backend, metric) {
       NA_character_
     }
     notes <- if (identical(backend, "cpu")) {
-      "Native CPU NNDescent supports Euclidean/L2 and raw inner-product self-KNN; cosine/correlation use normalized Euclidean graph search. Seed neighbours use random-projection windows plus deterministic row fill, with flat row-major graph buffers and fixed-width reverse-neighbour storage in C++."
+      "Native CPU NNDescent supports Euclidean/L2 self-KNN; cosine/correlation use normalized Euclidean graph search. Seed neighbours use random-projection windows plus deterministic row fill, with flat row-major graph buffers and fixed-width reverse-neighbour storage in C++."
     } else if (supported) {
       "CUDA NN-descent uses direct RAPIDS cuVS NN-descent for Euclidean/L2 self-KNN; cosine/correlation use normalized Euclidean graph search."
-    } else {
-      "Direct cuVS NN-descent accepts one symmetric L2 graph dataset and cannot represent the asymmetric transform required for raw maximum inner product."
     }
   } else if (identical(method, "cagra")) {
     supported <- identical(backend, "cuda") && all_metrics
@@ -5776,8 +5753,6 @@ nn_capability_row <- function(method, backend, metric) {
     implementation <- if (identical(backend, "cuda")) "FAISS GPU CAGRA or cuVS CAGRA" else NA_character_
     notes <- if (!identical(backend, "cuda")) {
       "CAGRA is CUDA-only."
-    } else if (identical(metric, "inner_product")) {
-      "CUDA CAGRA uses a maximum-inner-product-to-L2 extra-dimension transform and converts returned L2 distances back to faissR's shifted inner-product distance convention."
     } else if (identical(backend, "cuda")) {
       "CUDA-only approximate graph search; faissR.cagra_implementation selects FAISS GPU CAGRA, direct cuVS CAGRA, or a deterministic shape-aware auto provider rule."
     } else {
@@ -6476,7 +6451,92 @@ nn_auto_select_shape_cpp <- function(resolved_backend,
       out[[field]] <- NA_character_
     }
   }
-  out
+  nn_auto_hardware_metadata(out)
+}
+
+nn_runtime_cpu_model <- function() {
+  override <- faissr_option("runtime_cpu_model", NA_character_)
+  override <- as.character(override)[1L]
+  if (!is.na(override) && nzchar(override)) return(override)
+  if (exists("cpu_model", envir = .faissR_auto_hardware_cache, inherits = FALSE)) {
+    return(.faissR_auto_hardware_cache$cpu_model)
+  }
+  value <- NA_character_
+  if (file.exists("/proc/cpuinfo")) {
+    lines <- tryCatch(readLines("/proc/cpuinfo", warn = FALSE), error = function(e) character())
+    hit <- grep("^model name\\s*:", lines, value = TRUE)
+    if (length(hit)) value <- trimws(sub("^[^:]+:", "", hit[[1L]]))
+  } else if (identical(Sys.info()[["sysname"]], "Darwin")) {
+    value <- tryCatch(
+      suppressWarnings(trimws(system2(
+        "sysctl", c("-n", "machdep.cpu.brand_string"), stdout = TRUE, stderr = FALSE
+      )[1L])),
+      error = function(e) NA_character_
+    )
+  }
+  if (length(value) != 1L || is.na(value) || !nzchar(value)) value <- NA_character_
+  .faissR_auto_hardware_cache$cpu_model <- value
+  value
+}
+
+nn_runtime_gpu_model <- function() {
+  override <- faissr_option("runtime_gpu_model", NA_character_)
+  override <- as.character(override)[1L]
+  if (!is.na(override) && nzchar(override)) return(override)
+  if (exists("gpu_model", envir = .faissR_auto_hardware_cache, inherits = FALSE)) {
+    return(.faissR_auto_hardware_cache$gpu_model)
+  }
+  value <- tryCatch(cuda_native_summary()$device, error = function(e) NA_character_)
+  value <- as.character(value)[1L]
+  if (is.na(value) || !nzchar(value)) value <- NA_character_
+  .faissR_auto_hardware_cache$gpu_model <- value
+  value
+}
+
+nn_normalize_hardware_name <- function(x) {
+  x <- tolower(as.character(x)[1L])
+  if (is.na(x) || !nzchar(x)) return(NA_character_)
+  gsub("[^a-z0-9]+", "", x)
+}
+
+nn_auto_hardware_metadata <- function(route) {
+  device <- as.character(route$predicted_device %||% NA_character_)[1L]
+  calibration_model <- if (identical(device, "cuda")) {
+    route$calibration_gpu_model %||% NA_character_
+  } else {
+    route$calibration_cpu_model %||% NA_character_
+  }
+  runtime_model <- if (identical(device, "cuda")) {
+    nn_runtime_gpu_model()
+  } else {
+    nn_runtime_cpu_model()
+  }
+  calibration_name <- nn_normalize_hardware_name(calibration_model)
+  runtime_name <- nn_normalize_hardware_name(runtime_model)
+  match_status <- if (is.na(calibration_name) || is.na(runtime_name)) {
+    "unknown"
+  } else if (identical(calibration_name, runtime_name)) {
+    "matched"
+  } else {
+    "mismatch"
+  }
+  route$runtime_hardware_device <- device
+  route$runtime_hardware_model <- runtime_model
+  route$runtime_logical_cores <- suppressWarnings(as.integer(parallel::detectCores(logical = TRUE)))
+  route$hardware_match_status <- match_status
+  route$hardware_evidence <- if (identical(match_status, "matched")) {
+    "calibration_hardware_matched"
+  } else {
+    "hardware_extrapolated_unvalidated"
+  }
+  route$hardware_policy_action <- "static_policy_retained_no_hardware_fallback"
+  route$hardware_conservative_fallback <- FALSE
+  route$hardware_evidence_note <- if (identical(match_status, "matched")) {
+    "Runtime accelerator model matches the frozen calibration profile; provider versions and data geometry remain relevant."
+  } else {
+    "The compiled policy is being applied outside a confirmed hardware match. Method selection is unchanged; target and timing evidence are calibration-informed, not validated on this machine."
+  }
+  route
 }
 
 nn_auto_selection_for_backend <- function(backend,
@@ -6611,8 +6671,8 @@ normalize_nn_metric <- function(metric) {
   key <- tolower(trimws(metric))
   if (!key %in% valid) {
     stop(
-      "`metric` must be one of \"euclidean\", \"cosine\", ",
-      "\"correlation\", or \"inner_product\".",
+      "`metric` must be one of \"euclidean\", \"cosine\", or ",
+      "\"correlation\".",
       call. = FALSE
     )
   }
@@ -7656,6 +7716,11 @@ nn_tuning_metadata <- function(params, prefix = NULL) {
   )
   fields <- fields[fields %in% names(params)]
   out <- params[fields]
+  out <- c(out, list(
+    target_recall_statistic = "mean_query_recall_at_k",
+    target_recall_replicate_rule = "all_prespecified_validation_replicates",
+    target_recall_min_query_role = "diagnostic_only"
+  ))
   if (!is.null(prefix) && length(out)) {
     names(out) <- paste0(prefix, names(out))
   }
@@ -7665,6 +7730,10 @@ nn_tuning_metadata <- function(params, prefix = NULL) {
 append_nn_tuning_metadata <- function(result, ..., .prefixes = NULL) {
   params <- list(...)
   if (!length(params)) return(result)
+  result$target_recall_statistic <- "mean_query_recall_at_k"
+  result$target_recall_replicate_rule <-
+    "all_prespecified_validation_replicates"
+  result$target_recall_min_query_role <- "diagnostic_only"
   approx <- attr(result, "approximation") %||% list()
   if (is.null(.prefixes)) .prefixes <- rep(list(NULL), length(params))
   for (i in seq_along(params)) {
@@ -10191,13 +10260,16 @@ grid_self_knn <- function(data,
 #'   \item `"ivfpq"`: compressed FAISS IVF-PQ approximate search.
 #'   \item `"ivfpq_fastscan"`: FAISS FastScan on CPU and the package's
 #'   separately identified cuVS 4-bit IVF-PQ route on CUDA.
-#'   \item `"vamana"`: a faissR robust-pruned candidate graph inspired by
-#'   DiskANN/Vamana, followed by CPU or CUDA candidate refinement.
-#'   \item `"nsg"`: a faissR NSG/MRNG-style candidate graph followed by CPU or
-#'   CUDA candidate refinement.
-#'   \item `"nndescent"`: native CPU NN-descent or direct cuVS NN-descent on
-#'   CUDA. CUDA raw inner product is unsupported because cuVS exposes a
-#'   symmetric one-dataset graph API.
+#'   \item `"vamana_style"` (`"vamana"` compatibility alias): a package-owned
+#'   robust-pruned candidate graph inspired by DiskANN/Vamana, followed by CPU
+#'   or CUDA candidate refinement. It is not a feature-complete Vamana
+#'   reproduction.
+#'   \item `"nsg_style"` (`"nsg"` compatibility alias): a package-owned
+#'   NSG/MRNG-style candidate graph followed by CPU or CUDA candidate
+#'   refinement. It is not a feature-complete NSG reproduction.
+#'   \item `"nndescent_style"` (`"nndescent"` compatibility alias): the
+#'   package-owned CPU NN-descent-style graph route or direct external-provider
+#'   cuVS NN-descent on CUDA.
 #'   \item `"cagra"`: CUDA-only FAISS GPU CAGRA or direct cuVS CAGRA. Use
 #'   `cagra_implementation` to request a provider explicitly.
 #' }
@@ -10215,7 +10287,7 @@ grid_self_knn <- function(data,
 #' FAISS library. arXiv 2024. See also the FAISS C++ API documentation.
 #'
 #' RAPIDS Development Team. RAPIDS cuVS: GPU-accelerated vector search and
-#' clustering. https://github.com/rapidsai/cuvs.
+#' clustering. https://github.com/NVIDIA/cuvs.
 #'
 #' Dong W, Moses C, Li K. Efficient k-nearest neighbor graph construction for
 #' generic similarity measures. WWW 2011:577-586.
@@ -10256,40 +10328,39 @@ grid_self_knn <- function(data,
 #' @param method Algorithm selector. `"auto"` chooses a shape-aware default for
 #'   the selected backend. Other values include `"exact"`, `"flat"`,
 #'   `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`,
-#'   `"ivfpq"`, `"vamana"`, `"nsg"`, `"nndescent"`,
-#'   `"ivfpq_fastscan"`, and `"cagra"`. Use these canonical
-#'   lowercase method labels; resolved implementation labels such as
+#'   `"ivfpq"`, `"vamana_style"`, `"nsg_style"`,
+#'   `"nndescent_style"`, `"ivfpq_fastscan"`, and `"cagra"`. The historical
+#'   shorter spellings `"vamana"`, `"nsg"`, and `"nndescent"` remain accepted
+#'   compatibility aliases. Use these public lowercase method labels; resolved
+#'   implementation labels such as
 #'   `"faiss_hnsw"` or `"cuda_cuvs_cagra"` are not public `method` values. Unsupported
 #'   backend/method combinations fail clearly; for example,
 #'   `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only,
-#'   and CUDA `method = "ivfpq_fastscan"` accepts Euclidean/L2, cosine,
-#'   correlation, and raw inner-product search. CPU FastScan accepts Euclidean,
-#'   cosine, correlation, and raw inner product; cosine is implemented by row
+#'   and CUDA `method = "ivfpq_fastscan"` accepts Euclidean/L2, cosine, and
+#'   correlation. CPU FastScan accepts the same metrics; cosine is implemented by row
 #'   L2 normalization, correlation by row centering plus L2 normalization
-#'   followed by FastScan L2 search, and raw inner product by FAISS FastScan IP.
-#'   CUDA raw inner product applies the maximum-inner-product-to-L2 transform
-#'   before direct cuVS 4-bit IVF-PQ search.
+#'   followed by FastScan L2 search.
+#'   The preferred names for package-owned graph refinement are
+#'   `"nsg_style"`, `"vamana_style"`, and `"nndescent_style"`; the shorter
+#'   names remain compatibility aliases. Native results explicitly report that
+#'   they are style implementations rather than feature-complete canonical
+#'   reproductions. CUDA cuVS NN-descent is identified separately as an
+#'   external-provider implementation.
 #' @param metric Distance metric. The intentionally small public set is
-#'   `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.
-#'   Legacy metric aliases such as `"l2"`, `"cor"`, `"pearson"`, `"ip"`,
-#'   `"dot"`, and `"innerproduct"` are rejected; use the canonical metric
-#'   names.
-#'   `"inner_product"` is the raw dot product, `"cosine"` is the dot product
-#'   after row L2 normalization, and `"correlation"` is centered cosine
+#'   `"euclidean"`, `"cosine"`, and `"correlation"`.
+#'   Legacy aliases such as `"l2"`, `"cor"`, `"pearson"`, and `"ip"` are
+#'   rejected; use the canonical metric names. `"cosine"` uses row L2
+#'   normalization, and `"correlation"` is centered cosine
 #'   similarity after subtracting each row mean and L2-normalizing each row.
-#'   For `metric = "inner_product"`, neighbours are ranked by larger raw dot
-#'   product, but returned `distances` keep faissR's smaller-is-better
-#'   convention: within each query row the best returned dot product has
-#'   distance `0`, and lower dot products have larger shifted distances.
 #'   `"euclidean"` is the validated high-performance default. `"cosine"` and
 #'   `"correlation"` are implemented for exact CPU KNN, native 2D/3D grid
 #'   search, FAISS CPU/GPU Flat,
 #'   FAISS CPU/GPU IVF-Flat, FAISS CPU/GPU IVFPQ, FAISS CPU FastScan,
 #'   CUDA cuVS IVFPQ FastScan for cosine and correlation,
-#'   FAISS CPU HNSW, and native graph-refinement routes. FAISS approximate
-#'   IP-capable routes use row L2 normalization
+#'   FAISS CPU HNSW, and native graph-refinement routes. Similarity-capable
+#'   routes use row L2 normalization
 #'   for cosine and row centering plus L2 normalization for correlation before
-#'   inner-product search; distances are returned as `1 - similarity`.
+#'   search; distances are returned as `1 - similarity`.
 #'   All-zero cosine rows and constant correlation rows are zero-normalized
 #'   edge cases: two zero-normalized rows have distance `0`, while a
 #'   zero-normalized row versus a nonzero row has distance `1`. CPU FAISS Flat
@@ -10302,16 +10373,8 @@ grid_self_knn <- function(data,
 #'   query workloads, FAISS HNSW for large non-Euclidean self-search, native
 #'   CPU NSG/Vamana refinement for selected larger self-KNN cases, and native
 #'   CPU NN-descent for other large self-KNN cases. CPU `method = "hnsw"` uses
-#'   FAISS HNSW for all metrics.
-#'   `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP,
-#'   FAISS IVF-Flat/IVFPQ IP, FAISS HNSW IP, native CPU NN-descent raw
-#'   dot-product search, direct cuVS brute force through an exact MIPS-to-L2
-#'   transform, direct cuVS IVF/PQ through transformed approximate L2 indexes,
-#'   CUDA CAGRA and CUDA cuVS HNSW through the same MIPS-to-L2 graph-search
-#'   transform. CUDA `method = "nndescent"` uses direct cuVS NN-descent and
-#'   does not support raw inner-product search.
-#'   Direct cuVS NN-descent does not expose a safe raw-inner-product route in
-#'   faissR. CUDA HNSW metadata records the available cuVS HNSW wrapper design.
+#'   FAISS HNSW for all three metrics. CUDA HNSW metadata records the available
+#'   cuVS HNSW wrapper design.
 #'   Unsupported backend combinations fail clearly instead of returning neighbours
 #'   computed under a different metric.
 #' @param tuning Tuning policy. `"auto"` uses deterministic compiled defaults
@@ -10372,7 +10435,10 @@ grid_self_knn <- function(data,
 #'   ignore this argument.
 #' @return A list with integer matrix `indices`, `distances`, and stable
 #'   metadata fields `index_base`, `distance_type`, `metric`, and
-#'   `backend_used`. Float32 routes also record `input_layout` and
+#'   `backend_used`. Every result declares `distance_is_metric`,
+#'   `distance_semantics`, `distance_comparable_across_queries`, and
+#'   `distance_order`.
+#'   Float32 routes also record `input_layout` and
 #'   `input_owns_data` so downstream packages can distinguish direct float32
 #'   payload use from one-time row-major conversion. Normalized Euclidean graph
 #'   routes for cosine/correlation record `metric_transform` and
@@ -10385,7 +10451,11 @@ grid_self_knn <- function(data,
 #'   `attr(result, "auto_selection")`, a static shape/k/metric decision record
 #'   that records the predicted internal backend, public method class, device
 #'   class, explicit backend/method flags, backend/method decision reasons, and
-#'   does not run pilot tuning. CPU FAISS Flat/HNSW/IVF/IVFPQ/FastScan routes use a
+#'   hardware provenance. A capability-compatible machine that differs from
+#'   the calibration hardware keeps the compiled policy but is labelled
+#'   `hardware_extrapolated_unvalidated`; hardware identity alone never causes
+#'   a silent method or device fallback. The selector does not run pilot
+#'   tuning. CPU FAISS Flat/HNSW/IVF/IVFPQ/FastScan routes use a
 #'   bounded session-local fitted-index cache for repeated raw `nn()` calls
 #'   with matching data and parameters. CUDA `method = "ivfpq_fastscan"` also
 #'   reuses a fitted cuVS IVF-PQ index, dataset device buffer, and cuVS resources
@@ -10400,13 +10470,12 @@ grid_self_knn <- function(data,
 #'   `options(faissR.cache_fitted_nn_indexes_max_entries = <n>)`, or bound CUDA
 #'   FastScan GPU memory with
 #'   `options(faissR.cache_fitted_cuda_ivfpq_indexes_max_entries = <n>)`.
-#'   CPU Euclidean, cosine, correlation, and raw inner-product
+#'   CPU Euclidean, cosine, and correlation
 #'   `method = "ivfpq_fastscan"` resolve `tuning = "auto"` in C++ from
 #'   shape/k/target-recall defaults for `nlist`, `nprobe`, `pq_m`,
 #'   `refine_factor`, and FastScan block size. Cosine uses row L2 normalization
-#'   and correlation uses row centering plus L2 normalization before FastScan L2;
-#'   raw inner product uses FastScan IP. CUDA FastScan cosine, correlation, and
-#'   raw-inner-product auto policies are seeded from the CUDA Euclidean
+#'   and correlation uses row centering plus L2 normalization before FastScan L2.
+#'   CUDA FastScan cosine and correlation auto policies are seeded from the CUDA Euclidean
 #'   FastScan table until metric-specific HPC sweeps replace them, and those
 #'   rows report `tuning_benchmark_target_met = FALSE`.
 #' @examples
@@ -10414,15 +10483,14 @@ grid_self_knn <- function(data,
 #' knn_euclidean <- nn(x, k = 16, metric = "euclidean", backend = "cpu")
 #' knn_cosine <- nn(x, k = 16, metric = "cosine", backend = "cpu")
 #' knn_correlation <- nn(x, k = 16, metric = "correlation", backend = "cpu")
-#' knn_ip <- nn(x, k = 16, metric = "inner_product", backend = "cpu")
 #' @export
 nn <- function(data,
                points = data,
                k = NULL,
                exclude_self = FALSE,
                backend = NULL,
-               method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"),
-               metric = c("euclidean", "cosine", "correlation", "inner_product"),
+               method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana_style", "nsg_style", "nndescent_style", "ivfpq_fastscan", "cagra"),
+               metric = c("euclidean", "cosine", "correlation"),
                tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                target_recall = 0.99,
                cagra_implementation = NULL,
@@ -10430,9 +10498,13 @@ nn <- function(data,
                output = c("double", "float"),
                distances = NULL,
                n_threads = NULL) {
+  if (missing(method)) method <- "auto"
+  if (missing(metric)) metric <- "euclidean"
+  if (missing(tuning)) tuning <- "auto"
   set_call_cagra_implementation(cagra_implementation)
   set_call_cagra_build_algo(cagra_build_algo)
   points_missing <- missing(points)
+  requested_method_input <- trimws(as.character(method)[1L])
   exclude_self <- normalize_scalar_logical_arg(exclude_self, "exclude_self", default = FALSE)
   backend <- normalize_nn_backend_arg(backend)
   method <- normalize_nn_method(method)
@@ -10486,10 +10558,18 @@ nn <- function(data,
   )
   attr(result, "requested_backend") <- backend
   attr(result, "requested_method") <- public_nn_method_label(method)
+  result$requested_method_input <- requested_method_input
+  attr(result, "requested_method_input") <- requested_method_input
   attr(result, "tuning") <- tuning
   attr(result, "target_recall") <- target_recall
   result$exclude_self <- isTRUE(exclude_self)
   attr(result, "exclude_self") <- result$exclude_self
+  result <- attach_nn_method_implementation_contract(
+    result,
+    requested_method = method,
+    backend_used = result$backend_used %||% attr(result, "backend_used") %||%
+      attr(result, "resolved_backend")
+  )
   if (!is.null(auto_selection)) attr(result, "auto_selection") <- auto_selection
   finalize_nn_output(result, output)
 }
@@ -10503,8 +10583,7 @@ nn <- function(data,
 #' KNN output on the CUDA device.
 #'
 #' @details
-#' This is intentionally narrower than `nn()`: for Euclidean and raw
-#' inner-product
+#' This is intentionally narrower than `nn()`: for Euclidean
 #' `method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`, `nn_gpu()`
 #' uses a FAISS GPU direct `bfKnn` route and keeps the result buffers on the
 #' CUDA device when FAISS GPU is available. Euclidean inputs with two or three
@@ -10513,8 +10592,7 @@ nn <- function(data,
 #' low-dimensional vectors while retaining GPU-resident results. When FAISS
 #' was built with cuVS
 #' support, FAISS may dispatch the brute-force GPU distance primitive through
-#' cuVS internally. Raw inner-product results are converted on the CUDA device
-#' from FAISS similarities to faissR's shifted smaller-is-better distance.
+#' cuVS internally.
 #' Cosine and correlation currently keep using the native CUDA GPU-resident
 #' exact route; they are transformed to normalized squared L2 on the C++ side
 #' and stored as `1 - similarity`. Approximate cuVS/FAISS GPU methods currently
@@ -10528,8 +10606,7 @@ nn <- function(data,
 #' `auto_residency_constraint`. It also records the actual exact-family
 #' `execution_tuning` used by the GPU-resident route and the
 #' `auto_preferred_tuning` row for the approximate method selected by the
-#' compiled policy, including inner-product CAGRA/IVF/graph settings when
-#' available.
+#' compiled policy when available.
 #'
 #' @param data Numeric matrix/data frame or optional `float::fl()`/`float32`
 #'   reference matrix.
@@ -10540,8 +10617,7 @@ nn <- function(data,
 #' @param method `"auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. `"auto"`
 #'   consults the compiled shape/k/metric/target-recall selector but currently
 #'   returns GPU-resident exact-family buffers.
-#' @param metric `"euclidean"`, `"cosine"`, `"correlation"`, or
-#'   `"inner_product"`.
+#' @param metric `"euclidean"`, `"cosine"`, or `"correlation"`.
 #' @param tuning Tuning label to record. The current GPU-resident route is exact,
 #'   so `target_recall` is metadata for the executed route; auto-selected
 #'   approximate settings are recorded separately as `auto_preferred_tuning`.
@@ -10550,7 +10626,8 @@ nn <- function(data,
 #' @return A `faissR_gpu_knn` list. It contains an owning `handle`, non-owning
 #'   `indices_ptr` and `distances_ptr`, `n_query`, `k`, `index_base = 1L`,
 #'   `indices_type = "int32"`, `distance_type = "float32"`, `layout`, `metric`,
-#'   and `backend_used`. With `tuning = "auto"`, it also includes
+#'   and `backend_used`. The object also declares the same distance-contract
+#'   fields as `nn()`. With `tuning = "auto"`, it also includes
 #'   `execution_tuning`; with `method = "auto"`, it includes
 #'   `auto_preferred_tuning` when the compiled selector has a preferred CUDA
 #'   method/tuning row.
@@ -10566,9 +10643,12 @@ nn_gpu <- function(data,
                    k = NULL,
                    exclude_self = FALSE,
                    method = c("auto", "exact", "flat", "bruteforce"),
-                   metric = c("euclidean", "cosine", "correlation", "inner_product"),
+                   metric = c("euclidean", "cosine", "correlation"),
                    tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                    target_recall = 0.99) {
+  if (missing(method)) method <- "auto"
+  if (missing(metric)) metric <- "euclidean"
+  if (missing(tuning)) tuning <- "auto"
   points_missing <- missing(points)
   method <- normalize_scalar_choice_arg(
     method,
@@ -10801,7 +10881,7 @@ nn_gpu <- function(data,
         isTRUE(auto_preferred_tuning$tuning_benchmark_target_met)
     }
   }
-  out
+  attach_nn_distance_contract(out, metric)
 }
 
 #' Copy a GPU-resident KNN result to host matrices
@@ -10812,7 +10892,8 @@ nn_gpu <- function(data,
 #'
 #' @param x A `faissR_gpu_knn` object.
 #' @return A host `faissR_nn` list with integer `indices` and numeric
-#'   `distances`.
+#'   `distances`. The distance-contract metadata from the GPU object is
+#'   retained.
 #' @examples
 #' if (cuda_available()) {
 #'   x <- matrix(rnorm(200), ncol = 4)
@@ -10825,7 +10906,8 @@ gpu_knn_to_host <- function(x) {
   if (!inherits(x, "faissR_gpu_knn")) {
     stop("`x` must be a `faissR_gpu_knn` object.", call. = FALSE)
   }
-  gpu_knn_to_host_cpp(x)
+  out <- gpu_knn_to_host_cpp(x)
+  attach_nn_distance_contract(out, x$metric %||% attr(x, "metric") %||% "euclidean")
 }
 
 #' @export
@@ -10836,6 +10918,10 @@ print.faissR_gpu_knn <- function(x, ...) {
   cat("  shape:   ", as.integer(x$n_query %||% NA_integer_), " x ",
       as.integer(x$k %||% NA_integer_), "\n", sep = "")
   cat("  result:  CUDA device pointers (indices int32, distances float32)\n")
+  if (identical(x$metric %||% attr(x, "metric"), "inner_product")) {
+    cat("  values:  query-specific shifted inner product; not a metric or ",
+        "cross-query comparable\n", sep = "")
+  }
   invisible(x)
 }
 
@@ -10909,6 +10995,11 @@ print.faissR_nn <- function(x, ...) {
   metric <- attr(x, "metric")
   if (!is.null(metric) && !is.na(metric)) {
     cat("  metric: ", metric, "\n", sep = "")
+  }
+  if (!is.null(x$implementation_label) &&
+      identical(x$implementation_scope, "package_owned_style_implementation")) {
+    cat("  implementation: ", x$implementation_label, "\n", sep = "")
+    cat("  canonical reproduction: no\n")
   }
   if (!isTRUE(attr(x, "exact"))) {
     cat("  exact: false\n")

@@ -316,7 +316,7 @@ if (nzchar(results_root)) {
   aggregator <- Sys.getenv(
     "FAISSR_JSS_AGGREGATOR",
     unset = file.path(
-      package_root, "benchmark_scripts", "jmlr_mloss_publication",
+      package_root, "benchmark_scripts", "jss_reproduction",
       "analysis", "aggregate_publication_results.R"
     )
   )

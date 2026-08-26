@@ -651,11 +651,37 @@ Rcpp::List make_faiss_gpu_knn_result(FaissGpuKnnHandle* handle,
     out["metric_transform"] = "maximum_inner_product_search_then_row_best_shifted_distance";
     out["distance_transform"] = "inner_product_similarity_shifted_to_distance";
   }
+  out["distance_order"] = "smaller_is_better";
+  out["similarity_materialized"] = false;
+  if (metric == "euclidean") {
+    out["distance_is_metric"] = true;
+    out["distance_semantics"] = "euclidean_distance";
+    out["distance_comparable_across_queries"] = true;
+  } else if (metric == "cosine") {
+    out["distance_is_metric"] = false;
+    out["distance_semantics"] = "one_minus_cosine_similarity";
+    out["distance_comparable_across_queries"] = true;
+  } else if (metric == "correlation") {
+    out["distance_is_metric"] = false;
+    out["distance_semantics"] = "one_minus_row_centered_cosine_similarity";
+    out["distance_comparable_across_queries"] = true;
+  } else {
+    out["distance_is_metric"] = false;
+    out["distance_semantics"] = "query_specific_shifted_inner_product";
+    out["distance_comparable_across_queries"] = false;
+    out["similarity_semantics"] = "raw_inner_product";
+    out["similarity_order"] = "larger_is_better";
+  }
   out.attr("class") = Rcpp::CharacterVector::create("faissR_gpu_knn", "list");
   out.attr("metric") = metric;
   out.attr("backend_used") = backend_used;
   out.attr("resolved_backend") = backend_used;
   out.attr("result_residency") = "cuda";
+  out.attr("distance_is_metric") = out["distance_is_metric"];
+  out.attr("distance_semantics") = out["distance_semantics"];
+  out.attr("distance_comparable_across_queries") =
+    out["distance_comparable_across_queries"];
+  out.attr("distance_order") = "smaller_is_better";
   UNPROTECT(3);
   return out;
 }

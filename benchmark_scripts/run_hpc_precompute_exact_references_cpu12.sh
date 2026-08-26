@@ -39,7 +39,7 @@ export R_BIN="${R_BIN:-Rscript}"
 
 export DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41,TabulaMuris}"
 export K_VALUES="${K_VALUES:-15,30,50,100}"
-export METRICS="${METRICS:-euclidean,cosine,correlation,inner_product}"
+export METRICS="${METRICS:-euclidean,cosine,correlation}"
 
 export OMP_NUM_THREADS="${THREADS_CPU}"
 export OPENBLAS_NUM_THREADS="${THREADS_CPU}"

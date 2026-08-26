@@ -89,6 +89,10 @@ project_embedding_affine_parallel_cpp <- function(reference_data, query_data, re
     .Call(`_faissR_project_embedding_affine_parallel_cpp`, reference_data, query_data, reference_layout, projection_indices, projection_distances, max_neighbors, ridge, max_extrapolation, n_threads)
 }
 
+inner_product_scores_float32_cpp <- function(data, points, indices, cores) {
+    .Call(`_faissR_inner_product_scores_float32_cpp`, data, points, indices, cores)
+}
+
 nn_cpp <- function(data, points, k, method, square, sorted, p, parallel, cores, exclude_self) {
     .Call(`_faissR_nn_cpp`, data, points, k, method, square, sorted, p, parallel, cores, exclude_self)
 }

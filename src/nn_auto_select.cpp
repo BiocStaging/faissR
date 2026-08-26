@@ -725,23 +725,6 @@ const HnswCpuTuningSpec* hnsw_cpu_correlation_benchmark_spec(const std::string& 
 const HnswCpuTuningSpec* hnsw_cpu_inner_product_benchmark_spec(const std::string& shape_group,
                                                                int k_bucket,
                                                                int target_code) {
-  if (const auto* override_spec = jmlr_match_shape_spec(
-        jmlr_cpu_hnsw_inner_product_specs,
-        shape_group,
-        k_bucket,
-        target_code)) {
-    static thread_local HnswCpuTuningSpec adapted;
-    adapted = {
-      override_spec->shape_group,
-      override_spec->k_bucket,
-      override_spec->target_code,
-      override_spec->m,
-      override_spec->ef_construction,
-      override_spec->ef_search,
-      override_spec->basis
-    };
-    return &adapted;
-  }
   static const HnswCpuTuningSpec specs[] = {
     {"large_high_dim", 15, 90, 48, 320, 400, "best_recall_below_target_hnsw_recall90_coverage_3of3"},
     {"large_high_dim", 15, 95, 48, 320, 400, "best_recall_below_target_hnsw_recall95_coverage_3of3"},
@@ -1436,6 +1419,14 @@ List nn_auto_select_backend_cpp(std::string resolved_backend,
     _["target_recall"] = target_recall,
     _["requested_target_recall"] = target_recall_option,
     _["target_recall_code"] = target_recall_code,
+    _["calibration_hardware_profile_id"] = "uct_hpc_cpu12_nvidia_l40s_2026",
+    _["calibration_cpu_model"] = CharacterVector::create(NA_STRING),
+    _["calibration_cpu_threads"] = 12,
+    _["calibration_gpu_model"] = "NVIDIA L40S",
+    _["calibration_gpu_host_threads"] = 2,
+    _["calibration_gpu_memory_gib"] = 44.39,
+    _["calibration_gpu_driver"] = "595.58.03",
+    _["hardware_policy_portability"] = "static_policy_applied_on_capability_compatible_runtime",
     _["cuda_auto_rule"] = cuda_auto_rule,
     _["cuda_auto_shape_group"] = cuda_auto_shape_group,
     _["auto_method_policy"] = cuda_auto_rule.empty() ? "" : "cuda_flat_ivf_shape_k_target_recall",

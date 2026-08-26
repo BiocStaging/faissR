@@ -311,6 +311,20 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// inner_product_scores_float32_cpp
+NumericMatrix inner_product_scores_float32_cpp(SEXP data, SEXP points, IntegerMatrix indices, int cores);
+RcppExport SEXP _faissR_inner_product_scores_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP indicesSEXP, SEXP coresSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type points(pointsSEXP);
+    Rcpp::traits::input_parameter< IntegerMatrix >::type indices(indicesSEXP);
+    Rcpp::traits::input_parameter< int >::type cores(coresSEXP);
+    rcpp_result_gen = Rcpp::wrap(inner_product_scores_float32_cpp(data, points, indices, cores));
+    return rcpp_result_gen;
+END_RCPP
+}
 // nn_cpp
 List nn_cpp(NumericMatrix data, NumericMatrix points, int k, std::string method, bool square, bool sorted, double p, bool parallel, int cores, bool exclude_self);
 RcppExport SEXP _faissR_nn_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP methodSEXP, SEXP squareSEXP, SEXP sortedSEXP, SEXP pSEXP, SEXP parallelSEXP, SEXP coresSEXP, SEXP exclude_selfSEXP) {
@@ -2118,6 +2132,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_project_embedding_knn_cpp", (DL_FUNC) &_faissR_project_embedding_knn_cpp, 3},
     {"_faissR_project_embedding_affine_cpp", (DL_FUNC) &_faissR_project_embedding_affine_cpp, 8},
     {"_faissR_project_embedding_affine_parallel_cpp", (DL_FUNC) &_faissR_project_embedding_affine_parallel_cpp, 9},
+    {"_faissR_inner_product_scores_float32_cpp", (DL_FUNC) &_faissR_inner_product_scores_float32_cpp, 4},
     {"_faissR_nn_cpp", (DL_FUNC) &_faissR_nn_cpp, 10},
     {"_faissR_nndescent_candidate_matrix_cpp", (DL_FUNC) &_faissR_nndescent_candidate_matrix_cpp, 3},
     {"_faissR_nndescent_candidate_matrix_adaptive_cpp", (DL_FUNC) &_faissR_nndescent_candidate_matrix_adaptive_cpp, 6},

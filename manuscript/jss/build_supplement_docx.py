@@ -20,6 +20,11 @@ REFERENCE = HERE / "faissR_jss.docx"
 
 def word_source(source: str) -> str:
     """Normalize LaTeX constructs that Pandoc does not map cleanly to Word."""
+    source = re.sub(
+        r"\\path\{([^{}]+)\}",
+        lambda match: r"\texttt{" + match.group(1).replace("_", r"\_") + "}",
+        source,
+    )
     source = source.replace(r"\textsuperscript{\(\dagger\)}", " ")
     source = source.replace(r"\dagger", "co-first")
     source = source.replace(r"\ast", "corresponding")

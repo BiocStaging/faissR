@@ -12,7 +12,7 @@
 
 1. Johnson J, Douze M, Jegou H. Billion-scale similarity search with GPUs. IEEE Trans Big Data 2021;7:535-47.
 2. Douze M, Guzhva A, Deng C, Johnson J, Szilvasy G, Mazaré PE, et al. The FAISS library. arXiv 2024. Available from: https://github.com/facebookresearch/faiss.
-3. RAPIDS Development Team. RAPIDS cuVS: GPU-accelerated vector search and clustering [software]. Available from: https://github.com/rapidsai/cuvs.
+3. RAPIDS Development Team. RAPIDS cuVS: GPU-accelerated vector search and clustering [software]. Available from: https://github.com/NVIDIA/cuvs.
 4. Dong W, Moses C, Li K. Efficient k-nearest neighbor graph construction for generic similarity measures. In: Proceedings of the 20th International Conference on World Wide Web; 2011. p. 577-86.
 5. Malkov YA, Yashunin DA. Efficient and robust approximate nearest neighbor search using hierarchical navigable small world graphs. IEEE Trans Pattern Anal Mach Intell 2020;42:824-36.
 6. Jégou H, Douze M, Schmid C. Product quantization for nearest neighbor search. IEEE Trans Pattern Anal Mach Intell 2011;33:117-28.
@@ -24,7 +24,7 @@
 16. FAISS Project. C++ API documentation. Available from: https://faiss.ai/cpp_api/classlist.html.
 20. Yianilos PN. Data structures and algorithms for nearest neighbor search in general metric spaces. In: Proceedings of the Fourth Annual ACM-SIAM Symposium on Discrete Algorithms; 1993. p. 311-21.
 21. Fu C, Xiang C, Wang C, Cai D. Fast approximate nearest neighbor search with the navigating spreading-out graph. Proc VLDB Endow 2019;12:461-74.
-22. RAPIDS Development Team. cuVS HNSW C API documentation. Available from: https://docs.rapids.ai/api/cuvs/stable/c_api/neighbors_hnsw_c/.
+22. RAPIDS Development Team. cuVS: Vector Search and Clustering on the GPU. Available from: https://github.com/NVIDIA/cuvs.
 23. Kim J. CUHNSW: CUDA implementation of Hierarchical Navigable Small World Graph algorithm [software, Apache-2.0]. Available from: https://github.com/js1010/cuhnsw.
 24. Subramanya SJ, Devvrit, Kadekodi R, Krishaswamy R, Simhadri HV. DiskANN: Fast Accurate Billion-point Nearest Neighbor Search on a Single Node. NeurIPS 2019.
 25. Groh F, Ruppert L, Wieschollek P, Lensch HPA. GGNN: Graph-based GPU Nearest Neighbor Search. IEEE Trans Big Data 2023.

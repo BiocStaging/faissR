@@ -26,14 +26,11 @@ head(nn_res$distances)
 ## Non-Euclidean Metrics
 
 Cosine and correlation use validated exact CPU paths, FAISS Flat/IVF/IVFPQ
-CPU/GPU routes through normalized inner-product search, and FAISS CPU HNSW when
-selected. Inner-product search is available for exact CPU scoring and validated
 FAISS IP-capable routes where supported.
 
 ```r
 knn_cos <- nn(x, k = 15, backend = "auto", metric = "cosine", n_threads = 4)
 knn_ip <- nn(x, k = 15, backend = "cpu", method = "flat",
-             metric = "inner_product", n_threads = 4)
 ```
 
 ## kNN Classifier

@@ -26,10 +26,10 @@ split_arg <- function(value, default) {
 
 normalize_metric_arg <- function(value) {
   key <- tolower(trimws(as.character(value %||% "euclidean")[[1L]]))
-  valid <- c("euclidean", "cosine", "correlation", "inner_product")
+  valid <- c("euclidean", "cosine", "correlation")
   if (!key %in% valid) {
     stop(
-      "`metrics` must contain only euclidean, cosine, correlation, or inner_product.",
+      "`metrics` must contain only euclidean, cosine, or correlation.",
       call. = FALSE
     )
   }

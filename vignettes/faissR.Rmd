@@ -266,21 +266,26 @@ try(
 
 # Metrics
 
+The package-owned candidate-graph refinements use the preferred request names
+`nsg_style`, `vamana_style`, and `nndescent_style`. The shorter historical names
+remain compatibility aliases. Returned metadata and `print()` explicitly state
+that these are style implementations rather than canonical reproductions;
+`preferred_public_method` records the unambiguous spelling, and
+direct cuVS NN-descent is identified as an external-provider route.
+
 The public metric set is intentionally small:
 
 - `euclidean`;
 - `cosine`;
-- `correlation`;
-- `inner_product`.
+- `correlation`.
 
 Cosine normalizes each row before searching. Correlation first centers each row
-and then applies row normalization. Inner product ranks neighbours by larger
-raw dot product, while returned distances keep faissR's smaller-is-better
-convention.
+and then applies row normalization. Every result declares whether its values
+form a metric and whether they are comparable across query rows.
 
 ```{r metrics}
 metric_results <- lapply(
-    c("euclidean", "cosine", "correlation", "inner_product"),
+    c("euclidean", "cosine", "correlation"),
     function(metric) {
         out <- nn(
             x,
@@ -446,8 +451,8 @@ if (cuda_available()) {
 the GPU and copies them back to R only when `gpu_knn_to_host()` is called
 explicitly. Its current public method set is intentionally limited to
 `"auto"`, `"exact"`, `"flat"`, and `"bruteforce"`. Euclidean inputs with more
-than three columns and raw inner product use the FAISS GPU direct brute-force
-primitive when available. Two- and three-dimensional Euclidean inputs use a
+than three columns use the FAISS GPU direct brute-force primitive when
+available. Two- and three-dimensional Euclidean inputs use a
 native direct-difference CUDA kernel to avoid float32 cancellation for nearly
 coincident vectors. Cosine and correlation use the native CUDA exact route
 after their documented row transformations. If ordinary

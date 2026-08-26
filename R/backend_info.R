@@ -47,11 +47,11 @@ backend_info <- function() {
       "grid, flat, bruteforce, hnsw, ivf, ivfpq, ivfpq_fastscan, vamana, nsg, nndescent, cagra where compiled"
     ),
     supported_metrics = c(
-      "euclidean, cosine, correlation, inner_product; method-specific exclusions in nn_capabilities()",
-      "euclidean, cosine, correlation, inner_product for Flat/IVF/IVFPQ/HNSW and CPU IVFPQ FastScan where FastScan is available; public NSG uses the native CPU route for all metrics, with deterministic FAISS HNSW seeding on large high-dimensional CPU inputs, while explicit FAISS NSG is Euclidean-only",
-      "euclidean, cosine, correlation, inner_product for IVF/IVFPQ and CAGRA; CAGRA inner_product uses a maximum-inner-product-to-L2 transform",
-      "euclidean, cosine, correlation, inner_product for direct brute force, direct IVF/PQ, HNSW from CAGRA, and direct CAGRA using metric transforms where needed; euclidean plus normalized cosine/correlation for direct cuVS NN-descent; raw inner product is unsupported for CUDA NN-descent because its symmetric one-dataset graph API cannot use the asymmetric MIPS transform",
-      "euclidean, cosine, correlation, inner_product where the selected CUDA method supports the metric"
+      "euclidean, cosine, correlation; method-specific exclusions in nn_capabilities()",
+      "euclidean, cosine, correlation for Flat/IVF/IVFPQ/HNSW and CPU IVFPQ FastScan where FastScan is available; public NSG uses the native CPU route, with deterministic FAISS HNSW seeding on large high-dimensional CPU inputs, while explicit FAISS NSG is Euclidean-only",
+      "euclidean, cosine, correlation for IVF/IVFPQ and CAGRA",
+      "euclidean, cosine, correlation for direct brute force, direct IVF/PQ, HNSW from CAGRA, direct CAGRA, and direct cuVS NN-descent using metric transforms where needed",
+      "euclidean, cosine, correlation where the selected CUDA method supports the metric"
     ),
     resolved_route = c(
       "implementation label: cpu",

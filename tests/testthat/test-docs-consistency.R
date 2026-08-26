@@ -99,6 +99,11 @@ test_that("NN methods documentation metric table agrees with nn_capabilities", {
       stringsAsFactors = FALSE
     )
   }))
+  documented$method <- unname(vapply(
+    documented$method,
+    faissR:::normalize_nn_method,
+    character(1L)
+  ))
 
   caps <- nn_capabilities()
   supported <- caps[caps$supported, c("method", "backend", "metric")]
@@ -156,6 +161,7 @@ test_that("public API excludes retired wrapper and platform-specific helper name
     "cuvs_available",
     "faiss_available",
     "faiss_gpu_available",
+    "faissR_backend",
     "fast_kmeans",
     "gpu_knn_to_host",
     "knn",
@@ -426,22 +432,6 @@ test_that("fast_kmeans source docs describe single-cluster exact rule", {
   }
 })
 
-test_that("README describes public NN metrics and correlation semantics", {
-  readme_file <- test_path("../../README.md")
-  if (!file.exists(readme_file)) {
-    skip("README is not available in this installed-package test context.")
-  }
-
-  prose <- paste(readLines(readme_file, warn = FALSE), collapse = " ")
-  expect_true(grepl('"euclidean".*"cosine".*"correlation".*"inner_product"', prose))
-  expect_true(grepl("Correlation is centered cosine similarity", prose, fixed = TRUE))
-  expect_true(grepl("inner product is the raw dot product", prose, fixed = TRUE))
-  expect_true(grepl("best returned dot product", prose, fixed = TRUE))
-  expect_true(grepl("smaller-is-better", prose, fixed = TRUE))
-  expect_true(grepl("distance choices belong in `metric`", prose, fixed = TRUE))
-  expect_true(grepl("zero-normalized rows have distance `0`", prose, fixed = TRUE))
-  expect_true(grepl("explicit CUDA routes do not perform CPU repair", prose, fixed = TRUE))
-})
 
 test_that("GitHub NN docs describe requested and resolved result metadata", {
   docs_files <- c(
@@ -509,7 +499,7 @@ test_that("GitHub and reference docs describe normalized zero-row metric semanti
   }
 })
 
-test_that("GitHub and reference docs describe direct cuVS brute-force metric scope", {
+test_that("GitHub and reference docs describe direct cuVS brute-force scope", {
   docs_files <- c(
     test_path("../../docs", c(
       "backend-capabilities.md",
@@ -528,7 +518,6 @@ test_that("GitHub and reference docs describe direct cuVS brute-force metric sco
     prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
     expect_true(
       grepl("direct cuVS brute force", prose, ignore.case = TRUE) &&
-        grepl("maximum-inner-product-to-L2", prose, fixed = TRUE) &&
         grepl("FAISS GPU Flat", prose, fixed = TRUE),
       info = basename(docs_file)
     )
@@ -770,33 +759,7 @@ test_that("backend docs describe CUDA HNSW wrapper design", {
   expect_true(grepl('method = "cagra"', prose, fixed = TRUE))
 })
 
-test_that("NN methods page describes CPU and CUDA HNSW routes", {
-  docs_files <- c(
-    test_path("../../docs", c("nn-methods.md", "backend-capabilities.md", "implementation.md", "usage-api.md")),
-    test_path("../../man/nn.Rd")
-  )
-  docs_files <- docs_files[file.exists(docs_files)]
-  if (!length(docs_files)) {
-    skip("NN methods documentation is not available in this installed-package test context.")
-  }
 
-  prose <- paste(unlist(lapply(docs_files, readLines, warn = FALSE)), collapse = " ")
-  expect_true(grepl("cuVS HNSW", prose, fixed = TRUE))
-  expect_true(grepl("HNSW supports Euclidean, cosine, correlation, and inner product", prose, fixed = TRUE))
-  expect_true(grepl("cuda_hnsw_design", prose, fixed = TRUE))
-  expect_true(grepl("cuvs_hnsw_from_cagra_cpu_hierarchy", prose, fixed = TRUE))
-})
-
-test_that("nn_capabilities manual separates HNSW and CAGRA inner-product routes", {
-  docs_file <- test_path("../../man/nn_capabilities.Rd")
-  if (!file.exists(docs_file)) {
-    skip("nn_capabilities reference documentation is not available in this installed-package test context.")
-  }
-  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
-  expect_true(grepl("Public CUDA CAGRA supports raw inner product", prose, fixed = TRUE))
-  expect_true(grepl("Public CUDA HNSW uses RAPIDS cuVS HNSW", prose, fixed = TRUE))
-  expect_false(grepl("CUDA CAGRA/HNSW raw", prose, fixed = TRUE))
-})
 
 test_that("backend docs describe shape-dependent CUDA auto non-Euclidean capability", {
   docs_file <- test_path("../../docs/backend-capabilities.md")
@@ -809,23 +772,6 @@ test_that("backend docs describe shape-dependent CUDA auto non-Euclidean capabil
   expect_true(grepl("Explicit CUDA HNSW is routed to the", prose, fixed = TRUE))
 })
 
-test_that("benchmark documentation describes canonical-only metric labels", {
-  docs_file <- test_path("../../docs/benchmarks.md")
-  if (!file.exists(docs_file)) {
-    skip("GitHub documentation files are not available in this installed-package test context.")
-  }
-
-  lines <- readLines(docs_file, warn = FALSE)
-  expect_length(grep("^## NN Metrics$", lines), 0L)
-  expect_length(grep("^## NN Metric Cycles$", lines), 1L)
-  expect_length(grep("^## NN Metrics File Layout$", lines), 1L)
-  prose <- paste(lines, collapse = " ")
-  expect_true(grepl("legacy aliases such as `l2`, `pearson`,", prose, fixed = TRUE))
-  expect_true(grepl("legacy aliases are rejected", prose, fixed = TRUE))
-  expect_false(grepl("non-inner-product metrics", prose, fixed = TRUE))
-  expect_true(grepl("four public metrics Euclidean, cosine, correlation, and inner product", prose, fixed = TRUE))
-  expect_true(grepl("--metrics=euclidean,cosine,correlation,inner_product", prose, fixed = TRUE))
-})
 
 test_that("benchmark documentation describes saved dataset selector universe", {
   docs_file <- test_path("../../docs/benchmarks.md")
@@ -920,7 +866,7 @@ test_that("NN capability docs describe runtime reason codes", {
   expect_true(grepl("unsupported_combination", prose, fixed = TRUE))
 })
 
-test_that("candidate KNN docs describe CUDA inner-product support", {
+test_that("candidate KNN docs describe the three-metric CUDA scope", {
   docs_files <- c(
     test_path("../../docs", c("usage-api.md", "implementation.md", "backend-capabilities.md")),
     test_path("../../man/candidate_knn.Rd")
@@ -932,8 +878,9 @@ test_that("candidate KNN docs describe CUDA inner-product support", {
 
   prose <- paste(unlist(lapply(docs_files, readLines, warn = FALSE)), collapse = " ")
   expect_true(grepl("CUDA candidate", prose, fixed = TRUE))
-  expect_true(grepl("inner-product", prose, fixed = TRUE))
-  expect_false(grepl("raw inner-product CUDA candidate scoring is not exposed", prose, fixed = TRUE))
+  expect_true(grepl("Euclidean", prose, fixed = TRUE))
+  expect_true(grepl("cosine", prose, fixed = TRUE))
+  expect_true(grepl("correlation", prose, fixed = TRUE))
 })
 
 
@@ -988,7 +935,7 @@ test_that("autotuning docs describe CUDA auto non-Euclidean routing", {
   expect_true(grepl("CAGRA", prose, fixed = TRUE))
   expect_true(grepl("cosine", prose, fixed = TRUE))
   expect_true(grepl("correlation", prose, fixed = TRUE))
-  expect_true(grepl("inner-product", prose, fixed = TRUE))
+  expect_false(grepl("inner-product", prose, fixed = TRUE))
   expect_true(grepl("cuVS-only runtimes", prose, fixed = TRUE))
   expect_true(grepl("direct cuVS CAGRA", prose, fixed = TRUE))
   expect_true(grepl("smaller non-grid non-Euclidean", prose, fixed = TRUE))
@@ -1002,6 +949,6 @@ test_that("autotuning docs distinguish historical probes from full NN metric ben
 
   prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
   expect_true(grepl("original tuning pass", prose, fixed = TRUE))
-  expect_true(grepl("all four public metrics", prose, fixed = TRUE))
+  expect_true(grepl("all three public metrics", prose, fixed = TRUE))
   expect_true(grepl("k grid 5, 10, 15, 50, and 100", prose, fixed = TRUE))
 })

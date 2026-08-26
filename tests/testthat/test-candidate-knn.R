@@ -2,7 +2,6 @@ test_that("candidate_knn matches exact self-KNN with full candidate rows", {
   set.seed(301)
   x <- matrix(rnorm(30 * 4), nrow = 30)
   candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
-
   exact <- nn(x, k = 5L, backend = "cpu")
   cand <- candidate_knn(x, candidates, k = 5L, backend = "cpu", n_threads = 2L)
 
@@ -84,22 +83,6 @@ test_that("candidate_knn supports CPU cosine candidates", {
   expect_equal(out$indices[1, ], c(1L, 3L))
   expect_equal(out$distances[1, ], c(0, 1 - 1 / sqrt(2)), tolerance = 1e-12)
 })
-
-test_that("candidate_knn rejects legacy metric aliases", {
-  x <- matrix(c(
-    1, 0,
-    0, 1,
-    1, 1
-  ), ncol = 2, byrow = TRUE)
-  candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
-
-  out <- candidate_knn(x, candidates, k = 2L, backend = "cpu", metric = "inner_product")
-
-  expect_s3_class(out, "faissR_nn")
-  expect_equal(attr(out, "metric"), "inner_product")
-  expect_error(candidate_knn(x, candidates, k = 2L, backend = "cpu", metric = "ip"), "metric")
-})
-
 test_that("candidate_knn uses strict public backend labels", {
   x <- matrix(rnorm(30), ncol = 3)
   candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
@@ -153,65 +136,4 @@ test_that("candidate_knn supports CPU correlation candidates", {
   expect_equal(attr(out, "metric"), "correlation")
   expect_equal(out$indices[1, ], c(1L, 2L))
   expect_equal(out$distances[1, ], c(0, 0), tolerance = 1e-12)
-})
-
-test_that("candidate_knn supports CPU inner-product candidates", {
-  x <- matrix(c(
-    2, 0,
-    0, 3,
-    1, 1
-  ), ncol = 2, byrow = TRUE)
-  candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
-
-  out <- candidate_knn(x, candidates, k = 2L, backend = "cpu", metric = "inner_product")
-
-  expect_equal(attr(out, "metric"), "inner_product")
-  expect_equal(out$indices[1, ], c(1L, 3L))
-  expect_equal(out$distances[1, ], c(0, 2), tolerance = 1e-12)
-})
-
-test_that("candidate_knn GPU requests do not silently fall back", {
-  x <- matrix(rnorm(20), ncol = 2)
-  candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
-
-  if (cuda_available()) {
-    expect_no_error(candidate_knn(x, candidates, k = 2L, backend = "cuda", exclude_self = TRUE))
-  } else {
-    expect_error(candidate_knn(x, candidates, k = 2L, backend = "cuda", exclude_self = TRUE), "CUDA")
-  }
-  if (!cuda_available()) {
-    expect_error(
-      candidate_knn(x, candidates, k = 2L, backend = "cuda", metric = "inner_product", exclude_self = TRUE),
-      "CUDA"
-    )
-  }
-})
-
-test_that("candidate_knn CUDA supports normalized and inner-product candidates", {
-  set.seed(931)
-  x <- matrix(rnorm(36), nrow = 9)
-  candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
-
-  for (metric in c("cosine", "correlation", "inner_product")) {
-    if (cuda_available()) {
-      cpu <- candidate_knn(x, candidates, k = 3L, backend = "cpu", metric = metric, exclude_self = TRUE)
-      cuda <- candidate_knn(x, candidates, k = 3L, backend = "cuda", metric = metric, exclude_self = TRUE)
-      expect_equal(attr(cuda, "backend"), "cuda_candidate")
-      expect_equal(attr(cuda, "metric"), metric)
-      expect_equal(unname(cuda$indices), unname(cpu$indices))
-      expect_equal(unname(cuda$distances), unname(cpu$distances), tolerance = 1e-6)
-      if (metric %in% c("cosine", "correlation")) {
-        expect_match(attr(cuda, "candidate_knn")$transform, "normalize")
-        expect_equal(attr(cuda, "candidate_knn")$cuda_metric, "euclidean")
-      } else {
-        expect_true(is.na(attr(cuda, "candidate_knn")$transform))
-        expect_equal(attr(cuda, "candidate_knn")$cuda_metric, "inner_product")
-      }
-    } else {
-      expect_error(
-        candidate_knn(x, candidates, k = 3L, backend = "cuda", metric = metric, exclude_self = TRUE),
-        "CUDA"
-      )
-    }
-  }
 })

@@ -26,10 +26,10 @@ split_arg <- function(value, default) {
 
 normalize_metric_arg <- function(value) {
   key <- tolower(trimws(as.character(value %||% "euclidean")[[1L]]))
-  valid <- c("euclidean", "cosine", "correlation", "inner_product")
+  valid <- c("euclidean", "cosine", "correlation")
   if (!key %in% valid) {
     stop(
-      "`metrics` must contain only euclidean, cosine, correlation, or inner_product.",
+      "`metrics` must contain only euclidean, cosine, or correlation.",
       call. = FALSE
     )
   }
@@ -439,7 +439,7 @@ candidate_grid <- function(method, backend, n, p, k, metric, target_recalls, thr
                            nndescent_cuda_intermediate_graph_degrees = NULL,
                            nndescent_cuda_max_iterations = NULL) {
   metric <- normalize_metric_arg(metric)
-  inner_product_grid <- identical(metric, "inner_product")
+  extended_recall_grid <- FALSE
   rows <- list()
   add <- function(x) {
     rows[[length(rows) + 1L]] <<- fill_candidate(x)
@@ -491,7 +491,7 @@ candidate_grid <- function(method, backend, n, p, k, metric, target_recalls, thr
         hnsw_ef_construction = c(30L, 30L, 40L, 50L, 60L, 80L, 100L, 160L, 240L, 320L, 480L),
         hnsw_ef_search = pmax(k, c(15L, 20L, 25L, 35L, 45L, 60L, 80L, 120L, 220L, 400L, 720L))
       )
-      if (inner_product_grid) {
+      if (extended_recall_grid) {
         manual <- rbind(manual, data.frame(
           hnsw_m = c(80L, 96L, 128L, 128L),
           hnsw_ef_construction = c(640L, 800L, 960L, 1280L),
@@ -504,7 +504,7 @@ candidate_grid <- function(method, backend, n, p, k, metric, target_recalls, thr
         cagra_intermediate_graph_degree = c(16L, 24L, 32L, 48L, 64L, 128L, 192L, 320L, 512L),
         hnsw_ef_search = pmax(k, c(24L, 32L, 48L, 64L, 96L, 128L, 256L, 480L, 768L))
       )
-      if (inner_product_grid) {
+      if (extended_recall_grid) {
         manual <- rbind(manual, data.frame(
           cagra_graph_degree = c(160L, 192L, 256L),
           cagra_intermediate_graph_degree = c(640L, 768L, 1024L),
@@ -522,8 +522,7 @@ candidate_grid <- function(method, backend, n, p, k, metric, target_recalls, thr
     base_nlist <- ivf_nlist(n, k)
     custom_ivfpq_fastscan_grid <- method == "ivfpq_fastscan" &&
       (length(ivfpq_fastscan_nlist_multipliers) || length(ivfpq_fastscan_nprobe_multipliers))
-    if (inner_product_grid && !custom_ivfpq_fastscan_grid) {
-      # Raw MIPS can require substantially broader coarse-list coverage than
+    if (extended_recall_grid && !custom_ivfpq_fastscan_grid) {
       # L2/cosine.  These anchors include exact-recall recovery points while
       # respecting the FAISS GPU nprobe ceiling of 2048.
       specs <- data.frame(
@@ -588,7 +587,7 @@ candidate_grid <- function(method, backend, n, p, k, metric, target_recalls, thr
       x <- base_candidates(method, backend, k, thread_values, output_values, sprintf("%s_nl%d_np%d", specs$label[[i]], nlist, nprobe_values[[1L]]))
       x$ivf_nlist <- nlist; x$ivf_nprobe <- nprobe_values[[1L]]
       if (method == "ivfpq") {
-        pq_targets <- if (inner_product_grid) {
+        pq_targets <- if (extended_recall_grid) {
           if (backend == "cuda") c(16L, 32L, 64L, 96L, 128L, 192L, 256L) else c(16L, 32L, 64L, 96L, 128L, 192L, 256L)
         } else if (backend == "cuda") {
           c(16L, 32L, 48L, 64L)
@@ -647,7 +646,7 @@ candidate_grid <- function(method, backend, n, p, k, metric, target_recalls, thr
           }
           next
         }
-        refine_by_spec <- if (inner_product_grid) {
+        refine_by_spec <- if (extended_recall_grid) {
           c(2L, 4L, 8L, 16L, 32L, 32L, 64L, 128L, 256L)
         } else {
           c(1L, 2L, 4L, 4L, 8L, 12L, 16L, 24L, 48L)
@@ -698,7 +697,7 @@ candidate_grid <- function(method, backend, n, p, k, metric, target_recalls, thr
     vals$cagra_search_width <- c(1L, 1L, 2L, 2L, 4L, 8L, 12L, 16L)[vals$setting_id]
     vals$cagra_itopk_size <- pmax(k, c(16L, 32L, 64L, 64L, 128L, 256L, 512L, 768L)[vals$setting_id])
     vals$setting_id <- NULL
-    if (inner_product_grid) {
+    if (extended_recall_grid) {
       vals <- rbind(vals, data.frame(
         cagra_build_algo = rep("auto", 3L),
         cagra_graph_degree = c(160L, 192L, 256L),
@@ -722,7 +721,7 @@ candidate_grid <- function(method, backend, n, p, k, metric, target_recalls, thr
         nndescent_n_random_projections = c(3L, 4L, 6L, 8L, 10L, 12L, 16L, 24L, 32L, 40L)
       )
       vals$nndescent_max_candidates <- as.integer(pmax(vals$nndescent_max_candidates, 3L * vals$nndescent_pool_size))
-      if (inner_product_grid) {
+      if (extended_recall_grid) {
         vals <- rbind(vals, data.frame(
           nndescent_pool_size = pmax(k, c(256L, 384L, 512L, 768L)),
           nndescent_n_iters = c(40L, 48L, 64L, 80L),
@@ -751,7 +750,7 @@ candidate_grid <- function(method, backend, n, p, k, metric, target_recalls, thr
       nsg_r = c(4L, 6L, 8L, 12L, 16L, 24L, 32L, 48L, 64L, 96L),
       nsg_graph_k = pmax(k, c(12L, 16L, 20L, 30L, 40L, 60L, 80L, 120L, 180L, 256L))
     )
-    if (inner_product_grid) {
+    if (extended_recall_grid) {
       vals <- rbind(vals, data.frame(
         nsg_r = c(128L, 192L, 256L, 384L),
         nsg_graph_k = pmax(k, c(384L, 512L, 768L, 1024L))
@@ -768,7 +767,7 @@ candidate_grid <- function(method, backend, n, p, k, metric, target_recalls, thr
       vamana_search_l = pmax(k, c(12L, 16L, 20L, 30L, 40L, 60L, 100L, 160L, 240L, 400L)),
       vamana_alpha = c(1.0, 1.0, 1.0, 1.0, 1.0, 1.05, 1.1, 1.2, 1.35, 1.5)
     )
-    if (inner_product_grid) {
+    if (extended_recall_grid) {
       vals <- rbind(vals, data.frame(
         vamana_r = c(128L, 192L, 256L, 384L),
         vamana_search_l = pmax(k, c(512L, 768L, 1024L, 1536L)),
@@ -1057,11 +1056,9 @@ summarize_results <- function(out_dir, results_path, target_recalls, method) {
       "",
       "## IVF Notes",
       "",
-      "- Rows tune FAISS IVF-Flat `ivf_nlist` and `ivf_nprobe`; Euclidean and raw inner product use native FAISS IVF L2/IP, while cosine/correlation use normalized FAISS IVF searches.",
       "- CUDA rows exercise the public `backend = \"cuda\", method = \"ivf\"` route, which resolves to FAISS GPU IVF-Flat with cuVS-enabled FAISS builds when available.",
       "- CUDA correlation rows call the public `backend = \"cuda\", method = \"ivf\", metric = \"correlation\"` route, which row-centers and row-normalizes float32 data before FAISS GPU IVF search and converts normalized-search distances back to correlation distance.",
       "- CUDA IVF correlation shape/k/target defaults are summarized in `benchmark_scripts/cuda_ivf_correlation_shape_tuning_defaults_from_uploaded_results.csv` after aggregating the measured `faissR_IVF_TUNING_CUDA_correlation_20260703_133655` sweep.",
-      "- CUDA IVF raw-inner-product defaults are initially summarized in `benchmark_scripts/cuda_ivf_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`, seeded from the measured CUDA IVF Euclidean rows and marked validation-pending until the dedicated inner-product sweep replaces them.",
       "- Shape-level defaults for `tuning = \"auto\"` are selected from the fastest candidate that reaches the requested recall target when available; otherwise the highest-coverage best-available candidate is recorded with `tuning_benchmark_target_met = FALSE`."
     )
   }
@@ -1070,11 +1067,9 @@ summarize_results <- function(out_dir, results_path, target_recalls, method) {
       "",
       "## IVFPQ Notes",
       "",
-      "- Rows tune FAISS IVF-PQ `ivf_nlist`, `ivf_nprobe`, `pq_m`, and fixed 8-bit PQ codes; Euclidean and raw inner product use native FAISS IVF-PQ L2/IP, while cosine/correlation use normalized L2 transforms.",
       "- CUDA rows exercise the public `backend = \"cuda\", method = \"ivfpq\"` route, which resolves to FAISS GPU IVF-PQ with cuVS-enabled FAISS builds when available.",
       "- CUDA correlation rows call the public `backend = \"cuda\", method = \"ivfpq\", metric = \"correlation\"` route, which row-centers and row-normalizes float32 data before FAISS GPU IVF-PQ search and converts normalized-search distances back to correlation distance.",
       "- CUDA IVFPQ correlation shape/k/target defaults are summarized in `benchmark_scripts/cuda_ivfpq_correlation_shape_tuning_defaults_from_uploaded_results.csv` after aggregating the measured `faissR_IVFPQ_TUNING_CUDA_correlation_20260703_095008` sweep.",
-      "- CUDA IVFPQ raw-inner-product defaults are initially summarized in `benchmark_scripts/cuda_ivfpq_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`, seeded from the measured CUDA IVFPQ Euclidean rows and marked validation-pending until the dedicated inner-product sweep replaces them.",
       "- Shape-level defaults for `tuning = \"auto\"` are selected from the fastest candidate that reaches the requested recall target when available; otherwise the highest-recall candidate below target is recorded as a best-available setting.",
       "- `nlist` controls the number of coarse IVF lists, `nprobe` controls how many lists are searched, and `pq_m` controls product-quantizer subdivision. Larger `nprobe` and larger feasible `pq_m` generally improve recall but can increase build/search time and GPU memory traffic."
     )
@@ -1084,13 +1079,10 @@ summarize_results <- function(out_dir, results_path, target_recalls, method) {
       "",
       "## IVFPQ FastScan Notes",
       "",
-      "- CPU rows tune FAISS `IndexIVFPQFastScan` `ivf_nlist`, `ivf_nprobe`, `pq_m`, fixed 4-bit PQ, `ivfpq_fastscan_refine_factor`, and `ivfpq_fastscan_bbs`; Euclidean and raw inner product use native FastScan L2/IP, while cosine/correlation use normalized L2 transforms.",
       "- CUDA rows tune `ivf_nlist`, `ivf_nprobe`, byte-aligned 4-bit `cuvs_ivfpq_pq_dim`, and `FAISSR_CUVS_IVF_BATCH_SIZE`.",
       "- CUDA cosine rows call the public `backend = \"cuda\", method = \"ivfpq_fastscan\", metric = \"cosine\"` route, which row-normalizes to float32 before cuVS IVF-PQ L2 search and converts distances back to cosine distance.",
       "- CUDA correlation rows call the public `backend = \"cuda\", method = \"ivfpq_fastscan\", metric = \"correlation\"` route, which row-centers and row-normalizes to float32 before cuVS IVF-PQ L2 search and converts distances back to correlation distance.",
-      "- CUDA raw-inner-product rows call the public `backend = \"cuda\", method = \"ivfpq_fastscan\", metric = \"inner_product\"` route, which applies the maximum-inner-product-to-L2 extra-dimension transform before cuVS IVF-PQ L2 search and converts distances back to shifted inner-product distances.",
       "- CUDA IVFPQ FastScan correlation shape/k/target defaults are summarized in `benchmark_scripts/cuda_ivfpq_fastscan_correlation_shape_tuning_defaults_from_seeded_euclidean_results.csv`; these rows are validation-pending until the corrected correlation sweep replaces the prior run that failed before reaching cuVS.",
-      "- CUDA IVFPQ FastScan raw-inner-product shape/k/target defaults are summarized in `benchmark_scripts/cuda_ivfpq_fastscan_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`; these rows are validation-pending until this metric-specific sweep replaces the seeded Euclidean policy.",
       "- For cuVS 4-bit IVF-PQ, `pq_dim` is repaired to a byte-aligned value when needed; smaller `pq_dim` and smaller `nprobe` are expected to be faster but can reduce recall.",
       "- `nlist` controls the IVF build/search balance; too few lists can hurt recall, while too many lists can increase build and coarse-search overhead.",
       "- `FAISSR_CUVS_IVF_BATCH_SIZE` changes query batching and GPU memory use, not the IVF-PQ recall target directly.",
@@ -1104,7 +1096,6 @@ summarize_results <- function(out_dir, results_path, target_recalls, method) {
       "## Flat Notes",
       "",
       "- Rows tune exhaustive FAISS Flat search metadata rather than an approximate recall/speed trade-off; recall should be exact apart from metric transforms and numerical precision.",
-      "- CPU rows tune FAISS Flat query batching and fitted-index reuse for Euclidean, cosine, correlation, and raw inner-product routes.",
       "- CUDA rows tune FAISS GPU Flat query batch size, resource reuse, and float32 output handling for Euclidean, cosine, and correlation routes.",
       "- CUDA correlation rows call the public `backend = \"cuda\", method = \"flat\", metric = \"correlation\"` route, which row-centers and row-normalizes float32 data before FAISS GPU Flat L2 search and converts normalized Euclidean distances back to correlation distance.",
       "- Shape-level defaults for `tuning = \"auto\"` are selected from the fastest measured candidate for each shape/k/target cell; exact methods record `tuning_benchmark_target_met` so any numerical shortfall is visible.",
@@ -1117,7 +1108,6 @@ summarize_results <- function(out_dir, results_path, target_recalls, method) {
       "## Bruteforce Notes",
       "",
       "- Rows tune exhaustive brute-force search metadata rather than an approximate recall/speed trade-off; recall should be exact apart from metric transforms and numerical precision.",
-      "- CPU rows tune FAISS Flat query batching and fitted-index reuse for Euclidean, cosine, correlation, and raw inner-product bruteforce routes.",
       "- CUDA rows tune cuVS brute-force query batch size, resource reuse, and float32 output handling for Euclidean, cosine, and correlation routes.",
       "- CUDA correlation rows call the public `backend = \"cuda\", method = \"bruteforce\", metric = \"correlation\"` route, which row-centers and row-normalizes float32 data before cuVS L2 brute-force search and converts normalized Euclidean distances back to correlation distance.",
       "- CUDA Bruteforce correlation shape/k/target defaults are summarized in `benchmark_scripts/cuda_bruteforce_correlation_shape_tuning_defaults_from_proxy_results.csv`; these rows initially reuse measured Euclidean cuVS brute-force batch/resource choices because the earlier uploaded correlation sweep failed before reaching the backend."
@@ -1128,12 +1118,9 @@ summarize_results <- function(out_dir, results_path, target_recalls, method) {
       "",
       "## HNSW Notes",
       "",
-      "- CPU rows tune FAISS HNSW `M`, `efConstruction`, and `efSearch` for Euclidean, cosine, correlation, and raw inner-product routes.",
       "- CUDA rows tune the cuVS HNSW-from-CAGRA route through `cagra_graph_degree`, `cagra_intermediate_graph_degree`, and `hnsw_ef_search`.",
       "- CUDA correlation rows call the public `backend = \"cuda\", method = \"hnsw\", metric = \"correlation\"` route, which row-centers and row-normalizes float32 data before cuVS HNSW graph search and converts normalized Euclidean distances back to correlation distance.",
-      "- CUDA raw-inner-product rows call the public `backend = \"cuda\", method = \"hnsw\", metric = \"inner_product\"` route, which applies the maximum-inner-product-to-L2 transform before cuVS HNSW graph search and converts distances back to raw inner-product scores.",
       "- CUDA HNSW correlation shape/k/target defaults are summarized in `benchmark_scripts/cuda_hnsw_correlation_shape_tuning_defaults_from_uploaded_results.csv` after aggregating the measured `faissR_HNSW_TUNING_CUDA_correlation_20260703_070901` sweep.",
-      "- CUDA HNSW raw-inner-product defaults are initially seeded from `benchmark_scripts/cuda_hnsw_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`; this wrapper replaces those validation-pending rows with measured metric-specific settings.",
       "- Shape-level defaults for `tuning = \"auto\"` are selected from the fastest candidate that reaches the requested recall target when available; otherwise the highest-recall candidate below target is recorded as a best-available setting."
     )
   }
@@ -1160,9 +1147,7 @@ summarize_results <- function(out_dir, results_path, target_recalls, method) {
       "- CUDA Euclidean shape/k/target defaults are summarized in `benchmark_scripts/cuda_cagra_euclidean_shape_tuning_defaults_from_uploaded_results.csv` after aggregating the measured CAGRA sweep.",
       "- CUDA cosine rows call the public `backend = \"cuda\", method = \"cagra\", metric = \"cosine\"` route, which row-normalizes the float32 input, runs Euclidean CAGRA graph search, and converts normalized Euclidean distances back to cosine distance.",
       "- CUDA correlation rows call the public `backend = \"cuda\", method = \"cagra\", metric = \"correlation\"` route, which row-centers and row-normalizes the float32 input, runs Euclidean CAGRA graph search, and converts normalized Euclidean distances back to correlation distance.",
-      "- CUDA raw-inner-product rows call the public `backend = \"cuda\", method = \"cagra\", metric = \"inner_product\"` route, which applies the maximum-inner-product-to-L2 extra-dimension transform, runs CAGRA graph search, and converts distances back to faissR's shifted inner-product convention.",
       "- CUDA CAGRA correlation shape/k/target defaults are summarized in `benchmark_scripts/cuda_cagra_correlation_shape_tuning_defaults_from_seeded_euclidean_results.csv`; these rows are validation-pending until a metric-specific CUDA correlation sweep replaces the Euclidean-seeded policy.",
-      "- CUDA CAGRA raw-inner-product shape/k/target defaults are summarized in `benchmark_scripts/cuda_cagra_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`; these rows are validation-pending until `run_hpc_cagra_tuning_cuda_inner_product.sh` replaces the Euclidean-seeded policy.",
       "- Shape-level defaults for `tuning = \"auto\"` are selected from the fastest candidate that reaches the requested recall target when available; otherwise the highest-recall candidate below target is recorded as a best-available setting.",
       "- If a metric-specific sweep failed before reaching the backend, any seeded defaults must be marked with `tuning_benchmark_target_met = FALSE` until the corrected sweep is rerun."
     )
@@ -1175,7 +1160,6 @@ summarize_results <- function(out_dir, results_path, target_recalls, method) {
       "- CPU and CUDA rows tune the native faissR NSG-style pruning degree `nsg_r` and seed/candidate graph width `nsg_graph_k`.",
       "- CUDA rows call the public `backend = \"cuda\", method = \"nsg\"` route, which keeps the NSG pruning rule and uses the native CUDA row-candidate refinement kernel.",
       "- CUDA cosine rows row-normalize the float32 input, run normalized Euclidean NSG refinement, and convert distances back to cosine distance.",
-      "- CUDA correlation rows row-center and row-normalize the float32 input before the same CUDA NSG refinement; CUDA raw-inner-product rows use shifted dot-product ordering. Current package defaults for both CUDA correlation and CUDA raw inner product are seeded from the measured CUDA cosine NSG table until their metric-specific sweeps are rerun.",
       "- Shape-level defaults for `tuning = \"auto\"` are selected from the fastest candidate that reaches the requested recall target when available; otherwise the highest-recall candidate below target is recorded as a best-available setting."
     )
   }
@@ -1187,7 +1171,6 @@ summarize_results <- function(out_dir, results_path, target_recalls, method) {
       "- CPU and CUDA rows tune the native faissR Vamana-style robust-pruning degree `vamana_r`, search breadth `vamana_search_l`, and robust-pruning `vamana_alpha`.",
       "- CUDA rows call the public `backend = \"cuda\", method = \"vamana\"` route, which keeps the Vamana pruning rule and uses the native CUDA row-candidate refinement kernel.",
       "- CUDA cosine rows row-normalize the float32 input, run normalized Euclidean Vamana refinement, and convert distances back to cosine distance.",
-      "- CUDA correlation rows row-center and row-normalize the float32 input before the same CUDA Vamana refinement; CUDA raw-inner-product rows use shifted dot-product ordering. Current package defaults for both CUDA correlation and CUDA raw inner product are seeded from the measured CUDA cosine Vamana table until their metric-specific sweeps are rerun.",
       "- Shape-level defaults for `tuning = \"auto\"` are selected from the fastest candidate that reaches the requested recall target when available; otherwise the highest-recall candidate below target is recorded as a best-available setting."
     )
   }

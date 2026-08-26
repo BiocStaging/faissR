@@ -4,8 +4,8 @@
 
 The remaining experiments must support four claims and no more:
 
-1. `faissR` returns correct neighbors under Euclidean, cosine, correlation,
-   and raw inner-product contracts.
+1. `faissR` returns correct neighbors under Euclidean, cosine, and correlation
+   contracts.
 2. Recall-targeted settings achieve the requested operating point on held-out
    query samples often enough to be useful, with failures and misses reported.
 3. The automatic selector is competitive with the fastest qualifying explicit
@@ -29,7 +29,7 @@ updated after each `sbatch` call, so partial submission is visible and can be
 reconciled without duplicating jobs that Slurm already accepted.
 
 The optional `sync_publication_suite.sh` deployment utility copies this entire
-suite to a user-supplied HPC mirror and checks the 277-launcher count,
+suite to a user-supplied HPC mirror and checks the 203-launcher count,
 `submit_campaign.R` checksum, and shell syntax. It does not delete target
 files; an obsolete extra launcher therefore causes an explicit count failure
 rather than being removed silently.
@@ -38,8 +38,8 @@ rather than being removed silently.
 
 - Datasets: COIL20, USPS, FashionMNIST, FlowRepository FR-FCM-ZYRM, flow18,
   MNIST, ImageNet features, MetRef, and mass41.
-- Metrics: Euclidean, cosine, correlation, and raw inner product where the
-  method contract supports them.
+- Metrics: Euclidean, cosine, and correlation where the method contract
+  supports them.
 - Neighbor counts: 15, 30, 50, and 100.
 - Recall targets: 0.90, 0.95, and 0.99.
 - Calibration seed: 4.
@@ -133,11 +133,9 @@ Use the external-package launchers in the same `held_out/cpu/` directory.
 Euclidean is the common comparison metric; cosine is additionally evaluated
 with RcppAnnoy angular search, RcppHNSW, and eligible BiocNeighbors routes.
 RcppAnnoy angular distances are converted inside the timed adapter as
-`angular^2 / 2` to obtain `1 - cosine`. RcppAnnoy dot-product and RcppHNSW
-inner-product outputs are row-shifted after self removal to the package's
-smaller-is-better contract. All four rnndescent routes are additionally tested
-with their native cosine and correlation metrics. Other correlation and raw
-inner-product cells remain faissR-only unless a comparator exposes the same
+`angular^2 / 2` to obtain `1 - cosine`. All four rnndescent routes are
+additionally tested with their native cosine and correlation metrics. Other
+correlation cells remain faissR-only unless a comparator exposes the same
 public contract. Compare cold with cold. Warm query timing is a separate
 experiment and is never ranked against a one-call cold result.
 
@@ -188,14 +186,19 @@ sbatch benchmark_scripts/jmlr_mloss_publication/final_campaign/analysis/run_held
 
 For each dataset/backend/metric/k/target cell, define the empirical oracle as
 the fastest explicit `faissR` method that completed all six held-out timings
-(two seeds times three repeats) and met the target in every repeat. Report:
+(two seeds times three repeats) and was either exact-audited or, for an
+approximate method, met the target in every repeat. For LOODO, remove all rows
+from one named dataset before selecting a family, then evaluate that frozen
+cross-fitted choice on the omitted dataset. Report:
 
-- automatic-selector target attainment;
-- auto/oracle cold-time ratio;
-- recall difference;
-- resolved-method/provider agreement;
-- abstention or exact-selection rate;
-- leave-one-dataset-out sensitivity.
+- cross-fitted operating-point attainment;
+- cross-fitted selected/oracle cold-time ratio;
+- route-family agreement with the held-out empirical oracle;
+- abstention frequency;
+- exact-selection frequency;
+- approximate target attainment separately from exact-audited selection;
+- installed full-calibration `method = "auto"` results as a separate,
+  non-independent diagnostic.
 
 The overall cross-package winner is a separate Euclidean/cosine comparison and
 does not redefine the internal `faissR` oracle.
@@ -208,11 +211,14 @@ attainment and completion across datasets. Do not treat query rows as
 independent experimental replicates. Report all eligible datasets, timeouts,
 unsupported routes, and failures; avoid a complete-case-only league table.
 
-For paired systems ablations, report the within-cell time or memory ratio and a
-dataset-level paired summary. For method rankings, show the fastest and second
-fastest qualifying method plus an exact baseline. Exact-family routes that
-resolve to the same provider count as one mathematical algorithm, although
-their wrapper overhead remains visible.
+For every timing comparison, report the within-cell ratio and reduce it to one
+median ratio per dataset before cross-dataset summarization. External ratios
+are comparator/faissR-auto; selector regret is auto/oracle. Report the median,
+IQR, range, expected and paired datasets/cells, unpaired cells, timeouts, and
+out-of-memory events. Fastest/second-fastest and absolute-time tables are
+supplementary diagnostics, not the primary comparative estimand. Exact-family
+routes that resolve to the same provider count as one mathematical algorithm,
+although their wrapper overhead remains visible.
 
 ## Final freeze
 

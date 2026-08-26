@@ -110,7 +110,110 @@ finish_nn_result <- function(out,
   attr(out, "index_base") <- as.integer(out$index_base)
   attr(out, "backend_used") <- out$backend_used
   class(out) <- c("faissR_nn", "list")
+  out <- attach_nn_distance_contract(out, metric)
   attach_gpu_residency_metadata(out, out)
+}
+
+nn_distance_contract <- function(metric) {
+  metric <- normalize_nn_metric(metric)
+  switch(
+    metric,
+    euclidean = list(
+      distance_is_metric = TRUE,
+      distance_semantics = "euclidean_distance",
+      distance_comparable_across_queries = TRUE
+    ),
+    cosine = list(
+      distance_is_metric = FALSE,
+      distance_semantics = "one_minus_cosine_similarity",
+      distance_comparable_across_queries = TRUE
+    ),
+    correlation = list(
+      distance_is_metric = FALSE,
+      distance_semantics = "one_minus_row_centered_cosine_similarity",
+      distance_comparable_across_queries = TRUE
+    )
+  )
+}
+
+attach_nn_distance_contract <- function(result, metric) {
+  contract <- nn_distance_contract(metric)
+  for (name in names(contract)) {
+    result[[name]] <- contract[[name]]
+    attr(result, name) <- contract[[name]]
+  }
+  result$distance_order <- "smaller_is_better"
+  attr(result, "distance_order") <- "smaller_is_better"
+  result
+}
+
+nn_method_implementation_contract <- function(requested_method, backend_used) {
+  requested_method <- normalize_nn_method(requested_method %||% "auto")
+  backend_used <- as.character(backend_used %||% NA_character_)[1L]
+  method <- if (identical(requested_method, "auto")) {
+    nn_resolved_backend_public_method(backend_used)
+  } else {
+    requested_method
+  }
+
+  if (identical(method, "nsg")) {
+    return(list(
+      method_family = "nsg",
+      preferred_public_method = "nsg_style",
+      implementation_label = "faissR package-owned NSG/MRNG-style refinement",
+      implementation_scope = "package_owned_style_implementation",
+      canonical_reimplementation = FALSE,
+      canonical_reference_name = "NSG"
+    ))
+  }
+  if (identical(method, "vamana")) {
+    return(list(
+      method_family = "vamana",
+      preferred_public_method = "vamana_style",
+      implementation_label = "faissR package-owned Vamana-style robust pruning",
+      implementation_scope = "package_owned_style_implementation",
+      canonical_reimplementation = FALSE,
+      canonical_reference_name = "DiskANN/Vamana"
+    ))
+  }
+  if (identical(method, "nndescent")) {
+    provider_owned <- backend_used %in% c(
+      "cuda_nndescent", "cuda_cuvs_nndescent", "cuvs_nndescent",
+      "faiss_nndescent", "cpu_nndescent_faiss_nndescent"
+    )
+    if (isTRUE(provider_owned)) {
+      provider <- if (grepl("cuvs|cuda", backend_used)) "RAPIDS cuVS" else "FAISS"
+      return(list(
+        method_family = "nndescent",
+        preferred_public_method = "nndescent_style",
+        implementation_label = paste(provider, "NN-descent provider route"),
+        implementation_scope = "external_provider_implementation",
+        canonical_reimplementation = NA,
+        canonical_reference_name = "NN-descent"
+      ))
+    }
+    return(list(
+      method_family = "nndescent",
+      preferred_public_method = "nndescent_style",
+      implementation_label = "faissR package-owned NN-descent-style graph construction",
+      implementation_scope = "package_owned_style_implementation",
+      canonical_reimplementation = FALSE,
+      canonical_reference_name = "NN-descent"
+    ))
+  }
+  NULL
+}
+
+attach_nn_method_implementation_contract <- function(result,
+                                                       requested_method,
+                                                       backend_used) {
+  contract <- nn_method_implementation_contract(requested_method, backend_used)
+  if (is.null(contract)) return(result)
+  for (name in names(contract)) {
+    result[[name]] <- contract[[name]]
+    attr(result, name) <- contract[[name]]
+  }
+  result
 }
 
 nn_gpu_residency_metadata <- function(out) {

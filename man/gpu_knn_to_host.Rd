@@ -11,7 +11,8 @@ gpu_knn_to_host(x)
 }
 \value{
 A host `faissR_nn` list with integer `indices` and numeric
-  `distances`.
+  `distances`. The distance-contract metadata from the GPU object is
+  retained.
 }
 \description{
 `gpu_knn_to_host()` is an explicit diagnostic/conversion helper for

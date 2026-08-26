@@ -13,8 +13,14 @@ faissR_backend(backend = NULL)
 The active backend. Setting returns the previous option invisibly.
 }
 \description{
-Explicit function arguments take precedence over \code{options(backend = ...)},
-then \code{BACKEND}; CPU is the final default. The former faissR-specific
-option and environment variable remain compatibility fallbacks. The current
-faissR source supports CPU and CUDA. \code{"metal"} is rejected explicitly.
+Explicit function arguments take precedence over `options(backend)`, then
+`BACKEND`; CPU is the final default. Package-specific settings remain
+supported as compatibility fallbacks. The current faissR source supports
+CPU and CUDA. `"metal"` is rejected explicitly.
+}
+\examples{
+old <- getOption("backend")
+faissR_backend("cpu")
+faissR_backend()
+options(backend = old)
 }

@@ -43,7 +43,8 @@ def normalize_body(body: str) -> str:
         "tab:methods": ("Table", "2"),
         "tab:tuninggrid": ("Table", "3"),
         "tab:calibrationaudit": ("Table", "4"),
-        "tab:datasets": ("Table", "5"),
+        "tab:datasets": ("Table", "4"),
+        "tab:interim-heldout": ("Table", "5"),
         "tab:evidenceaudit": ("Table", "6"),
         "tab:ablations": ("Table", "7"),
         "sec:evaluation": ("Section", "7"),
@@ -162,6 +163,7 @@ def build_intermediate(source: str, architecture: Path, validation: Path) -> str
         "Moussa Kassim (1,2; co-first); Martin Ocharo (1,2; co-first); "
         "Dalia Ahmed (1); Dupe Ojo (1); Alessia Vignoli (3,4); "
         "Leonardo Tenori (3,4; co-corresponding); "
+        "Dinesh Gupta (20); Silvano Piazza (21,22); "
         "Stefano Cacciatore (1,2; co-corresponding)"
     )
     front = f"""\\documentclass{{article}}
@@ -256,6 +258,9 @@ def polish_docx(path: Path) -> None:
                 [2150, 2750, 4460],
             ("Ablation", "Backend", "Primary contrast", "Reported estimand"):
                 [1700, 1200, 2980, 3480],
+            ("Backend", "Method", "Metric", "Data", "Cells",
+             "Quality status", "Median (s)"):
+                [1100, 1550, 1550, 1100, 700, 2200, 1000],
         }
         widths = table_widths.get(tuple(headers))
         if widths is not None:

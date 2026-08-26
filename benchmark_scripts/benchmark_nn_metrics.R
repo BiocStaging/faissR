@@ -24,7 +24,7 @@ canonical_metric_key <- function(metric) {
 
 canonical_metric_values <- function(metrics) {
   metrics <- canonical_metric_key(metrics)
-  metrics <- metrics[metrics %in% c("euclidean", "cosine", "correlation", "inner_product")]
+  metrics <- metrics[metrics %in% c("euclidean", "cosine", "correlation")]
   unique(metrics)
 }
 
@@ -32,7 +32,7 @@ validate_metric_values <- function(metrics, arg_name = "metrics") {
   raw <- trimws(as.character(metrics))
   raw <- raw[nzchar(raw)]
   metrics <- unique(canonical_metric_key(raw))
-  valid <- c("euclidean", "cosine", "correlation", "inner_product")
+  valid <- c("euclidean", "cosine", "correlation")
   invalid <- metrics[!metrics %in% valid]
   if (length(invalid)) {
     stop(
@@ -51,7 +51,7 @@ validate_metric_values <- function(metrics, arg_name = "metrics") {
 }
 
 default_nn_metric_values <- function() {
-  c("euclidean", "cosine", "correlation", "inner_product")
+  c("euclidean", "cosine", "correlation")
 }
 
 default_nn_method_values <- function() {
@@ -475,7 +475,7 @@ with_elapsed_limit <- function(expr, timeout) {
 }
 
 cuda_exact_reference_available <- function(metric) {
-  if (metric %in% c("cosine", "correlation", "inner_product")) {
+  if (metric %in% c("cosine", "correlation")) {
     return(isTRUE(faissR::faiss_gpu_available()))
   }
   isTRUE(faissR::faiss_gpu_available()) || isTRUE(faissR::cuvs_available())
@@ -540,7 +540,7 @@ metric_reference <- function(x, k, metric, quality_n, quality_max_ops, n_threads
   sample_n <- min(as.integer(quality_n), n)
   sample_ops <- as.double(sample_n) * as.double(n) * as.double(p)
   if (sample_n < 1L) return(NULL)
-  set.seed(seed + as.integer(k) + match(metric, c("euclidean", "cosine", "correlation", "inner_product")))
+  set.seed(seed + as.integer(k) + match(metric, c("euclidean", "cosine", "correlation")))
   rows <- sort(sample.int(n, sample_n))
   if (sample_ops > quality_max_ops &&
       sample_ops <= cuda_ops_limit &&
@@ -1756,8 +1756,7 @@ nn_data_expected_skip <- function(x, method, metric = "euclidean", backend = "cp
       ))
     }
   }
-  if (backend %in% c("auto", "cuda") && identical(method, "nndescent") &&
-      !identical(metric, "inner_product")) {
+  if (backend %in% c("auto", "cuda") && identical(method, "nndescent")) {
     n <- nrow(x)
     p <- ncol(x)
     compact_very_wide <- length(n) == 1L && length(p) == 1L &&

@@ -29,7 +29,6 @@ slug_job <- function(metric) {
     euclidean = "EUCL",
     cosine = "COS",
     correlation = "COR",
-    inner_product = "IP",
     toupper(metric)
   )
 }
@@ -137,7 +136,7 @@ main <- function() {
   default_dir <- dirname(script_path())
   script_dir <- normalizePath(args$script_dir %||% default_dir, mustWork = TRUE)
   script_dir_global(script_dir)
-  metrics <- c("euclidean", "cosine", "correlation", "inner_product")
+  metrics <- c("euclidean", "cosine", "correlation")
 
   launchers <- list.files(
     script_dir,

@@ -11,8 +11,8 @@ nn(
   exclude_self = FALSE,
   backend = NULL,
   method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq",
-    "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"),
-  metric = c("euclidean", "cosine", "correlation", "inner_product"),
+    "vamana_style", "nsg_style", "nndescent_style", "ivfpq_fastscan", "cagra"),
+  metric = c("euclidean", "cosine", "correlation"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   target_recall = 0.99,
   cagra_implementation = NULL,
@@ -54,41 +54,40 @@ support or the selected CUDA combination is unavailable.}
 \item{method}{Algorithm selector. `"auto"` chooses a shape-aware default for
 the selected backend. Other values include `"exact"`, `"flat"`,
 `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`,
-`"ivfpq"`, `"vamana"`, `"nsg"`, `"nndescent"`,
-`"ivfpq_fastscan"`, and `"cagra"`. Use these canonical
-lowercase method labels; resolved implementation labels such as
+`"ivfpq"`, `"vamana_style"`, `"nsg_style"`,
+`"nndescent_style"`, `"ivfpq_fastscan"`, and `"cagra"`. The historical
+shorter spellings `"vamana"`, `"nsg"`, and `"nndescent"` remain accepted
+compatibility aliases. Use these public lowercase method labels; resolved
+implementation labels such as
 `"faiss_hnsw"` or `"cuda_cuvs_cagra"` are not public `method` values. Unsupported
 backend/method combinations fail clearly; for example,
 `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only,
-and CUDA `method = "ivfpq_fastscan"` accepts Euclidean/L2, cosine,
-correlation, and raw inner-product search. CPU FastScan accepts Euclidean,
-cosine, correlation, and raw inner product; cosine is implemented by row
+and CUDA `method = "ivfpq_fastscan"` accepts Euclidean/L2, cosine, and
+correlation. CPU FastScan accepts the same metrics; cosine is implemented by row
 L2 normalization, correlation by row centering plus L2 normalization
-followed by FastScan L2 search, and raw inner product by FAISS FastScan IP.
-CUDA raw inner product applies the maximum-inner-product-to-L2 transform
-before direct cuVS 4-bit IVF-PQ search.}
+followed by FastScan L2 search.
+The preferred names for package-owned graph refinement are
+`"nsg_style"`, `"vamana_style"`, and `"nndescent_style"`; the shorter
+names remain compatibility aliases. Native results explicitly report that
+they are style implementations rather than feature-complete canonical
+reproductions. CUDA cuVS NN-descent is identified separately as an
+external-provider implementation.}
 
 \item{metric}{Distance metric. The intentionally small public set is
-`"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.
-Legacy metric aliases such as `"l2"`, `"cor"`, `"pearson"`, `"ip"`,
-`"dot"`, and `"innerproduct"` are rejected; use the canonical metric
-names.
-`"inner_product"` is the raw dot product, `"cosine"` is the dot product
-after row L2 normalization, and `"correlation"` is centered cosine
+`"euclidean"`, `"cosine"`, and `"correlation"`.
+Legacy aliases such as `"l2"`, `"cor"`, `"pearson"`, and `"ip"` are
+rejected; use the canonical metric names. `"cosine"` uses row L2
+normalization, and `"correlation"` is centered cosine
 similarity after subtracting each row mean and L2-normalizing each row.
-For `metric = "inner_product"`, neighbours are ranked by larger raw dot
-product, but returned `distances` keep faissR's smaller-is-better
-convention: within each query row the best returned dot product has
-distance `0`, and lower dot products have larger shifted distances.
 `"euclidean"` is the validated high-performance default. `"cosine"` and
 `"correlation"` are implemented for exact CPU KNN, native 2D/3D grid
 search, FAISS CPU/GPU Flat,
 FAISS CPU/GPU IVF-Flat, FAISS CPU/GPU IVFPQ, FAISS CPU FastScan,
 CUDA cuVS IVFPQ FastScan for cosine and correlation,
-FAISS CPU HNSW, and native graph-refinement routes. FAISS approximate
-IP-capable routes use row L2 normalization
+FAISS CPU HNSW, and native graph-refinement routes. Similarity-capable
+routes use row L2 normalization
 for cosine and row centering plus L2 normalization for correlation before
-inner-product search; distances are returned as `1 - similarity`.
+search; distances are returned as `1 - similarity`.
 All-zero cosine rows and constant correlation rows are zero-normalized
 edge cases: two zero-normalized rows have distance `0`, while a
 zero-normalized row versus a nonzero row has distance `1`. CPU FAISS Flat
@@ -101,16 +100,8 @@ CPU `method = "auto"` can use FAISS Flat for larger exact non-Euclidean
 query workloads, FAISS HNSW for large non-Euclidean self-search, native
 CPU NSG/Vamana refinement for selected larger self-KNN cases, and native
 CPU NN-descent for other large self-KNN cases. CPU `method = "hnsw"` uses
-FAISS HNSW for all metrics.
-`"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP,
-FAISS IVF-Flat/IVFPQ IP, FAISS HNSW IP, native CPU NN-descent raw
-dot-product search, direct cuVS brute force through an exact MIPS-to-L2
-transform, direct cuVS IVF/PQ through transformed approximate L2 indexes,
-CUDA CAGRA and CUDA cuVS HNSW through the same MIPS-to-L2 graph-search
-transform. CUDA `method = "nndescent"` uses direct cuVS NN-descent and
-does not support raw inner-product search.
-Direct cuVS NN-descent does not expose a safe raw-inner-product route in
-faissR. CUDA HNSW metadata records the available cuVS HNSW wrapper design.
+FAISS HNSW for all three metrics. CUDA HNSW metadata records the available
+cuVS HNSW wrapper design.
 Unsupported backend combinations fail clearly instead of returning neighbours
 computed under a different metric.}
 
@@ -180,7 +171,10 @@ ignore this argument.}
 \value{
 A list with integer matrix `indices`, `distances`, and stable
   metadata fields `index_base`, `distance_type`, `metric`, and
-  `backend_used`. Float32 routes also record `input_layout` and
+  `backend_used`. Every result declares `distance_is_metric`,
+  `distance_semantics`, `distance_comparable_across_queries`, and
+  `distance_order`.
+  Float32 routes also record `input_layout` and
   `input_owns_data` so downstream packages can distinguish direct float32
   payload use from one-time row-major conversion. Normalized Euclidean graph
   routes for cosine/correlation record `metric_transform` and
@@ -193,7 +187,11 @@ A list with integer matrix `indices`, `distances`, and stable
   `attr(result, "auto_selection")`, a static shape/k/metric decision record
   that records the predicted internal backend, public method class, device
   class, explicit backend/method flags, backend/method decision reasons, and
-  does not run pilot tuning. CPU FAISS Flat/HNSW/IVF/IVFPQ/FastScan routes use a
+  hardware provenance. A capability-compatible machine that differs from
+  the calibration hardware keeps the compiled policy but is labelled
+  `hardware_extrapolated_unvalidated`; hardware identity alone never causes
+  a silent method or device fallback. The selector does not run pilot
+  tuning. CPU FAISS Flat/HNSW/IVF/IVFPQ/FastScan routes use a
   bounded session-local fitted-index cache for repeated raw `nn()` calls
   with matching data and parameters. CUDA `method = "ivfpq_fastscan"` also
   reuses a fitted cuVS IVF-PQ index, dataset device buffer, and cuVS resources
@@ -208,13 +206,12 @@ A list with integer matrix `indices`, `distances`, and stable
   `options(faissR.cache_fitted_nn_indexes_max_entries = <n>)`, or bound CUDA
   FastScan GPU memory with
   `options(faissR.cache_fitted_cuda_ivfpq_indexes_max_entries = <n>)`.
-  CPU Euclidean, cosine, correlation, and raw inner-product
+  CPU Euclidean, cosine, and correlation
   `method = "ivfpq_fastscan"` resolve `tuning = "auto"` in C++ from
   shape/k/target-recall defaults for `nlist`, `nprobe`, `pq_m`,
   `refine_factor`, and FastScan block size. Cosine uses row L2 normalization
-  and correlation uses row centering plus L2 normalization before FastScan L2;
-  raw inner product uses FastScan IP. CUDA FastScan cosine, correlation, and
-  raw-inner-product auto policies are seeded from the CUDA Euclidean
+  and correlation uses row centering plus L2 normalization before FastScan L2.
+  CUDA FastScan cosine and correlation auto policies are seeded from the CUDA Euclidean
   FastScan table until metric-specific HPC sweeps replace them, and those
   rows report `tuning_benchmark_target_met = FALSE`.
 }
@@ -244,13 +241,16 @@ The public methods are:
   \item `"ivfpq"`: compressed FAISS IVF-PQ approximate search.
   \item `"ivfpq_fastscan"`: FAISS FastScan on CPU and the package's
   separately identified cuVS 4-bit IVF-PQ route on CUDA.
-  \item `"vamana"`: a faissR robust-pruned candidate graph inspired by
-  DiskANN/Vamana, followed by CPU or CUDA candidate refinement.
-  \item `"nsg"`: a faissR NSG/MRNG-style candidate graph followed by CPU or
-  CUDA candidate refinement.
-  \item `"nndescent"`: native CPU NN-descent or direct cuVS NN-descent on
-  CUDA. CUDA raw inner product is unsupported because cuVS exposes a
-  symmetric one-dataset graph API.
+  \item `"vamana_style"` (`"vamana"` compatibility alias): a package-owned
+  robust-pruned candidate graph inspired by DiskANN/Vamana, followed by CPU
+  or CUDA candidate refinement. It is not a feature-complete Vamana
+  reproduction.
+  \item `"nsg_style"` (`"nsg"` compatibility alias): a package-owned
+  NSG/MRNG-style candidate graph followed by CPU or CUDA candidate
+  refinement. It is not a feature-complete NSG reproduction.
+  \item `"nndescent_style"` (`"nndescent"` compatibility alias): the
+  package-owned CPU NN-descent-style graph route or direct external-provider
+  cuVS NN-descent on CUDA.
   \item `"cagra"`: CUDA-only FAISS GPU CAGRA or direct cuVS CAGRA. Use
   `cagra_implementation` to request a provider explicitly.
 }
@@ -265,7 +265,6 @@ x <- scale(as.matrix(iris[, 1:4]))
 knn_euclidean <- nn(x, k = 16, metric = "euclidean", backend = "cpu")
 knn_cosine <- nn(x, k = 16, metric = "cosine", backend = "cpu")
 knn_correlation <- nn(x, k = 16, metric = "correlation", backend = "cpu")
-knn_ip <- nn(x, k = 16, metric = "inner_product", backend = "cpu")
 }
 \references{
 Johnson J, Douze M, Jegou H. Billion-scale similarity search with GPUs. IEEE
@@ -275,7 +274,7 @@ Douze M, Guzhva A, Deng C, Johnson J, Szilvasy G, Mazaré PE, et al. The
 FAISS library. arXiv 2024. See also the FAISS C++ API documentation.
 
 RAPIDS Development Team. RAPIDS cuVS: GPU-accelerated vector search and
-clustering. https://github.com/rapidsai/cuvs.
+clustering. https://github.com/NVIDIA/cuvs.
 
 Dong W, Moses C, Li K. Efficient k-nearest neighbor graph construction for
 generic similarity measures. WWW 2011:577-586.

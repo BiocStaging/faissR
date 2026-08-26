@@ -29,37 +29,28 @@ by design from combinations that should be treated as expected skips in
 benchmarks.
 }
 \details{
-faissR exposes four public nearest-neighbour metrics: \code{"euclidean"},
-\code{"cosine"}, \code{"correlation"}, and \code{"inner_product"}. Correlation
-is centered cosine similarity, whereas inner product is the raw dot product.
-For \code{metric = "inner_product"}, neighbours are ranked by larger raw dot
-product, but returned \code{distances} keep faissR's smaller-is-better
-convention by shifting each query row so the best returned dot product has
-distance \code{0}.
+faissR exposes three public nearest-neighbour metrics: \code{"euclidean"},
+\code{"cosine"}, and \code{"correlation"}. Correlation is centered cosine
+similarity.
 
 The capability table reports metric support only when the selected route
 computes neighbours under that metric. FAISS Flat, IVF-Flat, IVFPQ, and HNSW
-support cosine and correlation by using normalized inner-product searches.
+support cosine and correlation by using normalized dot-product searches.
 CAGRA and NNDescent support cosine and correlation by using normalized
-Euclidean graph search. Native CPU NNDescent and faissR's native CUDA
-NNDescent candidate-refinement route also support raw inner-product self-KNN
-through faissR's shifted dot-product distance convention. Public CUDA CAGRA
-supports raw inner product through the same maximum-inner-product-to-L2
-transform used by direct cuVS brute-force and IVF/PQ routes. Public CUDA HNSW
+Euclidean graph search. Public CUDA HNSW
 uses RAPIDS cuVS HNSW from a CAGRA seed graph with a cuVS CPU hierarchy and records that wrapper design
 in metadata rather than presenting it as a pure all-GPU HNSW implementation.
 Public CPU NSG uses faissR's native
 NSG-style route for all metrics because linked FAISS graph builders can abort
 during graph construction; large high-dimensional CPU inputs use deterministic
-FAISS HNSW seeding before NSG/MRNG-style pruning. Direct cuVS NNDescent does
-not expose raw inner-product search.
+FAISS HNSW seeding before NSG/MRNG-style pruning.
 Public CUDA \code{method = "cagra"} can resolve to FAISS GPU CAGRA or direct
 cuVS CAGRA; \code{options(faissR.cagra_implementation = "faiss_gpu")} or
 \code{"cuvs"} forces one provider, while \code{"auto"} uses a deterministic
 shape rule: direct cuVS CAGRA is selected for compact high-dimensional
 self-KNN, and FAISS GPU CAGRA remains the default when both providers are
 available for other shapes. Availability preflights respect the forced provider
-for all CAGRA metrics, and returned approximate NN objects record
+for all supported CAGRA metrics, and returned approximate NN objects record
 \code{cagra_provider} plus \code{cagra_provider_option}.
 
 Use \code{runtime = TRUE} for benchmark preflight checks that must distinguish

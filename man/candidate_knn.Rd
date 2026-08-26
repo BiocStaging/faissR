@@ -10,7 +10,7 @@ candidate_knn(
   points = data,
   k,
   backend = NULL,
-  metric = c("euclidean", "cosine", "correlation", "inner_product"),
+  metric = c("euclidean", "cosine", "correlation"),
   n_threads = NULL,
   exclude_self = FALSE
 )
@@ -31,15 +31,11 @@ entries are ignored.}
 `"cuda"` for the native CUDA row-candidate kernel. GPU backends currently
 require self-query candidates with `exclude_self = TRUE`.}
 
-\item{metric}{`"euclidean"`, `"cosine"`, `"correlation"`, or
-`"inner_product"`. Legacy metric aliases such as `"l2"`, `"cor"`,
+\item{metric}{`"euclidean"`, `"cosine"`, or `"correlation"`. Legacy
+metric aliases such as `"l2"`, `"cor"`,
 `"pearson"`, and `"ip"` are rejected. Correlation is centered cosine
-similarity, not raw inner product. CPU inner-product scoring ranks by larger raw dot product,
-while returned `distances` are shifted within each query so the best
-returned dot product has distance `0`. CUDA candidate scoring supports
-Euclidean directly, cosine/correlation through normalized Euclidean
-scoring, and raw inner-product scoring through a dedicated CUDA kernel
-mode that preserves the same shifted-distance convention as CPU.}
+similarity. CUDA candidate scoring supports Euclidean directly and
+cosine/correlation through normalized Euclidean scoring.}
 
 \item{n_threads}{CPU threads for the CPU backend.}
 
@@ -49,7 +45,8 @@ set. This is valid only for self-query candidate KNN.}
 \value{
 A `faissR_nn` object with `indices` and `distances`. If a row
   has fewer than `k` valid unique candidates, remaining entries are `NA` and
-  `Inf`.
+  `Inf`. Distance-contract metadata states whether the returned values are a
+  metric and comparable across query rows.
 }
 \description{
 `candidate_knn()` computes exact top-k neighbours restricted to a supplied

@@ -1428,6 +1428,72 @@ void search_grid3d_exact(const std::vector<Scalar>& x,
 } // namespace
 
 // [[Rcpp::export]]
+NumericMatrix inner_product_scores_float32_cpp(SEXP data,
+                                               SEXP points,
+                                               IntegerMatrix indices,
+                                               int cores) {
+  MatrixViewF32 data_view = make_row_major_float32_view(data, "data");
+  const bool same_object = data == points;
+  MatrixViewF32 points_view = same_object ?
+    MatrixViewF32() :
+    make_row_major_float32_view(points, "points");
+  if (same_object) {
+    points_view.nrow = data_view.nrow;
+    points_view.ncol = data_view.ncol;
+    points_view.data = data_view.data;
+    points_view.layout = data_view.layout;
+  }
+  if (points_view.ncol != data_view.ncol) {
+    Rcpp::stop("data and points must have the same number of columns");
+  }
+  if (indices.nrow() != points_view.nrow) {
+    Rcpp::stop("indices must have one row per query");
+  }
+
+  const int n_points = points_view.nrow;
+  const int n_neighbors = indices.ncol();
+  const int n_features = data_view.ncol;
+  NumericMatrix scores(n_points, n_neighbors);
+  const int n_threads = requested_threads(cores > 1, cores, n_points);
+  auto worker = [&](const int start, const int end) {
+    for (int q = start; q < end; ++q) {
+      const float* query = points_view.data +
+        static_cast<std::size_t>(q) * n_features;
+      for (int j = 0; j < n_neighbors; ++j) {
+        const std::size_t dst = static_cast<std::size_t>(j) * n_points + q;
+        const int index = indices[dst];
+        if (index == NA_INTEGER || index < 1 || index > data_view.nrow) {
+          scores[dst] = NA_REAL;
+          continue;
+        }
+        const float* reference = data_view.data +
+          static_cast<std::size_t>(index - 1) * n_features;
+        double dot = 0.0;
+        for (int c = 0; c < n_features; ++c) {
+          dot += static_cast<double>(query[c]) *
+            static_cast<double>(reference[c]);
+        }
+        scores[dst] = dot;
+      }
+    }
+  };
+
+  if (n_threads == 1) {
+    worker(0, n_points);
+  } else {
+    std::vector<std::thread> workers;
+    workers.reserve(static_cast<std::size_t>(n_threads));
+    for (int t = 0; t < n_threads; ++t) {
+      const int start = (n_points * t) / n_threads;
+      const int end = (n_points * (t + 1)) / n_threads;
+      workers.emplace_back(worker, start, end);
+    }
+    for (auto& thread : workers) thread.join();
+  }
+  return scores;
+}
+
+// [[Rcpp::export]]
 List nn_cpp(NumericMatrix data,
             NumericMatrix points,
             int k,

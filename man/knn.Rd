@@ -9,9 +9,12 @@ knn(
   Ytrain,
   Xtest = NULL,
   backend = NULL,
-  method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq",
-    "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"),
-  metric = c("euclidean", "cosine", "correlation", "inner_product"),
+  method = c(
+    "auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf",
+    "ivfpq", "vamana_style", "nsg_style", "nndescent_style",
+    "ivfpq_fastscan", "cagra"
+  ),
+  metric = c("euclidean", "cosine", "correlation"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   target_recall = 0.99,
   cagra_implementation = NULL,
@@ -34,9 +37,8 @@ resolution, using CUDA only for validated CUDA combinations when CUDA/cuVS
 runtime support is available, and CPU otherwise.}
 \item{method}{Nearest-neighbour algorithm selector passed to \code{nn()}. \code{"auto"} chooses the most appropriate method for the selected backend. See \code{?nn} for descriptions and references for \code{"exact"}, \code{"flat"}, \code{"bruteforce"}, \code{"grid"}, \code{"hnsw"}, \code{"ivf"}, \code{"ivfpq"}, \code{"ivfpq_fastscan"}, \code{"vamana"}, \code{"nsg"}, \code{"nndescent"}, and \code{"cagra"}.}
 \item{metric}{Distance metric passed to \code{nn()}: \code{"euclidean"},
-\code{"cosine"}, \code{"correlation"}, or \code{"inner_product"}. Legacy metric
-aliases such as \code{"l2"}, \code{"cor"}, \code{"pearson"}, and \code{"ip"} are rejected.
-Correlation is centered cosine similarity, not raw inner product. See
+\code{"cosine"}, or \code{"correlation"}. Legacy metric aliases are rejected.
+Correlation is centered cosine similarity. See
 \code{nn()} for metric/backend support details, including metric-aware CPU
 HNSW routing.}
 \item{tuning}{Tuning policy passed to \code{nn()}. \code{"auto"} uses the deterministic default for the resolved method; \code{"cache"} and \code{"pilot"} opt into pilot tuning where implemented. FAISS GPU IVF pilot/cache tuning is Euclidean-only; non-Euclidean IVF routes use deterministic metric-aware defaults.}

@@ -24,7 +24,6 @@ set -euo pipefail
 #
 # Or submit a metric-specific wrapper such as:
 #   sbatch /scratch/firenze/NN/benchmark_scripts/run_hpc_ivf_tuning_cuda_correlation.sh
-#   sbatch /scratch/firenze/NN/benchmark_scripts/run_hpc_ivf_tuning_cuda_inner_product.sh
 #
 # The job scans float32 .RData files, uses explicit backend="cuda",
 # method="ivf", the metrics listed in METRICS, k=15,30,50,100, and writes
@@ -54,7 +53,7 @@ export R_BIN="${R_BIN:-Rscript}"
 
 export DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41,TabulaMuris}"
 export K_VALUES="${K_VALUES:-15,30,50,100}"
-export METRICS="${METRICS:-euclidean,cosine,correlation,inner_product}"
+export METRICS="${METRICS:-euclidean,cosine,correlation}"
 export TARGET_RECALLS="${TARGET_RECALLS:-0.9,0.95,0.99}"
 export OUTPUT_VALUES="${OUTPUT_VALUES:-float}"
 export SKIP_PREVIOUS_TIMEOUTS="${SKIP_PREVIOUS_TIMEOUTS:-TRUE}"

@@ -16,21 +16,18 @@
 #' @param backend `"auto"`/`"cpu"` for the general CPU implementation,
 #'   `"cuda"` for the native CUDA row-candidate kernel. GPU backends currently
 #'   require self-query candidates with `exclude_self = TRUE`.
-#' @param metric `"euclidean"`, `"cosine"`, `"correlation"`, or
-#'   `"inner_product"`. Legacy metric aliases such as `"l2"`, `"cor"`,
+#' @param metric `"euclidean"`, `"cosine"`, or `"correlation"`. Legacy
+#'   metric aliases such as `"l2"`, `"cor"`,
 #'   `"pearson"`, and `"ip"` are rejected. Correlation is centered cosine
-#'   similarity, not raw inner product. CPU inner-product scoring ranks by larger raw dot product,
-#'   while returned `distances` are shifted within each query so the best
-#'   returned dot product has distance `0`. CUDA candidate scoring supports
-#'   Euclidean directly, cosine/correlation through normalized Euclidean
-#'   scoring, and raw inner-product scoring through a dedicated CUDA kernel
-#'   mode that preserves the same shifted-distance convention as CPU.
+#'   similarity. CUDA candidate scoring supports Euclidean directly and
+#'   cosine/correlation through normalized Euclidean scoring.
 #' @param n_threads CPU threads for the CPU backend.
 #' @param exclude_self If `TRUE`, remove each query row from its own candidate
 #'   set. This is valid only for self-query candidate KNN.
 #' @return A `faissR_nn` object with `indices` and `distances`. If a row
 #'   has fewer than `k` valid unique candidates, remaining entries are `NA` and
-#'   `Inf`.
+#'   `Inf`. Distance-contract metadata states whether the returned values are a
+#'   metric and comparable across query rows.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
 #' rough <- nn(x, k = 10, backend = "cpu")
@@ -42,9 +39,10 @@ candidate_knn <- function(data,
                           points = data,
                           k,
                           backend = NULL,
-                          metric = c("euclidean", "cosine", "correlation", "inner_product"),
+                          metric = c("euclidean", "cosine", "correlation"),
                           n_threads = NULL,
                           exclude_self = FALSE) {
+  if (missing(metric)) metric <- "euclidean"
   backend <- normalize_public_backend_arg(backend)
   metric <- normalize_nn_metric(metric)
   exclude_self <- normalize_scalar_logical_arg(exclude_self, "exclude_self", default = FALSE)
@@ -97,8 +95,7 @@ candidate_knn <- function(data,
       metric_inputs <- normalized_euclidean_metric_inputs(x, q, self_query, metric)
       search_x <- metric_inputs$data
     }
-    cuda_metric <- if (identical(metric, "inner_product")) "inner_product" else "euclidean"
-    out <- row_candidate_knn_cuda_cpp(search_x, cand, as.integer(k), cuda_metric)
+    out <- row_candidate_knn_cuda_cpp(search_x, cand, as.integer(k), "euclidean")
     result <- finish_nn_result(out, "cuda_candidate", k, TRUE, exact = FALSE, metric = metric)
     if (!is.null(metric_inputs)) {
       result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
@@ -107,7 +104,7 @@ candidate_knn <- function(data,
       candidate_columns = as.integer(ncol(cand)),
       exclude_self = exclude_self,
       exact_within_candidates = TRUE,
-      cuda_metric = cuda_metric,
+      cuda_metric = "euclidean",
       transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform
     )
     return(result)

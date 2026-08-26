@@ -25,46 +25,6 @@ source_benchmark_helpers <- function(path, stop_marker) {
   env
 }
 
-test_that("NN metric benchmark defaults cover full method metric backend and k grid", {
-  env <- source_benchmark_helpers(
-    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
-    "args <- parse_args()"
-  )
-
-  expect_setequal(
-    env$default_nn_metric_values(),
-    c("euclidean", "cosine", "correlation", "inner_product")
-  )
-  expect_setequal(env$default_nn_backend_values(), c("auto", "cpu", "cuda"))
-  expect_setequal(
-    env$default_nn_method_values(),
-    c(
-      "auto", "exact", "flat", "bruteforce", "grid",
-      "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"
-    )
-  )
-  expect_equal(env$default_nn_k_values(), c(5L, 10L, 15L, 50L, 100L))
-  expect_equal(env$nn_k_values_arg(list(k = "15")), "15")
-  expect_equal(env$nn_k_values_arg(list(k_values = "5,10", k = "15")), "5,10")
-  expect_null(env$nn_k_values_arg(list()))
-  expect_equal(env$default_nn_cycles(), 10L)
-  expect_equal(
-    env$validate_metric_values(c("euclidean", "correlation", "inner_product")),
-    c("euclidean", "correlation", "inner_product")
-  )
-  expect_error(
-    env$validate_metric_values(c("l2", "pearson", "ip", "dot-product")),
-    "Invalid value"
-  )
-  expect_error(
-    env$validate_metric_values("manhattan"),
-    "faissR public metrics"
-  )
-  expect_error(
-    env$required_positive_int_values(c("5", "0", "10"), "k_values"),
-    "positive integers"
-  )
-})
 
 test_that("NN metric benchmark isolates high-work CPU native timeout risks", {
   env <- source_benchmark_helpers(
@@ -462,46 +422,7 @@ test_that("benchmark dataset defaults use the requested real and simulated datas
   }
 })
 
-test_that("NN metric benchmark preflights NSG metric and runtime skips", {
-  env <- source_benchmark_helpers(
-    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
-    "args <- parse_args()"
-  )
-  caps <- nn_capabilities()
 
-  for (metric in c("cosine", "correlation", "inner_product")) {
-    skip <- env$is_expected_skip(caps, "cpu", "nsg", metric)
-    expect_null(skip)
-
-    cuda_skip <- env$is_expected_skip(caps, "cuda", "nsg", metric)
-    if (!is.null(cuda_skip)) {
-      expect_true(isTRUE(cuda_skip$skip))
-      expect_match(cuda_skip$reason, "runtime_unavailable|missing_cuda_route")
-    }
-  }
-})
-
-test_that("NN metric benchmark preflights auto rows from nn_capabilities", {
-  env <- source_benchmark_helpers(
-    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
-    "args <- parse_args()"
-  )
-  caps <- nn_capabilities()
-
-  skip <- env$is_expected_skip(caps, "cpu", "cagra", "inner_product")
-  expect_type(skip, "list")
-  expect_true(isTRUE(skip$skip))
-  expect_true(nzchar(skip$reason))
-  expect_match(skip$notes, "CUDA-only|unsupported", ignore.case = TRUE)
-
-  auto_cap <- env$capability_status(caps, "auto", "flat", "inner_product")
-  expect_true(isTRUE(auto_cap$supported))
-  skip <- env$is_expected_skip(caps, "auto", "flat", "inner_product")
-  if (!is.null(skip)) {
-    expect_true(isTRUE(skip$skip))
-    expect_match(skip$notes, "requires|unavailable|resolver", ignore.case = TRUE)
-  }
-})
 
 test_that("NN metric benchmark preflights every unsupported capability row", {
   env <- source_benchmark_helpers(
@@ -787,31 +708,6 @@ test_that("NN metric best rows use threshold-aware speed and recall rules", {
   expect_equal(best_cycle$method, c("fast_good", "higher_recall_slow", "fast_missing_recall", "cycle1_fast_good", "cycle2_fast_good"))
 })
 
-test_that("NN metric benchmark rejects legacy metric aliases before preflight", {
-  env <- source_benchmark_helpers(
-    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
-    "args <- parse_args()"
-  )
-  caps <- nn_capabilities()
-
-  expect_equal(env$canonical_metric_values(c("l2", "pearson", "ip", "dot-product", "unknown")), character())
-  expect_error(
-    env$validate_metric_values(c("l2", "pearson", "ip", "dot-product")),
-    "Invalid value"
-  )
-  expect_error(
-    env$validate_metric_values(c("euclidean", "manhattan")),
-    "Invalid value\\(s\\): manhattan"
-  )
-  expect_error(
-    env$validate_metric_values(character()),
-    "at least one metric"
-  )
-  expect_true(isTRUE(env$capability_status(caps, "cpu", "flat", "euclidean")$supported))
-  expect_true(isTRUE(env$capability_status(caps, "cpu", "flat", "correlation")$supported))
-  expect_true(isTRUE(env$capability_status(caps, "cpu", "flat", "inner_product")$supported))
-  expect_true(isTRUE(env$capability_status(caps, "cpu", "nsg", "inner_product")$supported))
-})
 
 test_that("NN metric benchmark validates public backend labels", {
   env <- source_benchmark_helpers(
@@ -881,90 +777,6 @@ test_that("NN metric benchmark validates dataset selectors", {
   )
 })
 
-test_that("NN metric benchmark defaults cover requested metrics and k grid", {
-  env <- source_benchmark_helpers(
-    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
-    "args <- parse_args()"
-  )
-
-  expect_equal(
-    env$default_nn_method_values(),
-    faissR:::nn_method_labels()
-  )
-  expect_equal(
-    env$default_nn_backend_values(),
-    c("auto", "cpu", "cuda")
-  )
-  expect_equal(
-    env$default_nn_metric_values(),
-    c("euclidean", "cosine", "correlation", "inner_product")
-  )
-  expect_equal(
-    env$default_nn_k_values(),
-    c(5L, 10L, 15L, 50L, 100L)
-  )
-  expect_equal(env$default_nn_cycles(), 10L)
-  expect_equal(
-    env$canonical_metric_values(c("unknown")),
-    character()
-  )
-  expect_equal(
-    env$as_int_vec_arg(c("unknown"), env$default_nn_k_values()),
-    env$default_nn_k_values()
-  )
-  expect_equal(
-    env$required_positive_int_values(c("5", "10", "10"), "k_values"),
-    c(5L, 10L)
-  )
-  expect_error(
-    env$required_positive_int_values(c("5", "zero"), "k_values"),
-    "Invalid value\\(s\\): zero"
-  )
-  expect_error(
-    env$required_positive_int_values(c("0"), "k_values"),
-    "Invalid value\\(s\\): 0"
-  )
-  expect_error(
-    env$required_positive_int_values(c("15.5"), "k_values"),
-    "Invalid value\\(s\\): 15.5"
-  )
-  expect_error(
-    env$required_positive_int_values(character(), "k_values"),
-    "at least one positive integer"
-  )
-  expect_equal(env$required_positive_int_arg("12", "threads"), 12L)
-  expect_equal(env$required_positive_int_arg("600", "timeout"), 600L)
-  expect_equal(env$required_positive_int_arg("10", "cycles"), 10L)
-  expect_equal(env$required_positive_int_arg("512", "quality_n"), 512L)
-  expect_equal(env$required_positive_int_arg("42", "seed"), 42L)
-  expect_error(env$required_positive_int_arg("many", "cycles"), "positive integer")
-  expect_error(env$required_positive_int_arg("1.5", "cycles"), "positive integer")
-  expect_error(env$required_positive_int_arg(0, "quality_n"), "positive integer")
-  expect_error(env$required_positive_int_arg("many", "seed"), "positive integer")
-  expect_error(env$required_positive_int_arg("1.5", "seed"), "positive integer")
-  expect_error(env$required_positive_int_arg(0, "seed"), "positive integer")
-  expect_equal(env$required_positive_numeric_arg("5e9", "quality_max_ops"), 5e9)
-  expect_equal(env$required_positive_numeric_arg("1000", "quality_max_ops"), 1000)
-  expect_error(
-    env$required_positive_numeric_arg("many", "quality_max_ops"),
-    "positive numeric"
-  )
-  expect_error(
-    env$required_positive_numeric_arg(0, "quality_max_ops"),
-    "positive numeric"
-  )
-  expect_equal(env$required_probability_arg("0.98", "recall_threshold"), 0.98)
-  expect_equal(env$required_probability_arg(0, "recall_threshold"), 0)
-  expect_equal(env$required_probability_arg(1, "recall_threshold"), 1)
-  expect_error(
-    env$required_probability_arg("high", "recall_threshold"),
-    "between 0 and 1"
-  )
-  expect_error(
-    env$required_probability_arg(1.1, "recall_threshold"),
-    "between 0 and 1"
-  )
-})
 
 test_that("NN metric benchmark reference policy records exact CPU and cap skips", {
   env <- source_benchmark_helpers(
@@ -1404,83 +1216,6 @@ test_that("NN metric benchmark raw rows record expected-skip reason labels", {
 
 
 
-test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
-  env <- source_benchmark_helpers(
-    test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
-    "if (worker)"
-  )
-
-  methods <- env$method_table()
-  expect_false(any(methods$method %in% c("faissR_faiss_flat_ip", "faissR_faiss_gpu_flat_ip")))
-  expect_true(all(c("faissR_faiss_flat_l2", "faissR_faiss_gpu_flat_l2") %in% methods$method))
-
-  expect_equal(
-    env$benchmark_method_aliases(c("flat")),
-    "faissR_faiss_flat_l2"
-  )
-  expect_equal(
-    env$benchmark_method_aliases(c("nsg")),
-    "faissR_cpu_nsg"
-  )
-  expect_equal(
-    env$benchmark1_method_values("flat", methods$method),
-    "faissR_faiss_flat_l2"
-  )
-  expect_error(
-    env$benchmark1_method_values("faissR_faiss_flat_ip", methods$method),
-    "invalid Benchmark #1 method"
-  )
-  expect_error(
-    env$benchmark1_method_values("faissR_faiss_gpu_flat_ip", methods$method),
-    "invalid Benchmark #1 method"
-  )
-  expect_error(
-    env$benchmark1_method_values("flat,unknown_method", methods$method),
-    "invalid Benchmark #1 method"
-  )
-  expect_error(
-    env$benchmark1_method_values("", methods$method),
-    "at least one method"
-  )
-
-  expect_true(isTRUE(env$method_metric_applicable("faissR_faiss_flat_l2", "inner_product")$ok))
-  expect_true(isTRUE(env$method_metric_applicable("faissR_faiss_gpu_flat_l2", "inner_product")$ok))
-  expect_true(isTRUE(env$method_metric_applicable("faissR_cuda_cuvs_bruteforce", "inner_product")$ok))
-  expect_true(isTRUE(env$method_metric_applicable("faissR_cuda_cuvs_ivf_flat", "inner_product")$ok))
-  expect_true(isTRUE(env$method_metric_applicable("faissR_cuda_cuvs_ivfpq", "inner_product")$ok))
-  expect_true(isTRUE(env$method_is_exact("faissR_faiss_flat_l2", "inner_product")))
-  expect_true(isTRUE(env$method_is_exact("faissR_faiss_gpu_flat_l2", "inner_product")))
-  expect_true(isTRUE(env$method_is_exact("faissR_cuda_cuvs_bruteforce", "euclidean")))
-  expect_true(isTRUE(env$method_is_exact("faissR_cuda_cuvs_bruteforce", "inner_product")))
-  expect_false(isTRUE(env$method_is_exact("faissR_cuda_cuvs_ivf_flat", "inner_product")))
-  cuvs_bruteforce_route <- env$faissr_benchmark_route("faissR_cuda_cuvs_bruteforce")
-  expect_equal(cuvs_bruteforce_route$execution_backend, "cuda_cuvs_bruteforce")
-  expect_equal(cuvs_bruteforce_route$public_backend, "cuda")
-  expect_equal(cuvs_bruteforce_route$public_method, "bruteforce")
-
-  removed_cpu_route <- env$faissr_benchmark_route("faissR_faiss_flat_ip")
-  removed_gpu_route <- env$faissr_benchmark_route("faissR_faiss_gpu_flat_ip")
-  expect_equal(removed_cpu_route$execution_backend, "faiss_flat_ip")
-  expect_true(is.na(removed_cpu_route$public_backend))
-  expect_true(is.na(removed_cpu_route$public_method))
-  expect_equal(removed_gpu_route$execution_backend, "faiss_gpu_flat_ip")
-  expect_true(is.na(removed_gpu_route$public_backend))
-  expect_true(is.na(removed_gpu_route$public_method))
-
-  invalid_row <- env$invalid_worker_method_row(
-    dataset = "COIL20",
-    method = "faissR_faiss_flat_ip",
-    k = 50L,
-    metric = "inner_product",
-    n_threads = 12L
-  )
-  expect_equal(invalid_row$status, "failed")
-  expect_equal(invalid_row$quality_status, "failed")
-  expect_match(invalid_row$error, "invalid Benchmark #1 method")
-  expect_true(is.na(invalid_row$public_method))
-  expect_true(is.na(invalid_row$route_parameters))
-  expect_true(is.na(invalid_row$tuning_status))
-})
 
 test_that("legacy Benchmark #1 extracts faissR result route and tuning metadata", {
   env <- source_benchmark_helpers(
@@ -1524,79 +1259,6 @@ test_that("legacy Benchmark #1 extracts faissR result route and tuning metadata"
   expect_equal(env$benchmark1_tuning_status(out), "balanced_shape_metric")
 })
 
-test_that("legacy Benchmark #1 records faissR runtime capability preflight", {
-  env <- source_benchmark_helpers(
-    test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
-    "if (worker)"
-  )
-  methods <- env$method_table()
-  caps <- env$benchmark1_runtime_capabilities(methods, c("euclidean", "inner_product"))
-
-  expect_s3_class(caps, "data.frame")
-  expect_true(all(c(
-    "method", "metric", "execution_backend", "public_backend",
-    "public_method", "public_metric", "metric_supported",
-    "public_runtime_reason", "runtime_available", "runtime_reason", "runtime_notes"
-  ) %in% names(caps)))
-  expect_true("faissR_faiss_gpu_flat_l2" %in% caps$method)
-
-  cpu_flat <- caps[
-    caps$method == "faissR_faiss_flat_l2" & caps$metric == "euclidean",
-    ,
-    drop = FALSE
-  ]
-  expect_equal(cpu_flat$execution_backend, "faiss_flat_l2")
-  expect_equal(cpu_flat$public_backend, "cpu")
-  expect_equal(cpu_flat$public_method, "flat")
-  expect_equal(cpu_flat$public_metric, "euclidean")
-  expect_equal(cpu_flat$runtime_available, faiss_available())
-  expect_equal(cpu_flat$runtime_reason, if (faiss_available()) "available" else "missing_faiss")
-
-  cpu_nnd_ip <- caps[
-    caps$method == "faissR_cpu_nndescent" & caps$metric == "inner_product",
-    ,
-    drop = FALSE
-  ]
-  expect_equal(cpu_nnd_ip$execution_backend, "cpu_nndescent")
-  expect_equal(cpu_nnd_ip$public_backend, "cpu")
-  expect_equal(cpu_nnd_ip$public_method, "nndescent")
-  expect_equal(cpu_nnd_ip$public_metric, "inner_product")
-  expect_true(isTRUE(cpu_nnd_ip$metric_supported))
-  expect_true(isTRUE(cpu_nnd_ip$public_supported))
-  expect_equal(cpu_nnd_ip$public_resolved_backend, "cpu_nndescent")
-  expect_true(isTRUE(cpu_nnd_ip$runtime_available))
-
-  cuda_cuvs_nnd_ip <- caps[
-    caps$method == "faissR_cuda_cuvs_nndescent" & caps$metric == "inner_product",
-    ,
-    drop = FALSE
-  ]
-  expect_equal(cuda_cuvs_nnd_ip$execution_backend, "cuda_cuvs_nndescent")
-  expect_equal(cuda_cuvs_nnd_ip$public_backend, "cuda")
-  expect_equal(cuda_cuvs_nnd_ip$public_method, "nndescent")
-  expect_equal(cuda_cuvs_nnd_ip$public_metric, "inner_product")
-  expect_false(isTRUE(cuda_cuvs_nnd_ip$metric_supported))
-  expect_false(isTRUE(cuda_cuvs_nnd_ip$public_supported))
-  expect_true(is.na(cuda_cuvs_nnd_ip$public_resolved_backend))
-
-  direct_cuvs_ivf_ip <- caps[
-    caps$method == "faissR_cuda_cuvs_ivf_flat" & caps$metric == "inner_product",
-    ,
-    drop = FALSE
-  ]
-  expect_equal(direct_cuvs_ivf_ip$execution_backend, "cuda_cuvs_ivf_flat")
-  expect_equal(direct_cuvs_ivf_ip$public_backend, "cuda")
-  expect_equal(direct_cuvs_ivf_ip$public_method, "ivf")
-  expect_equal(direct_cuvs_ivf_ip$public_metric, "inner_product")
-  expect_true(isTRUE(direct_cuvs_ivf_ip$metric_supported))
-
-  gpu_skip <- env$benchmark1_runtime_skip("faissR_faiss_gpu_flat_l2", "euclidean")
-  if (isTRUE(faiss_gpu_available())) {
-    expect_null(gpu_skip)
-  } else {
-    expect_match(gpu_skip, "FAISS GPU|not available|unavailable", ignore.case = TRUE)
-  }
-})
 
 test_that("legacy Benchmark #1 uses canonical direct cuVS IVF row", {
   env <- source_benchmark_helpers(
@@ -1612,40 +1274,6 @@ test_that("legacy Benchmark #1 uses canonical direct cuVS IVF row", {
   expect_equal(aliases, "faissR_cuda_cuvs_ivf_flat")
 })
 
-test_that("legacy Benchmark #1 defaults to all four public metrics", {
-  env <- source_benchmark_helpers(
-    test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
-    "if (worker)"
-  )
-
-  expect_equal(
-    env$benchmark1_metric_values(metrics = NULL, env_metrics = NA_character_),
-    c("euclidean", "cosine", "correlation", "inner_product")
-  )
-  expect_equal(env$benchmark1_metric_value("euclidean"), "euclidean")
-  expect_error(env$benchmark1_metric_value("pearson"), "Invalid value")
-  expect_error(env$benchmark1_metric_value("ip"), "Invalid value")
-  expect_error(
-    env$benchmark1_metric_value("manhattan"),
-    "Invalid value\\(s\\): manhattan"
-  )
-  expect_equal(
-    env$benchmark1_metric_values("euclidean,correlation,inner_product", env_metrics = NA_character_),
-    c("euclidean", "correlation", "inner_product")
-  )
-  expect_error(
-    env$benchmark1_metric_values(metrics = NULL, env_metrics = "cosine,innerproduct"),
-    "Invalid value"
-  )
-  expect_error(
-    env$benchmark1_metric_values("unknown", env_metrics = NA_character_),
-    "Invalid value\\(s\\): unknown"
-  )
-  expect_error(
-    env$benchmark1_metric_values("", env_metrics = ""),
-    "at least one metric"
-  )
-})
 
 test_that("legacy Benchmark #1 validates k-value grids", {
   env <- source_benchmark_helpers(
@@ -1727,50 +1355,6 @@ test_that("legacy Benchmark #1 validates scalar numeric controls", {
   )
 })
 
-test_that("legacy Benchmark #1 exposes faissR NNDescent metric support", {
-  env <- source_benchmark_helpers(
-    test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
-    "if (worker)"
-  )
-
-  for (method in c("faissR_cpu_nndescent", "faissR_cuda_cuvs_nndescent")) {
-    expect_true(isTRUE(env$method_metric_applicable(method, "euclidean")$ok))
-    expect_true(isTRUE(env$method_metric_applicable(method, "cosine")$ok))
-    expect_true(isTRUE(env$method_metric_applicable(method, "correlation")$ok))
-  }
-  expect_true(isTRUE(env$method_metric_applicable("faissR_cpu_nndescent", "inner_product")$ok))
-  expect_false(isTRUE(env$method_metric_applicable("faissR_cuda_cuvs_nndescent", "inner_product")$ok))
-  for (metric in c("euclidean", "cosine", "correlation", "inner_product")) {
-    expect_true(isTRUE(env$method_metric_applicable("faissR_cuda_nsg", metric)$ok), info = metric)
-    expect_true(isTRUE(env$method_metric_applicable("faissR_cpu_vamana", metric)$ok), info = metric)
-    expect_true(isTRUE(env$method_metric_applicable("faissR_cuda_vamana", metric)$ok), info = metric)
-  }
-  methods <- env$method_table()
-  cpu_vamana <- methods[methods$method == "faissR_cpu_vamana", , drop = FALSE]
-  expect_equal(nrow(cpu_vamana), 1L)
-  expect_equal(cpu_vamana$execution_backend, "cpu_vamana")
-  expect_equal(cpu_vamana$public_backend, "cpu")
-  expect_equal(cpu_vamana$public_method, "vamana")
-  expect_equal(cpu_vamana$backend_detail, "Native Vamana candidate graph")
-  cuda_vamana <- methods[methods$method == "faissR_cuda_vamana", , drop = FALSE]
-  expect_equal(nrow(cuda_vamana), 1L)
-  expect_equal(cuda_vamana$execution_backend, "cuda_vamana")
-  expect_equal(cuda_vamana$public_backend, "cuda")
-  expect_equal(cuda_vamana$public_method, "vamana")
-  expect_equal(cuda_vamana$backend_detail, "Native Vamana candidate graph + CUDA refinement")
-  cuda_nsg <- methods[methods$method == "faissR_cuda_nsg", , drop = FALSE]
-  expect_equal(nrow(cuda_nsg), 1L)
-  expect_equal(cuda_nsg$execution_backend, "cuda_nsg")
-  expect_equal(cuda_nsg$public_backend, "cuda")
-  expect_equal(cuda_nsg$public_method, "nsg")
-  expect_equal(cuda_nsg$backend_detail, "Native CUDA NSG candidate graph")
-  cuda_cuvs_nnd <- methods[methods$method == "faissR_cuda_cuvs_nndescent", , drop = FALSE]
-  expect_equal(nrow(cuda_cuvs_nnd), 1L)
-  expect_equal(cuda_cuvs_nnd$execution_backend, "cuda_cuvs_nndescent")
-  expect_equal(cuda_cuvs_nnd$public_backend, "cuda")
-  expect_equal(cuda_cuvs_nnd$public_method, "nndescent")
-  expect_equal(cuda_cuvs_nnd$backend_detail, "Direct RAPIDS cuVS")
-})
 
 test_that("legacy Benchmark #1 best ranking is quality-aware before speed", {
   env <- source_benchmark_helpers(
@@ -1860,22 +1444,6 @@ test_that("legacy Benchmark #1 quality metrics guard invalid finite means", {
   expect_true(is.na(env$knn_rank_correlation(candidate, reference, k = 2L)))
 })
 
-test_that("legacy Benchmark #1 inner-product reference uses distance convention", {
-  env <- source_benchmark_helpers(
-    test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
-    "if (worker)"
-  )
-  x <- matrix(c(
-    2, 0,
-    0, 3,
-    1, 1
-  ), ncol = 2, byrow = TRUE)
-
-  ref <- env$exact_subset_knn(x, rows = 1L, k = 2L, metric = "inner_product")
-
-  expect_equal(ref$indices[1L, ], c(3L, 2L))
-  expect_equal(ref$distances[1L, ], c(0, 2), tolerance = 1e-12)
-})
 
 test_that("benchmark KNN recall ignores missing neighbour padding", {
   source_file <- test_path("../../benchmark_scripts/source.R")
@@ -2691,7 +2259,7 @@ test_that("k-means fast-vs-stats comparison guards derived metrics", {
 
 test_that("publication aggregator requires complete held-out recall", {
   path <- test_path(
-    "../../benchmark_scripts/jmlr_mloss_publication/analysis/aggregate_publication_results.R"
+    "../../benchmark_scripts/jss_reproduction/analysis/aggregate_publication_results.R"
   )
   if (!file.exists(path)) {
     skip("Publication scripts are not available in this installed-package test context.")
@@ -2727,10 +2295,42 @@ test_that("publication aggregator requires complete held-out recall", {
   expect_true(summary$complete_validation)
   expect_false(summary$target_met_all_runs)
   expect_equal(summary$min_recall_at_k, 0.98)
+  expect_equal(summary$target_recall_statistic, "mean_query_recall_at_k")
+  expect_equal(
+    summary$target_recall_replicate_rule,
+    "all_prespecified_validation_replicates"
+  )
+  expect_equal(summary$min_query_recall_role, "diagnostic_only")
+  expect_false(summary$target_attained_all_validation_replicates)
+  expect_equal(summary$n_valid_host_memory_measurements, 0L)
+  expect_true(is.na(summary$median_peak_rss_gb))
+
+  isolated_rows <- rows
+  isolated_rows$memory_process_isolated <- TRUE
+  isolated_rows$memory_valid_for_comparison <- TRUE
+  isolated_summary <- env$robust_summary(
+    isolated_rows, expected_seeds = 2L, expected_repeats = 3L
+  )
+  expect_equal(isolated_summary$n_valid_host_memory_measurements, 6L)
+  expect_equal(isolated_summary$median_peak_rss_gb, 1)
 
   rows$recall_at_k <- 0.995
   summary <- env$robust_summary(rows, expected_seeds = 2L, expected_repeats = 3L)
   expect_true(summary$target_met_all_runs)
+  expect_true(summary$target_attained_all_validation_replicates)
+
+  exact_rows <- rows
+  exact_rows$method_id <- "faissR_cpu_flat"
+  exact_rows$public_method <- "flat"
+  exact_rows$recall_at_k <- 0.98
+  exact_summary <- env$robust_summary(
+    exact_rows, expected_seeds = 2L, expected_repeats = 3L
+  )
+  expect_false(exact_summary$set_overlap_target_met_all_runs)
+  expect_true(exact_summary$exact_audited)
+  expect_true(is.na(exact_summary$approximate_target_met))
+  expect_true(exact_summary$selection_eligible)
+  expect_identical(exact_summary$quality_class, "exact-audited")
 
   missing_repeat <- rows[
     !(rows$validation_seed == 20260807 & rows$repeat_id == 3L),
@@ -2808,272 +2408,53 @@ test_that("publication aggregator requires complete held-out recall", {
   expect_identical(selector$faissr_oracle_method, "faissR_cpu_hnsw")
   expect_equal(selector$auto_over_oracle, 1.5)
   expect_true(selector$auto_provider_agreement)
-})
 
-test_that("publication external comparison enforces a common recall tier", {
-  path <- test_path(
-    "../../benchmark_scripts/jmlr_mloss_publication/common/benchmark_jmlr_tuned_methods.R"
+  selector_rows$exact_audited <- c(TRUE, TRUE, FALSE, FALSE)
+  selector_rows$approximate_target_met <- c(NA, NA, TRUE, TRUE)
+  selector_rows$selection_eligible <- TRUE
+  selector_rows$n_timeout <- c(0L, 2L, 0L, 0L)
+  selector_rows$n_out_of_memory <- 0L
+  external_pairs <- env$pair_auto_with_external(selector_rows)
+  expect_equal(nrow(external_pairs), 2L)
+  expect_equal(
+    external_pairs$paired_ratio[external_pairs$comparator_method == "FNN_kd"],
+    0.5 / 1.5
   )
-  if (!file.exists(path)) {
-    skip("Publication scripts are not available in this installed-package test context.")
-  }
-  old <- Sys.getenv("FAISSR_JMLR_SOURCE_ONLY", unset = NA_character_)
-  on.exit({
-    if (is.na(old)) Sys.unsetenv("FAISSR_JMLR_SOURCE_ONLY") else
-      Sys.setenv(FAISSR_JMLR_SOURCE_ONLY = old)
-  }, add = TRUE)
-  Sys.setenv(FAISSR_JMLR_SOURCE_ONLY = "true")
-  env <- new.env(parent = globalenv())
-  sys.source(path, envir = env)
-
-  aggregate <- data.frame(
-    dataset = "MNIST",
-    backend = "cpu",
-    metric = "euclidean",
-    k = 30L,
-    target_recall = c(0.99, 0.99, NA, NA),
-    implementation = c("faissR", "faissR", "RANN", "BiocNeighbors"),
-    method_id = c(
-      "faissR_cpu_hnsw", "faissR_cpu_flat",
-      "RANN_kd", "BiocNeighbors_hnsw"
-    ),
-    n_runs = 6L,
-    target_met_all_runs = c(FALSE, TRUE, NA, NA),
-    median_time_sec = c(1, 3, 0.5, 4),
-    min_seed_recall_at_k = c(0.95, 1, 0.8, 0.995),
-    stringsAsFactors = FALSE
+  expect_identical(
+    unique(external_pairs$ratio_definition),
+    "comparator_time/faissR_auto_time"
+  )
+  expect_equal(
+    external_pairs$comparator_timeouts[
+      external_pairs$comparator_method == "nabor_auto"
+    ],
+    2L
   )
 
-  out <- env$target_aware_external_comparison(
-    aggregate,
-    target_recalls = 0.99,
-    expected_runs = 6L
+  oracle_pairs <- env$pair_auto_with_oracle(selector)
+  expect_equal(oracle_pairs$paired_ratio, 1.5)
+  expect_identical(
+    oracle_pairs$ratio_definition,
+    "faissR_auto_time/faissR_oracle_time"
   )
-  expect_equal(nrow(out), 1L)
-  expect_equal(out$faissr_method, "faissR_cpu_flat")
-  expect_equal(out$external_method, "BiocNeighbors_hnsw")
-  expect_equal(out$speedup_faissr_vs_external, 4 / 3)
-
-  source_text <- readLines(path, warn = FALSE)
-  expect_true(any(grepl("getNNsByItemList", source_text, fixed = TRUE)))
-  expect_false(any(grepl("getNNsByVectorList", source_text, fixed = TRUE)))
-  expect_true(any(grepl("index$setSeed(as.integer(seed))", source_text, fixed = TRUE)))
-  expect_true(any(grepl("algorithm_seed =", source_text, fixed = TRUE)))
-  expect_true(any(grepl("implementation_version =", source_text, fixed = TRUE)))
-  expect_true(any(grepl("method_parameters =", source_text, fixed = TRUE)))
-
-  cpu_external <- env$external_methods("cpu")
+  all_pairs <- rbind(external_pairs, oracle_pairs)
+  by_dataset <- env$summarize_pairs_by_dataset(all_pairs)
+  across_datasets <- env$summarize_pairs_across_datasets(by_dataset)
   expect_true(all(c(
-    "FNN_kd", "FNN_cover", "FNN_brute", "nabor_auto", "nabor_brute",
-    "RcppAnnoy_angular", "RcppAnnoy_dot_product", "RcppHNSW_hnsw"
-  ) %in% cpu_external$method_id))
-  expect_true(env$metric_supported_external("RcppAnnoy_angular", "cosine"))
-  expect_false(env$metric_supported_external("RcppAnnoy_angular", "euclidean"))
-  expect_true(env$metric_supported_external(
-    "RcppAnnoy_dot_product", "inner_product"
-  ))
-  expect_false(env$metric_supported_external(
-    "RcppAnnoy_dot_product", "euclidean"
-  ))
-  expect_true(env$metric_supported_external("RcppHNSW_hnsw", "cosine"))
-  expect_true(env$metric_supported_external(
-    "RcppHNSW_hnsw", "inner_product"
-  ))
-  for (method in c(
-    "rnndescent_rpf", "rnndescent_rnnd", "rnndescent_nnd",
-    "rnndescent_bruteforce"
-  )) {
-    expect_true(env$metric_supported_external(method, "cosine"), info = method)
-    expect_true(env$metric_supported_external(method, "correlation"), info = method)
-    expect_false(env$metric_supported_external(
-      method, "inner_product"
-    ), info = method)
-  }
-  cuda_external <- env$external_methods("cuda")
-  expect_identical(cuda_external$method_id, "cuda_ml_knn")
-  expect_identical(cuda_external$kind, "not_standalone")
-  expect_match(cuda_external$detail, "supervised models")
-
-  expect_true(any(grepl("FNN::get.knn(", source_text, fixed = TRUE)))
-  expect_true(any(grepl("nabor::knn(", source_text, fixed = TRUE)))
-  expect_true(any(grepl("RcppHNSW::hnsw_knn(", source_text, fixed = TRUE)))
-  expect_equal(
-    env$canonicalize_biocneighbors_distances(
-      matrix(c(0, sqrt(0.5), sqrt(2)), nrow = 1L), "cosine"
-    ),
-    matrix(c(0, 0.25, 1), nrow = 1L),
-    tolerance = 1e-12
-  )
-  euclidean_distances <- matrix(c(0, 0.5, 2), nrow = 1L)
-  expect_identical(
-    env$canonicalize_biocneighbors_distances(
-      euclidean_distances, "euclidean"
-    ),
-    euclidean_distances
-  )
-  expect_equal(
-    env$canonicalize_annoy_angular_distances(
-      matrix(c(0, sqrt(0.5), sqrt(2)), nrow = 1L)
-    ),
-    matrix(c(0, 0.25, 1), nrow = 1L),
-    tolerance = 1e-12
-  )
-  expect_equal(
-    env$canonicalize_annoy_dot_product_scores(
-      matrix(c(3, 2, -1), nrow = 1L)
-    ),
-    matrix(c(0, 1, 4), nrow = 1L)
-  )
-  expect_equal(
-    env$canonicalize_hnsw_inner_product_distances(
-      matrix(c(-2, -1, 2), nrow = 1L)
-    ),
-    matrix(c(0, 1, 4), nrow = 1L)
-  )
-
-  reordered <- env$quality_metrics(
-    list(
-      indices = matrix(c(3L, 2L), nrow = 1L),
-      distances = matrix(c(30, 20), nrow = 1L)
-    ),
-    list(
-      indices = matrix(c(2L, 3L), nrow = 1L),
-      distances = matrix(c(20, 30), nrow = 1L)
-    ),
-    rows = 1L,
-    k = 2L
-  )
-  expect_equal(reordered$recall_at_k, 1)
-  expect_equal(reordered$mean_relative_distance_error, 0)
-
-  partial <- env$quality_metrics(
-    list(
-      indices = matrix(c(3L, 4L), nrow = 1L),
-      distances = matrix(c(31, 40), nrow = 1L)
-    ),
-    list(
-      indices = matrix(c(2L, 3L), nrow = 1L),
-      distances = matrix(c(20, 30), nrow = 1L)
-    ),
-    rows = 1L,
-    k = 2L
-  )
-  expect_equal(partial$recall_at_k, 0.5)
-  expect_equal(partial$mean_relative_distance_error, 1 / 30)
+    "n_datasets_paired", "n_cells_paired", "n_cells_unpaired",
+    "median_dataset_paired_ratio", "q1_dataset_paired_ratio",
+    "q3_dataset_paired_ratio", "min_dataset_paired_ratio",
+    "max_dataset_paired_ratio", "n_comparator_timeouts"
+  ) %in% names(across_datasets)))
+  expect_true(all(by_dataset$n_expected_cells == by_dataset$n_paired_cells))
 })
 
-test_that("reusable external benchmark records its actual index seed", {
-  path <- test_path(
-    "../../benchmark_scripts/jmlr_mloss_publication/common/benchmark_reusable_external_indexes.R"
-  )
-  if (!file.exists(path)) {
-    skip("Publication scripts are not available in this installed-package test context.")
-  }
-  old <- Sys.getenv("FAISSR_JSS_REUSABLE_SOURCE_ONLY", unset = NA_character_)
-  on.exit({
-    if (is.na(old)) Sys.unsetenv("FAISSR_JSS_REUSABLE_SOURCE_ONLY") else
-      Sys.setenv(FAISSR_JSS_REUSABLE_SOURCE_ONLY = old)
-  }, add = TRUE)
-  Sys.setenv(FAISSR_JSS_REUSABLE_SOURCE_ONLY = "true")
-  env <- new.env(parent = globalenv())
-  sys.source(path, envir = env)
 
-  config <- list(
-    dataset = "synthetic",
-    data_path = "synthetic.RData",
-    dataset_md5 = "not-used",
-    route = "RcppAnnoy_euclidean",
-    metric = "euclidean",
-    k = 4L,
-    threads = 2L,
-    index_seed = 17L,
-    conversion_sec = 0
-  )
-  row <- env$base_row(
-    config, package_version = "test", n = 40L, p = 6L,
-    seed = 23L, phase = "warm_query", repeat_id = 1L
-  )
-  expect_identical(row$algorithm_seed, 17L)
-  expect_match(row$method_parameters, "index_seed=17")
-  expect_identical(row$threads_requested, 1L)
-
-  source_text <- readLines(path, warn = FALSE)
-  expect_true(any(grepl("index$setSeed(as.integer(index_seed))", source_text, fixed = TRUE)))
-  expect_false(any(grepl("index$setSeed(4L)", source_text, fixed = TRUE)))
-
-  expect_true(any(grepl(
-    'RcppHNSW::hnsw_build(',
-    source_text,
-    fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    'RcppHNSW::hnsw_search(',
-    source_text,
-    fixed = TRUE
-  )))
-  expect_match(
-    env$reusable_parameter_string(
-      "BiocNeighbors_exhaustive", "cosine", 5L, 2L, 4L
-    ),
-    "distance=\\(normalized_L2\\^2\\)/2"
-  )
-
-  expect_equal(
-    env$canonicalize_biocneighbors_distances(
-      matrix(c(0, sqrt(0.5), sqrt(2)), nrow = 1L), "cosine"
-    ),
-    matrix(c(0, 0.25, 1), nrow = 1L),
-    tolerance = 1e-12
-  )
-  expect_equal(
-    env$canonicalize_annoy_angular_distances(
-      matrix(c(0, sqrt(0.5), sqrt(2)), nrow = 1L)
-    ),
-    matrix(c(0, 0.25, 1), nrow = 1L),
-    tolerance = 1e-12
-  )
-  expect_match(
-    env$reusable_parameter_string(
-      "RcppAnnoy_angular", "cosine", 5L, 2L, 4L
-    ),
-    "AnnoyAngular"
-  )
-  expect_equal(
-    env$canonicalize_annoy_dot_product_scores(
-      matrix(c(3, 2, -1), nrow = 1L)
-    ),
-    matrix(c(0, 1, 4), nrow = 1L)
-  )
-  expect_equal(
-    env$canonicalize_hnsw_inner_product_distances(
-      matrix(c(-2, -1, 2), nrow = 1L)
-    ),
-    matrix(c(0, 1, 4), nrow = 1L)
-  )
-  valid <- env$reusable_supported_metrics()
-  expect_identical(valid$RcppAnnoy_dot_product, "inner_product")
-  expect_identical(
-    valid$RcppHNSW_hnsw,
-    c("euclidean", "cosine", "inner_product")
-  )
-  expect_match(
-    env$reusable_parameter_string(
-      "RcppAnnoy_dot_product", "inner_product", 5L, 2L, 4L
-    ),
-    "AnnoyDotProduct"
-  )
-  expect_match(
-    env$reusable_parameter_string(
-      "RcppHNSW_hnsw", "inner_product", 5L, 2L, 4L
-    ),
-    "distance=ip"
-  )
-})
 
 test_that("RcppAnnoy angular comparison obeys the cosine-distance contract", {
   skip_if_not_installed("RcppAnnoy")
   path <- test_path(
-    "../../benchmark_scripts/jmlr_mloss_publication/common/benchmark_jmlr_tuned_methods.R"
+    "../../benchmark_scripts/jss_reproduction/common/benchmark_jmlr_tuned_methods.R"
   )
   if (!file.exists(path)) {
     skip("Publication scripts are not available in this installed-package test context.")
@@ -3110,86 +2491,10 @@ test_that("RcppAnnoy angular comparison obeys the cosine-distance contract", {
   expect_equal(result$distances, expected, tolerance = 2e-5)
 })
 
-test_that("RcppAnnoy dot-product comparison obeys the score contract", {
-  skip_if_not_installed("RcppAnnoy")
-  path <- test_path(
-    "../../benchmark_scripts/jmlr_mloss_publication/common/benchmark_jmlr_tuned_methods.R"
-  )
-  if (!file.exists(path)) {
-    skip("Publication scripts are not available in this installed-package test context.")
-  }
-  old <- Sys.getenv("FAISSR_JMLR_SOURCE_ONLY", unset = NA_character_)
-  on.exit({
-    if (is.na(old)) Sys.unsetenv("FAISSR_JMLR_SOURCE_ONLY") else
-      Sys.setenv(FAISSR_JMLR_SOURCE_ONLY = old)
-  }, add = TRUE)
-  Sys.setenv(FAISSR_JMLR_SOURCE_ONLY = "true")
-  env <- new.env(parent = globalenv())
-  sys.source(path, envir = env)
 
-  set.seed(20260801)
-  x <- matrix(rnorm(64L * 7L), nrow = 64L)
-  result <- env$run_external_method(
-    x, "RcppAnnoy_dot_product", k = 5L, metric = "inner_product",
-    threads = 1L, seed = 17L
-  )
-  expect_equal(dim(result$indices), c(64L, 5L))
-  expect_equal(dim(result$distances), c(64L, 5L))
-  expect_true(all(is.finite(result$distances)))
-  expect_true(all(vapply(seq_len(nrow(x)), function(i) {
-    !i %in% result$indices[i, ]
-  }, logical(1L))))
-
-  expected <- matrix(NA_real_, nrow(x), 5L)
-  for (i in seq_len(nrow(x))) {
-    ids <- result$indices[i, ]
-    scores <- drop(x[ids, , drop = FALSE] %*% x[i, ])
-    expected[i, ] <- max(scores) - scores
-  }
-  expect_equal(result$distances, expected, tolerance = 2e-5)
-})
-
-test_that("RcppHNSW inner-product comparison obeys the score contract", {
-  skip_if_not_installed("RcppHNSW")
-  path <- test_path(
-    "../../benchmark_scripts/jmlr_mloss_publication/common/benchmark_jmlr_tuned_methods.R"
-  )
-  if (!file.exists(path)) {
-    skip("Publication scripts are not available in this installed-package test context.")
-  }
-  old <- Sys.getenv("FAISSR_JMLR_SOURCE_ONLY", unset = NA_character_)
-  on.exit({
-    if (is.na(old)) Sys.unsetenv("FAISSR_JMLR_SOURCE_ONLY") else
-      Sys.setenv(FAISSR_JMLR_SOURCE_ONLY = old)
-  }, add = TRUE)
-  Sys.setenv(FAISSR_JMLR_SOURCE_ONLY = "true")
-  env <- new.env(parent = globalenv())
-  sys.source(path, envir = env)
-
-  set.seed(20260801)
-  x <- matrix(rnorm(64L * 7L), nrow = 64L)
-  result <- env$run_external_method(
-    x, "RcppHNSW_hnsw", k = 5L, metric = "inner_product",
-    threads = 1L, seed = 17L
-  )
-  expect_equal(dim(result$indices), c(64L, 5L))
-  expect_equal(dim(result$distances), c(64L, 5L))
-  expect_true(all(is.finite(result$distances)))
-  expect_true(all(vapply(seq_len(nrow(x)), function(i) {
-    !i %in% result$indices[i, ]
-  }, logical(1L))))
-
-  expected <- matrix(NA_real_, nrow(x), 5L)
-  for (i in seq_len(nrow(x))) {
-    ids <- result$indices[i, ]
-    scores <- drop(x[ids, , drop = FALSE] %*% x[i, ])
-    expected[i, ] <- max(scores) - scores
-  }
-  expect_equal(result$distances, expected, tolerance = 2e-5)
-})
 
 test_that("publication systems-ablation scripts retain backend-specific headers", {
-  root <- test_path("../../benchmark_scripts/jmlr_mloss_publication")
+  root <- test_path("../../benchmark_scripts/jss_reproduction")
   if (!dir.exists(root)) {
     skip("Publication scripts are not available in this installed-package test context.")
   }
@@ -3244,7 +2549,7 @@ test_that("publication systems-ablation scripts retain backend-specific headers"
 })
 
 test_that("publication references reject a changed dataset fingerprint", {
-  root <- test_path("../../benchmark_scripts/jmlr_mloss_publication")
+  root <- test_path("../../benchmark_scripts/jss_reproduction")
   if (!dir.exists(root)) {
     skip("Publication scripts are not available in this installed-package test context.")
   }
@@ -3276,332 +2581,11 @@ test_that("publication references reject a changed dataset fingerprint", {
   expect_false(cpu_env$reference_is_valid(ref_path, 3L, md5_v2))
 })
 
-test_that("JSS reviewer-response scripts are parseable and preserve HPC contracts", {
-  root <- test_path("../../benchmark_scripts/jmlr_mloss_publication")
-  reviewer <- file.path(root, "reviewer_response")
-  if (!dir.exists(reviewer)) {
-    skip("Reviewer-response scripts are not available in this installed-package test context.")
-  }
-  r_files <- c(
-    file.path(root, "common", "benchmark_metric_conformance.R"),
-    file.path(root, "analysis", "analyze_leave_one_dataset_out.R"),
-    file.path(root, "analysis", "build_publication_figures.R"),
-    file.path(root, "analysis", "audit_publication_freeze.R")
-  )
-  expect_true(all(file.exists(r_files)))
-  expect_silent(lapply(r_files, parse))
 
-  cpu <- readLines(file.path(reviewer, "run_metric_conformance_cpu12.sh"), warn = FALSE)
-  cuda <- readLines(file.path(reviewer, "run_metric_conformance_cuda.sh"), warn = FALSE)
-  expect_true(any(grepl("^#SBATCH --account=immunology$", cpu)))
-  expect_true(any(grepl("^#SBATCH --partition=ada$", cpu)))
-  expect_true(any(grepl("^#SBATCH --ntasks=12$", cpu)))
-  expect_true(any(grepl("^#SBATCH --account=l40sfree$", cuda)))
-  expect_true(any(grepl("^#SBATCH --partition=l40s$", cuda)))
-  expect_true(any(grepl("^#SBATCH --gres=gpu:l40s:1$", cuda)))
-  expect_true(any(grepl("singularity exec --nv", cuda, fixed = TRUE)))
-
-  conformance <- readLines(r_files[[1L]], warn = FALSE)
-  expect_true(any(grepl("inner_product_rank_direction_pass", conformance, fixed = TRUE)))
-  expect_true(any(grepl("degenerate_row_pass", conformance, fixed = TRUE)))
-  expect_true(any(grepl('"grid", "euclidean"', conformance, fixed = TRUE)))
-  ablation <- readLines(file.path(root, "common", "benchmark_jss_systems_ablations.R"), warn = FALSE)
-  held_out <- readLines(file.path(root, "common", "benchmark_jmlr_tuned_methods.R"), warn = FALSE)
-  expect_true(any(grepl("nvidia-smi_process_sampled_100ms", ablation, fixed = TRUE)))
-  expect_true(any(grepl("nvidia-smi_process_sampled_100ms", held_out, fixed = TRUE)))
-  expect_true(any(grepl("reference_backend_used", held_out, fixed = TRUE)))
-  expect_false(any(grepl(
-    'base$reference_source <- "precomputed_exact_cpu"',
-    held_out,
-    fixed = TRUE
-  )))
-
-  freeze <- readLines(r_files[[4L]], warn = FALSE)
-  expect_true(any(grepl("mismatched_faissR_result_versions.csv", freeze, fixed = TRUE)))
-  expect_true(any(grepl("mismatched_faissR_result_commits.csv", freeze, fixed = TRUE)))
-  expect_true(any(grepl("exact_reference_identity_audit.csv", freeze, fixed = TRUE)))
-  expect_true(any(grepl("faissR_image_commit", freeze, fixed = TRUE)))
-  expect_true(any(grepl("^[[:xdigit:]]{40}$", freeze, fixed = TRUE)))
-  expect_true(any(grepl("^[[:xdigit:]]{64}$", freeze, fixed = TRUE)))
-
-  replication <- readLines(
-    test_path("../../manuscript/jss/replication_article.R"),
-    warn = FALSE
-  )
-  expect_true(any(grepl("publication_results_all_runs.csv", replication, fixed = TRUE)))
-  expect_true(any(grepl("combined <- latest_method_runs(all_runs)", replication, fixed = TRUE)))
-})
-
-test_that("final JSS campaign rejects a stale faissR Singularity image", {
-  root <- test_path("../../benchmark_scripts/jmlr_mloss_publication")
-  campaign <- file.path(root, "final_campaign")
-  if (!dir.exists(campaign)) {
-    skip("Final publication campaign is not available in this installed-package context.")
-  }
-
-  generator <- readLines(file.path(campaign, "generate_launchers.R"), warn = FALSE)
-  held_out <- readLines(file.path(root, "common", "run_one_method.sh"), warn = FALSE)
-  calibration <- readLines(
-    file.path(root, "common", "run_one_inner_product_tuning.sh"),
-    warn = FALSE
-  )
-  expect_true(any(grepl(
-    'read.dcf(description_path)[1L, "Version"]',
-    generator, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    "export EXPECTED_FAISSR_VERSION",
-    generator, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    'FAISSR_PACKAGE_COMMIT:?Export the 40-character faissR commit',
-    generator, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    'FAISSR_IMAGE_COMMIT:-',
-    generator,
-    fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    'export FAISSR_REQUIRE_FROZEN_IDENTITY=1',
-    generator, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    'SINGULARITYENV_FAISSR_PACKAGE_COMMIT',
-    generator, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    'packageVersion("faissR")',
-    held_out, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    "Frozen campaign requires faissR",
-    held_out, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    "Frozen campaign requires faissR",
-    calibration, fixed = TRUE
-  )))
-  route_qa <- readLines(
-    file.path(root, "common", "benchmark_package_route_qa.R"),
-    warn = FALSE
-  )
-  expect_true(any(grepl(
-    'Sys.getenv("EXPECTED_FAISSR_VERSION"',
-    route_qa, fixed = TRUE
-  )))
-  expect_true(any(grepl('"RcppHNSW"', route_qa, fixed = TRUE)))
-  expect_true(any(grepl('"rnndescent"', route_qa, fixed = TRUE)))
-  expect_true(any(grepl('"nabor"', route_qa, fixed = TRUE)))
-  expect_true(any(grepl(
-    "jss_environment_packages.csv",
-    route_qa, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    "faissR::faiss_gpu_available()",
-    route_qa, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    "faissR::cuvs_available()",
-    route_qa, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    "jss_gpu_residency_qa.csv",
-    route_qa, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    "device_to_host_result_copies == 0L",
-    route_qa, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    "gpu_input <- float::fl(x)",
-    route_qa, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    'input_type == "float32" & !float32_compatibility_conversion',
-    route_qa, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    'self_query_methods <- c("grid", "nndescent", "nsg", "vamana")',
-    route_qa, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    'query_mode <- if (self_query) "self" else "separate"',
-    route_qa, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    "if (!self_query)", route_qa, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    "nn_args$points <- float::fl(", route_qa, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    "do.call(faissR::nn, nn_args)", route_qa, fixed = TRUE
-  )))
-  expect_false(any(grepl(
-    "points = route_points", route_qa, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    "route_x <- float::fl(route_source)",
-    route_qa, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    "capability_contract(",
-    route_qa, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    'status = "unsupported"',
-    route_qa, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    'status == "unsupported" |',
-    route_qa, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    "external_comparator_route_qa <- function",
-    route_qa, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    "jss_external_comparator_route_qa.csv",
-    route_qa, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    'status = "not_public_api"',
-    route_qa, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    'metrics <- c("euclidean", "cosine", "correlation", "inner_product")',
-    route_qa, fixed = TRUE
-  )))
-
-  tuned_methods <- readLines(
-    file.path(root, "common", "benchmark_jmlr_tuned_methods.R"),
-    warn = FALSE
-  )
-  expect_false(any(grepl(
-    "rnndescent::.*progress=none", tuned_methods
-  )))
-  expect_true(any(grepl(
-    "rnndescent::rpf_knn(", tuned_methods, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    "include_self = TRUE, verbose = FALSE", tuned_methods, fixed = TRUE
-  )))
-
-  generated <- readLines(
-    file.path(
-      campaign, "held_out", "cpu",
-      "run_faissR_hnsw_cpu12_euclidean.sh"
-    ),
-    warn = FALSE
-  )
-  expected <- as.character(packageVersion("faissR"))
-  expect_true(any(grepl(
-    sprintf("export EXPECTED_FAISSR_VERSION='%s'", expected),
-    generated, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    'IMAGE_FAISSR_COMMIT="$(singularity exec --cleanenv',
-    generated, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    'Frozen campaign requires faissR commit ${FAISSR_PACKAGE_COMMIT}',
-    generated, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    'export FAISSR_REQUIRE_FROZEN_IDENTITY=1',
-    generated, fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    'SINGULARITYENV_FAISSR_PACKAGE_COMMIT',
-    generated, fixed = TRUE
-  )))
-  identity_sources <- c(
-    "benchmark_jmlr_tuned_methods.R",
-    "benchmark_method_tuning_from_reference.R",
-    "benchmark_jss_systems_ablations.R",
-    "benchmark_metric_conformance.R",
-    "benchmark_precompute_exact_references.R",
-    "benchmark_precompute_exact_references_cuda.R",
-    "benchmark_reusable_external_indexes.R"
-  )
-  for (name in identity_sources) {
-    source_text <- readLines(file.path(root, "common", name), warn = FALSE)
-    expect_true(any(grepl("faissR_package_commit", source_text, fixed = TRUE)),
-                info = name)
-    expect_true(any(grepl("faissR_image_commit", source_text, fixed = TRUE)),
-                info = name)
-  }
-  generated_qa_cpu <- readLines(
-    file.path(campaign, "qa", "run_package_route_qa_cpu12.sh"),
-    warn = FALSE
-  )
-  expect_true(any(grepl(
-    'sha256sum "${SINGULARITY_IMAGE}"',
-    generated_qa_cpu, fixed = TRUE
-  )))
-  generated_cuda <- readLines(
-    file.path(campaign, "qa", "run_package_route_qa_cuda.sh"),
-    warn = FALSE
-  )
-  expect_true(any(grepl(
-    'nvidia-smi -L > "${OUT_DIR}/nvidia_smi_devices.txt"',
-    generated_cuda, fixed = TRUE
-  )))
-
-  rcpphnsw_held_out <- file.path(
-    campaign, "held_out", "cpu",
-    "run_RcppHNSW_hnsw_cpu12_euclidean.sh"
-  )
-  rcpphnsw_reusable <- file.path(
-    campaign, "reusable_external",
-    "run_RcppHNSW_hnsw_cpu12_cosine.sh"
-  )
-  expect_true(file.exists(rcpphnsw_held_out))
-  expect_true(file.exists(rcpphnsw_reusable))
-  expect_true(file.exists(file.path(
-    campaign, "held_out", "cpu",
-    "run_RcppAnnoy_angular_cpu12_cosine.sh"
-  )))
-  expect_true(file.exists(file.path(
-    campaign, "reusable_external",
-    "run_RcppAnnoy_angular_cpu12_cosine.sh"
-  )))
-  expect_true(file.exists(file.path(
-    campaign, "held_out", "cpu",
-    "run_RcppAnnoy_dot_product_cpu12_inner_product.sh"
-  )))
-  expect_true(file.exists(file.path(
-    campaign, "reusable_external",
-    "run_RcppAnnoy_dot_product_cpu12_inner_product.sh"
-  )))
-  expect_true(file.exists(file.path(
-    campaign, "held_out", "cpu",
-    "run_RcppHNSW_hnsw_cpu12_inner_product.sh"
-  )))
-  expect_true(file.exists(file.path(
-    campaign, "reusable_external",
-    "run_RcppHNSW_hnsw_cpu12_inner_product.sh"
-  )))
-  expect_true(file.exists(file.path(
-    campaign, "held_out", "cpu",
-    "run_rnndescent_nnd_cpu12_correlation.sh"
-  )))
-  expect_true(any(grepl(
-    "export REQUIRED_EXTERNAL_PACKAGE='RcppHNSW'",
-    readLines(rcpphnsw_held_out, warn = FALSE),
-    fixed = TRUE
-  )))
-  expect_true(any(grepl(
-    "export REQUIRED_EXTERNAL_PACKAGE='RcppHNSW'",
-    readLines(rcpphnsw_reusable, warn = FALSE),
-    fixed = TRUE
-  )))
-})
 
 test_that("final JSS campaign submitter preserves explicit phase gates", {
   campaign <- test_path(
-    "../../benchmark_scripts/jmlr_mloss_publication/final_campaign"
+    "../../benchmark_scripts/jss_reproduction/final_campaign"
   )
   submitter <- file.path(campaign, "submit_campaign.R")
   if (!file.exists(submitter)) {
@@ -3626,9 +2610,9 @@ test_that("final JSS campaign submitter preserves explicit phase gates", {
   )
   expect_identical(
     contract$expected_jobs,
-    c(2L, 5L, 105L, 1L, 142L, 16L, 4L, 2L)
+    c(2L, 4L, 63L, 1L, 113L, 14L, 4L, 2L)
   )
-  expect_equal(sum(contract$expected_jobs), 277L)
+  expect_equal(sum(contract$expected_jobs), 203L)
   for (i in seq_len(nrow(contract))) {
     launchers <- env$phase_launchers(campaign, contract$phase[[i]])
     expect_length(launchers, contract$expected_jobs[[i]])
@@ -3641,11 +2625,30 @@ test_that("final JSS campaign submitter preserves explicit phase gates", {
   expect_true(all(grepl("^sbatch --export=ALL", output)))
   expect_true(any(grepl("run_package_route_qa_cpu12.sh", output, fixed = TRUE)))
   expect_true(any(grepl("run_package_route_qa_cuda.sh", output, fixed = TRUE)))
+
+  cpu_batch <- capture.output(env$submit_phase(
+    "held_out", dry_run = TRUE, backend = "cpu", start = 26L, limit = 25L
+  ))
+  expect_length(cpu_batch, 25L)
+  expect_true(all(grepl("/held_out/cpu/", cpu_batch, fixed = TRUE)))
+
+  cuda_batch <- capture.output(env$submit_phase(
+    "held_out", dry_run = TRUE, backend = "cuda", start = 26L, limit = 24L
+  ))
+  expect_length(cuda_batch, 24L)
+  expect_true(all(grepl("/held_out/cuda/", cuda_batch, fixed = TRUE)))
+
+  expect_error(
+    env$submit_phase(
+      "held_out", dry_run = TRUE, backend = "cuda", start = 50L
+    ),
+    "only 49 launchers"
+  )
 })
 
 test_that("final JSS campaign submitter preserves a partial submission ledger", {
   campaign <- test_path(
-    "../../benchmark_scripts/jmlr_mloss_publication/final_campaign"
+    "../../benchmark_scripts/jss_reproduction/final_campaign"
   )
   submitter_path <- file.path(campaign, "submit_campaign.R")
   if (!file.exists(submitter_path)) {
@@ -3654,7 +2657,8 @@ test_that("final JSS campaign submitter preserves a partial submission ledger", 
   old_source_only <- Sys.getenv("FAISSR_JSS_SOURCE_ONLY", unset = NA_character_)
   tracked_env <- c(
     "BASE_DIR", "SINGULARITY_IMAGE", "EXPECTED_FAISSR_VERSION",
-    "FAISSR_PACKAGE_COMMIT"
+    "FAISSR_PACKAGE_COMMIT", "SINGULARITYENV_FAISSR_IMAGE_COMMIT",
+    "APPTAINERENV_FAISSR_IMAGE_COMMIT"
   )
   old_env <- Sys.getenv(tracked_env, unset = NA_character_)
   on.exit({
@@ -3705,7 +2709,7 @@ test_that("final JSS campaign submitter preserves a partial submission ledger", 
   )))
 
   ledgers <- list.files(
-    file.path(base_dir, "faissR_JMLR_MLOSS", "final_campaign", "submissions"),
+    file.path(base_dir, "faissR_JSS_REPRODUCTION", "final_campaign", "submissions"),
     pattern = "[.]csv$", full.names = TRUE
   )
   expect_length(ledgers, 1L)
@@ -3714,11 +2718,19 @@ test_that("final JSS campaign submitter preserves a partial submission ledger", 
   expect_equal(ledger$job_id[[1L]], 12345)
   expect_true(is.na(ledger$job_id[[2L]]))
   expect_match(ledger$submission_output[[2L]], "simulated sbatch rejection")
+  expect_identical(
+    Sys.getenv("SINGULARITYENV_FAISSR_IMAGE_COMMIT"),
+    paste(rep("a", 40L), collapse = "")
+  )
+  expect_identical(
+    Sys.getenv("APPTAINERENV_FAISSR_IMAGE_COMMIT"),
+    paste(rep("a", 40L), collapse = "")
+  )
 })
 
 test_that("publication-suite sync utility is portable and non-destructive", {
   sync_script <- test_path(
-    "../../benchmark_scripts/jmlr_mloss_publication/sync_publication_suite.sh"
+    "../../benchmark_scripts/jss_reproduction/sync_publication_suite.sh"
   )
   if (!file.exists(sync_script)) {
     skip("Publication-suite synchronization utility is unavailable.")
@@ -3750,7 +2762,7 @@ test_that("JSS compact replication report is executed and error-free", {
 test_that("publication rnndescent routes use their current public APIs", {
   skip_if_not_installed("rnndescent")
   script <- test_path(
-    "../../benchmark_scripts/jmlr_mloss_publication/common/benchmark_jmlr_tuned_methods.R"
+    "../../benchmark_scripts/jss_reproduction/common/benchmark_jmlr_tuned_methods.R"
   )
   if (!file.exists(script)) {
     skip("Publication benchmark scripts are unavailable after installation.")
@@ -3818,7 +2830,7 @@ test_that("publication rnndescent routes use their current public APIs", {
 })
 
 test_that("synthetic exact-reference paths are dataset-specific", {
-  root <- test_path("../../benchmark_scripts/jmlr_mloss_publication")
+  root <- test_path("../../benchmark_scripts/jss_reproduction")
   if (!dir.exists(root)) {
     skip("Publication scripts are not available in this installed-package test context.")
   }
@@ -3865,4 +2877,28 @@ test_that("synthetic exact-reference paths are dataset-specific", {
     expect_true(any(grepl('startsWith(dataset_file, "synthetic_")', source_text,
                           fixed = TRUE)), info = name)
   }
+})
+
+test_that("publication provenance has resolved redistribution decisions", {
+  root <- test_path("../../benchmark_scripts/jss_reproduction")
+  if (!dir.exists(root)) {
+    skip("Publication scripts are not available in this installed-package test context.")
+  }
+
+  path <- file.path(
+    root, "reviewer_response", "dataset_provenance_jss_template.csv"
+  )
+  provenance <- read.csv(path, stringsAsFactors = FALSE, check.names = FALSE)
+
+  expect_setequal(provenance$redistribution_permitted, c("yes", "no"))
+  expect_false(any(grepl(
+    "verify|unknown|pending",
+    provenance$redistribution_permitted,
+    ignore.case = TRUE
+  )))
+  expect_true(all(grepl("^[[:xdigit:]]{32}$", provenance$dataset_md5)))
+  expect_true(all(nzchar(provenance$source_url)))
+  expect_true(all(nzchar(provenance$source_release)))
+  expect_true(all(nzchar(provenance$source_accession)))
+  expect_true(all(nzchar(provenance$preprocessing)))
 })

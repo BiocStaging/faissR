@@ -64,7 +64,7 @@ scalar_positive_number <- function(value, default, arg = "value") {
 
 normalize_metric_values <- function(value, default = "euclidean") {
   vals <- tolower(split_arg(value, default))
-  valid <- c("euclidean", "cosine", "correlation", "inner_product")
+  valid <- c("euclidean", "cosine", "correlation")
   bad <- setdiff(vals, valid)
   if (length(bad)) stop("Unsupported metric(s): ", paste(bad, collapse = ", "), call. = FALSE)
   unique(vals)

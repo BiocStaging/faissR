@@ -22,7 +22,7 @@ The default run uses:
 
 - datasets listed in the generated float32 manifest under `/scratch/firenze/NN/Data`;
 - `k = 15,30,50,100`;
-- metrics `euclidean`, `cosine`, `correlation`, and `inner_product`;
+- metrics `euclidean`, `cosine`, and `correlation`;
 - target recall values `0.9,0.95,0.99`;
 - two independent exact-reference seeds with 1,024 queries each;
 - three measured repetitions per seed and method configuration;
@@ -33,7 +33,7 @@ The default run uses:
 Useful overrides:
 
 ```bash
-METRICS=euclidean,cosine,correlation,inner_product sbatch benchmark_scripts/run_hpc_jmlr_tuned_benchmark_cpu12.sh
+METRICS=euclidean,cosine,correlation sbatch benchmark_scripts/run_hpc_jmlr_tuned_benchmark_cpu12.sh
 DATASETS=MNIST,USPS METHODS=auto,hnsw,ivf TARGET_RECALLS=0.99 sbatch benchmark_scripts/run_hpc_jmlr_tuned_benchmark_cuda.sh
 ```
 
@@ -77,21 +77,6 @@ The benchmark directly records:
 - external-package comparisons under the same data, metric, and k settings;
 - failures and unsupported combinations without silently falling back to another method;
 - GPU-resident timing and explicit host-copy timing as separate quantities.
-
-## Additional Publication Experiments
-
-The real-data comparison should be accompanied by the controlled MIPS stress
-benchmark:
-
-```bash
-sbatch benchmark_scripts/run_hpc_jmlr_mips_stress_cpu12.sh
-sbatch benchmark_scripts/run_hpc_jmlr_mips_stress_cuda.sh
-```
-
-It varies dataset shape and vector-norm distributions (unit norm, log-normal,
-and Pareto). This separates failures caused by raw-inner-product geometry from
-failures caused by an implementation. It also includes 2D/3D unit-norm data
-for the low-dimensional grid-method comparison.
 
 For a JMLR MLOSS submission, report both cold end-to-end time and repeated-run
 medians, the timing IQR, peak memory, target attainment on held-out reference

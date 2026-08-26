@@ -11,7 +11,7 @@
 #'
 #' Full calibration and validation are deliberately not launched here. Their
 #' separate Slurm/Singularity commands are recorded in
-#' `benchmark_scripts/jmlr_mloss_publication/final_campaign/submission_commands.txt`.
+#' `benchmark_scripts/jss_reproduction/final_campaign/submission_commands.txt`.
 #'
 #' Required software for the compact path is R, FAISS, and faissR. Set an
 #' output directory if desired:

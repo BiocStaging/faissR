@@ -26,9 +26,9 @@
 #'   \code{\link{nn}()}. See \code{\link{nn}()} for method descriptions and
 #'   references.
 #' @param metric Distance metric passed to \code{\link{nn}()}: `"euclidean"`,
-#'   `"cosine"`, `"correlation"`, or `"inner_product"`. Legacy metric aliases
+#'   `"cosine"`, or `"correlation"`. Legacy metric aliases
 #'   such as `"l2"`, `"cor"`, `"pearson"`, and `"ip"` are rejected.
-#'   Correlation is centered cosine similarity, not raw inner product; see
+#'   Correlation is centered cosine similarity; see
 #'   \code{\link{nn}()} for the metric transforms and backend support matrix.
 #' @param tuning Tuning policy passed to \code{\link{nn}()}. `"auto"` uses the
 #'   deterministic default for the resolved method; pilot/cache tuning is
@@ -87,8 +87,8 @@ knn <- function(Xtrain,
                 Ytrain,
                 Xtest = NULL,
                 backend = NULL,
-                method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"),
-                metric = c("euclidean", "cosine", "correlation", "inner_product"),
+                method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana_style", "nsg_style", "nndescent_style", "ivfpq_fastscan", "cagra"),
+                metric = c("euclidean", "cosine", "correlation"),
                 tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                 target_recall = 0.99,
                 cagra_implementation = NULL,
@@ -99,6 +99,9 @@ knn <- function(Xtrain,
                 vote = c("majority", "weighted"),
                 type = c("response", "prob"),
                 ...) {
+  if (missing(method)) method <- "auto"
+  if (missing(metric)) metric <- "euclidean"
+  if (missing(tuning)) tuning <- "auto"
   vote <- normalize_knn_vote(vote)
   type <- normalize_knn_type(type)
   backend <- normalize_public_backend_arg(backend)
@@ -141,7 +144,7 @@ knn_model_fit <- function(Xtrain,
                           Ytrain,
                           backend = NULL,
                           method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"),
-                          metric = c("euclidean", "cosine", "correlation", "inner_product"),
+                          metric = c("euclidean", "cosine", "correlation"),
                           tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                           target_recall = 0.99,
                           cagra_implementation = NULL,
@@ -149,6 +152,9 @@ knn_model_fit <- function(Xtrain,
                           task = c("auto", "classification", "regression"),
                           k = 15L,
                           n_threads = NULL) {
+  if (missing(method)) method <- "auto"
+  if (missing(metric)) metric <- "euclidean"
+  if (missing(tuning)) tuning <- "auto"
   backend <- normalize_public_backend_arg(backend)
   method <- normalize_nn_method(method)
   tuning <- normalize_nn_tuning(tuning)
@@ -269,6 +275,7 @@ predict.faissR_knn_model <- function(object,
                                       vote = c("majority", "weighted"),
                                       type = c("response", "prob"),
                                       ...) {
+  if (missing(tuning)) tuning <- "auto"
   backend <- normalize_public_backend_arg(backend)
   tuning <- normalize_nn_tuning(tuning)
   if (is.null(target_recall)) {
@@ -409,6 +416,23 @@ attach_knn_prediction_metadata <- function(out, neighbours, k, backend, method, 
     auto_selection = attr(neighbours, "auto_selection") %||% NULL,
     metric_transform = attr(neighbours, "metric_transform") %||% neighbours$metric_transform %||% NULL,
     distance_transform = attr(neighbours, "distance_transform") %||% NULL,
+    distance_is_metric = attr(neighbours, "distance_is_metric") %||%
+      neighbours$distance_is_metric %||% NA,
+    distance_semantics = attr(neighbours, "distance_semantics") %||%
+      neighbours$distance_semantics %||% NA_character_,
+    distance_comparable_across_queries =
+      attr(neighbours, "distance_comparable_across_queries") %||%
+      neighbours$distance_comparable_across_queries %||% NA,
+    distance_order = attr(neighbours, "distance_order") %||%
+      neighbours$distance_order %||% "smaller_is_better",
+    implementation_label = attr(neighbours, "implementation_label") %||%
+      neighbours$implementation_label %||% NA_character_,
+    implementation_scope = attr(neighbours, "implementation_scope") %||%
+      neighbours$implementation_scope %||% NA_character_,
+    preferred_public_method = attr(neighbours, "preferred_public_method") %||%
+      neighbours$preferred_public_method %||% NA_character_,
+    canonical_reimplementation = attr(neighbours, "canonical_reimplementation") %||%
+      neighbours$canonical_reimplementation %||% NA,
     input_type = attr(neighbours, "input_type") %||% neighbours$input_type %||% NA_character_,
     input_layout = attr(neighbours, "input_layout") %||% neighbours$input_layout %||% NA_character_,
     input_owns_data = attr(neighbours, "input_owns_data") %||% neighbours$input_owns_data %||% NA,
@@ -480,17 +504,17 @@ knn_build_fitted_nn_index <- function(x,
     ),
     error = function(e) NA_character_
   )
-  if (!resolved_backend %in% c("faiss_flat_l2", "faiss_flat_ip", "faiss_hnsw", "faiss_ivf", "faiss_ivfpq")) {
+  if (!resolved_backend %in% c("faiss_flat_l2", "faiss_hnsw", "faiss_ivf", "faiss_ivfpq")) {
     return(NULL)
   }
-  if (!metric %in% c("euclidean", "inner_product")) {
+  if (!identical(metric, "euclidean")) {
     return(NULL)
   }
   if (!isTRUE(faiss_available())) {
     return(NULL)
   }
 
-  if (resolved_backend %in% c("faiss_flat_l2", "faiss_flat_ip")) {
+  if (identical(resolved_backend, "faiss_flat_l2")) {
     index <- nn_faiss_index_build_float32_cpp(
       x,
       "flat",
@@ -746,7 +770,7 @@ knn_predict_with_fitted_faiss_hnsw_index <- function(object,
     return(NULL)
   }
   if (!identical(object$method %||% "auto", "hnsw") ||
-      !object$metric %in% c("euclidean", "inner_product")) {
+      !identical(object$metric, "euclidean")) {
     return(NULL)
   }
   if (!knn_fitted_index_resolves_to_stored_backend(object, backend, k)) {

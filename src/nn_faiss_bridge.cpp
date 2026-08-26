@@ -331,7 +331,6 @@ List nn_faiss_flat_pretransformed_float32_cpp(SEXP data,
 namespace {
 
 std::string float32_backend_used(const std::string& metric) {
-  if (metric == "inner_product") return "faiss_flat_ip";
   if (metric == "cosine") return "faiss_flat_cosine";
   if (metric == "correlation") return "faiss_flat_correlation";
   return "faiss_flat_l2";
@@ -380,6 +379,13 @@ List faissR_nn_float32_call_impl(SEXP x,
   const bool include_self_value = Rcpp::as<bool>(include_self);
   const int n_threads_value = Rcpp::as<int>(n_threads);
   const std::string distances_value = Rcpp::as<std::string>(distances);
+  if (metric_value != "euclidean" &&
+      metric_value != "cosine" &&
+      metric_value != "correlation") {
+    Rcpp::stop(
+      "`metric` must be one of \"euclidean\", \"cosine\", or \"correlation\""
+    );
+  }
   if (backend_value != "auto" &&
       backend_value != "cpu" &&
       backend_value != "faiss" &&
@@ -406,11 +412,33 @@ List faissR_nn_float32_call_impl(SEXP x,
   out["index_base"] = 1;
   out["metric"] = metric_value;
   out["backend_used"] = backend_used;
+  out["distance_order"] = "smaller_is_better";
+  out["similarity_materialized"] = false;
+  if (metric_value == "euclidean") {
+    out["distance_is_metric"] = true;
+    out["distance_semantics"] = "euclidean_distance";
+    out["distance_comparable_across_queries"] = true;
+  } else if (metric_value == "cosine") {
+    out["distance_is_metric"] = false;
+    out["distance_semantics"] = "one_minus_cosine_similarity";
+    out["distance_comparable_across_queries"] = true;
+  } else if (metric_value == "correlation") {
+    out["distance_is_metric"] = false;
+    out["distance_semantics"] = "one_minus_row_centered_cosine_similarity";
+    out["distance_comparable_across_queries"] = true;
+  }
+  // Adding list elements may reallocate the R vector, so attach metadata only
+  // after the payload is complete.
   out.attr("index_base") = 1;
   out.attr("metric") = metric_value;
   out.attr("backend_used") = backend_used;
   out.attr("resolved_backend") = backend_used;
   out.attr("distance_type") = Rcpp::as<std::string>(out["distance_type"]);
+  out.attr("distance_is_metric") = out["distance_is_metric"];
+  out.attr("distance_semantics") = out["distance_semantics"];
+  out.attr("distance_comparable_across_queries") =
+    out["distance_comparable_across_queries"];
+  out.attr("distance_order") = "smaller_is_better";
   out.attr("class") = Rcpp::CharacterVector::create("faissR_nn", "list");
   return out;
 }

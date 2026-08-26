@@ -95,9 +95,9 @@ benchmark1_metric_value <- function(metric = NULL, arg_name = "metric") {
     stop("`", arg_name, "` must contain exactly one metric.", call. = FALSE)
   }
   value <- tolower(trimws(raw))
-  if (value %in% c("euclidean", "cosine", "correlation", "inner_product")) return(value)
+  if (value %in% c("euclidean", "cosine", "correlation")) return(value)
   stop(
-    "`", arg_name, "` must be one of: euclidean, cosine, correlation, inner_product. ",
+    "`", arg_name, "` must be one of: euclidean, cosine, correlation. ",
     "Invalid value(s): ", value, ".",
     call. = FALSE
   )
@@ -107,7 +107,7 @@ benchmark1_metric_values <- function(metrics = NULL,
                                      env_metrics = Sys.getenv("FAISSR_BENCHMARK1_METRICS", unset = NA_character_)) {
   raw <- metrics %||% env_metrics
   if (length(raw) != 1L || is.na(raw)) {
-    raw <- "euclidean,cosine,correlation,inner_product"
+    raw <- "euclidean,cosine,correlation"
   }
   if (!nzchar(raw)) {
     stop("`metrics` must contain at least one metric.", call. = FALSE)
@@ -369,41 +369,12 @@ metric_arg_for_label <- function(metric) {
     euclidean = "euclidean",
     cosine = "cosine",
     correlation = "correlation",
-    inner_product = "inner_product",
     "euclidean"
   )
 }
 
 method_metric_applicable <- function(method, metric) {
-  ip_methods <- c(
-    "faissR_cpu_exact",
-    "faissR_faiss_flat_l2",
-    "faissR_faiss_gpu_flat_l2",
-    "faissR_faiss_ivf",
-    "faissR_faiss_ivfpq",
-    "faissR_faiss_ivfpq_fastscan",
-    "faissR_faiss_gpu_ivf_flat",
-    "faissR_faiss_gpu_ivfpq",
-    "faissR_faiss_hnsw",
-    "faissR_cuda_cuvs_hnsw",
-    "faissR_cuda_cuvs_ivf_flat",
-    "faissR_cuda_cuvs_ivfpq",
-    "faissR_cuda_cuvs_ivfpq_fastscan",
-    "faissR_cuda_cuvs_bruteforce",
-    "faissR_cpu_vamana",
-    "faissR_cuda_vamana",
-    "faissR_cpu_nsg",
-    "faissR_cuda_nsg",
-    "faissR_cpu_nndescent"
-  )
-  if (grepl("_ip$", method) && !identical(metric, "inner_product")) {
-    return(list(ok = FALSE, reason = "inner-product FAISS Flat methods are benchmarked only with `metric = inner_product`"))
-  }
   if (identical(metric, "euclidean")) return(list(ok = TRUE, reason = ""))
-  if (identical(metric, "inner_product")) {
-    if (method %in% ip_methods) return(list(ok = TRUE, reason = ""))
-    return(list(ok = FALSE, reason = "inner-product search is benchmarked only with exact/IP-capable methods"))
-  }
   non_euclidean_methods <- c(
     "faissR_cpu_exact",
     "faissR_faiss_flat_l2",
@@ -476,14 +447,6 @@ method_dataset_applicable <- function(method, dataset) {
 }
 
 method_is_exact <- function(method, metric) {
-  if (identical(metric, "inner_product")) {
-    return(method %in% c(
-      "faissR_cpu_exact",
-      "faissR_faiss_flat_l2",
-      "faissR_faiss_gpu_flat_l2",
-      "faissR_cuda_cuvs_bruteforce"
-    ))
-  }
   method %in% c(
     "faissR_cpu_exact",
     "faissR_faiss_flat_l2",
@@ -580,13 +543,6 @@ exact_subset_knn <- function(x, rows, k, metric) {
       ord <- order(dist, decreasing = FALSE)[seq_len(k)]
       idx[ii, ] <- ord
       dst[ii, ] <- dist[ord]
-    } else if (identical(metric, "inner_product")) {
-      score <- drop(z %*% z[r, ])
-      score[r] <- -Inf
-      ord <- order(score, decreasing = TRUE)[seq_len(k)]
-      idx[ii, ] <- ord
-      best <- score[ord[[1L]]]
-      dst[ii, ] <- best - score[ord]
     } else {
       diff <- sweep(z, 2L, z[r, ], FUN = "-")
       dist2 <- rowSums(diff * diff)
@@ -846,7 +802,7 @@ benchmark1_execution_backend_status <- function(execution_backend) {
   list(runtime_available = TRUE, runtime_reason = "available", runtime_notes = "No faissR runtime dependency detected.")
 }
 
-benchmark1_runtime_capabilities <- function(methods, metrics = c("euclidean", "cosine", "correlation", "inner_product")) {
+benchmark1_runtime_capabilities <- function(methods, metrics = c("euclidean", "cosine", "correlation")) {
   metrics <- benchmark1_metric_values(paste(metrics, collapse = ","))
   rows <- vector("list", nrow(methods) * length(metrics))
   r <- 0L
@@ -1864,8 +1820,8 @@ materials <- c(
   "The faissR CUDA/cuVS NN-descent output was saved for every dataset where the method completed successfully.",
   "",
   "faissR methods tested when selected: exact CPU, FAISS Flat, FAISS CPU IVF/IVF-Flat, FAISS CPU IVFPQ, FAISS CPU IVFPQ FastScan, FAISS GPU Flat, FAISS GPU IVF-Flat with NVIDIA cuVS integration, FAISS GPU IVF-PQ with NVIDIA cuVS integration, FAISS GPU CAGRA, FAISS HNSW, optional explicit FAISS NSG, native CPU/CUDA NSG candidate graph, native CPU NNDescent, CPU grid on simulated 2D/3D only, native CUDA exact, CUDA grid on simulated 2D/3D only, direct RAPIDS cuVS brute force, direct cuVS HNSW, direct cuVS IVF-Flat, direct cuVS IVF-PQ, direct cuVS 4-bit IVFPQ FastScan route, direct cuVS CAGRA, and direct cuVS NN-descent.",
-  "Native CPU NNDescent is benchmarked for Euclidean, cosine, correlation, and raw inner-product metrics. Direct CUDA/cuVS brute force and direct CUDA/cuVS IVF/PQ are benchmarked for transformed raw inner product where available. Direct CUDA/cuVS NN-descent is benchmarked for Euclidean, cosine, and correlation; raw inner-product CUDA/cuVS NN-descent is recorded as unsupported.",
-  "The Flat rows use the public `method = \"flat\"` route. When `metric = \"inner_product\"` is explicitly requested, faissR dispatches the same public Flat rows to the appropriate FAISS inner-product index internally instead of listing duplicate Flat-IP methods.",
+  "Native CPU NNDescent and direct CUDA/cuVS NN-descent are benchmarked for Euclidean, cosine, and correlation metrics.",
+  "The Flat rows use the public `method = \"flat\"` route.",
   "For faissR rows, `execution_backend` records the internal backend label used by `nn_compute()`, while `public_backend` and `public_method` record the equivalent public `nn(..., backend = , method = )` route. This separates legacy benchmark labels from the public API.",
   "Successful faissR rows also record `result_backend`, `result_requested_backend`, `result_requested_method`, `result_tuning`, `resolved_backend`, `implementation_backend`, `auto_predicted_method`, `auto_predicted_device`, `auto_explicit_backend`, `auto_explicit_method`, `auto_backend_decision`, `auto_method_decision`, compact `route_parameters`, and `tuning_status`. These fields make deterministic no-pilot tuning choices, explicit backend/method requests, and concrete FAISS/cuVS/native routes explicit in the Benchmark #1 result table.",
   "The benchmark result table includes `backend_detail` to distinguish FAISS GPU indexes that use NVIDIA cuVS internally from direct RAPIDS cuVS API calls.",

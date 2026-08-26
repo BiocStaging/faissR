@@ -28,6 +28,32 @@ summary.faissR_nn <- function(object, ...) {
     metric = as.character(
       object$metric %||% attr(object, "metric") %||% NA_character_
     )[1L],
+    distance_is_metric = isTRUE(
+      object$distance_is_metric %||% attr(object, "distance_is_metric")
+    ),
+    distance_semantics = as.character(
+      object$distance_semantics %||% attr(object, "distance_semantics") %||% NA_character_
+    )[1L],
+    distance_comparable_across_queries = isTRUE(
+      object$distance_comparable_across_queries %||%
+        attr(object, "distance_comparable_across_queries")
+    ),
+    implementation_label = as.character(
+      object$implementation_label %||% attr(object, "implementation_label") %||%
+        NA_character_
+    )[1L],
+    implementation_scope = as.character(
+      object$implementation_scope %||% attr(object, "implementation_scope") %||%
+        NA_character_
+    )[1L],
+    preferred_public_method = as.character(
+      object$preferred_public_method %||% attr(object, "preferred_public_method") %||%
+        NA_character_
+    )[1L],
+    canonical_reimplementation = as.logical(
+      object$canonical_reimplementation %||% attr(object, "canonical_reimplementation") %||%
+        NA
+    )[1L],
     exact = isTRUE(attr(object, "exact") %||% object$exact),
     self_query = isTRUE(attr(object, "self_query")),
     exclude_self = isTRUE(
@@ -53,6 +79,11 @@ summary.faissR_gpu_knn <- function(object, ...) {
     )[1L],
     indices_type = as.character(object$indices_type %||% "int32")[1L],
     distance_type = as.character(object$distance_type %||% "float32")[1L],
+    distance_is_metric = isTRUE(object$distance_is_metric),
+    distance_semantics = as.character(object$distance_semantics %||% NA_character_)[1L],
+    distance_comparable_across_queries = isTRUE(
+      object$distance_comparable_across_queries
+    ),
     device_to_host_result_copies = as.integer(
       object$device_to_host_result_copies %||% 0L
     ),

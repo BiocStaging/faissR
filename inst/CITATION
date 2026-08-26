@@ -40,11 +40,11 @@ citHeader("For direct cuVS HNSW, please acknowledge the RAPIDS cuVS HNSW API. CU
 
 bibentry(
   bibtype = "Manual",
-  title = "cuVS HNSW C API documentation",
+  title = "cuVS: Vector Search and Clustering on the GPU",
   author = c(person(given = "RAPIDS", family = "Development Team")),
   year = "2026",
-  url = "https://docs.rapids.ai/api/cuvs/stable/c_api/neighbors_hnsw_c/",
-  textVersion = "RAPIDS Development Team (2026). cuVS HNSW C API documentation. https://docs.rapids.ai/api/cuvs/stable/c_api/neighbors_hnsw_c/"
+  url = "https://github.com/NVIDIA/cuvs",
+  textVersion = "RAPIDS Development Team (2026). cuVS: Vector Search and Clustering on the GPU. https://github.com/NVIDIA/cuvs"
 )
 
 bibentry(

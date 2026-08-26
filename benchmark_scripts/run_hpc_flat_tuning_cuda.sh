@@ -26,8 +26,7 @@ set -euo pipefail
 # method="flat". Set METRICS to run one or more supported metrics; the
 # metric-specific wrappers include run_hpc_flat_tuning_cuda_euclidean.sh,
 # run_hpc_flat_tuning_cuda_cosine.sh,
-# run_hpc_flat_tuning_cuda_correlation.sh, and
-# run_hpc_flat_tuning_cuda_inner_product.sh.
+# run_hpc_flat_tuning_cuda_correlation.sh.
 
 export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
 export DATA_ROOT="${DATA_ROOT:-${BASE_DIR}/Data}"
@@ -53,7 +52,7 @@ export R_BIN="${R_BIN:-Rscript}"
 
 export DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41,TabulaMuris}"
 export K_VALUES="${K_VALUES:-15,30,50,100}"
-export METRICS="${METRICS:-euclidean,cosine,correlation,inner_product}"
+export METRICS="${METRICS:-euclidean,cosine,correlation}"
 export TARGET_RECALLS="${TARGET_RECALLS:-0.9,0.95,0.99}"
 export OUTPUT_VALUES="${OUTPUT_VALUES:-float}"
 export SKIP_PREVIOUS_TIMEOUTS="${SKIP_PREVIOUS_TIMEOUTS:-TRUE}"

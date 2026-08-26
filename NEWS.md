@@ -1,3 +1,16 @@
+# faissR 0.99.23
+
+* Restricts the public nearest-neighbour metric contract to Euclidean, cosine,
+  and correlation and removes obsolete inner-product benchmark and publication
+  routes.
+* Makes session-resolved backend validation reject non-scalar values and keeps
+  the public `backend = NULL` contract consistent across nearest-neighbour,
+  supervised kNN, prediction, and k-means interfaces.
+* Preserves the documented route and distance metadata on results returned by
+  the versioned float32 C-callable interface.
+* Renames the reproducible publication campaign to `jss_reproduction` and
+  refreshes package documentation, references, tests, and release checks.
+
 # faissR 0.99.22
 
 * Adds a session-wide backend selector through `faissR_backend()`,
@@ -30,12 +43,12 @@
 # faissR 0.99.15
 
 * Initial Bioconductor development release.
-* Provides FAISS-backed nearest-neighbour search, graph construction,
-  graph clustering, k-nearest-neighbour prediction, and k-means helpers.
+* Provides FAISS-backed nearest-neighbour search, k-nearest-neighbour
+  prediction, and k-means helpers.
 * Adds optional CUDA, FAISS GPU, RAPIDS cuVS, and RAPIDS libcugraph routes
   where the corresponding system libraries are available.
-* Supports shape-aware automatic tuning policies for Euclidean, cosine,
-  correlation, and inner-product nearest-neighbour searches.
+* Supports shape-aware automatic tuning policies for Euclidean, cosine, and
+  correlation nearest-neighbour searches.
 * Clarifies Bioconductor/r-universe system requirements: FAISS is the
   mandatory compiled dependency for all builds, while CUDA/RAPIDS libraries
   are optional and requested only for explicit GPU builds.
