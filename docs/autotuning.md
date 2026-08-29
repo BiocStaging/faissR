@@ -692,7 +692,7 @@ Policy summary:
   Euclidean self-KNN
   where HNSW graph construction is too memory-heavy; FAISS HNSW for large
   high-dimensional CPU self-KNN, including cosine, correlation, and
-  exact workloads; native CPU NSG-style refinement for selected larger
+  exact workloads; native CPU NSG/MRNG-derived refinement for selected larger
   non-Euclidean self-KNN cases; and native CPU NN-descent for other large
   self-KNN cases.
   On the benchmark `k` grid, large high-dimensional CPU self-search uses
@@ -762,7 +762,7 @@ rather than a reliable CPU-auto default.
   temporary workspace warning around 45 GB, while `iterative_cagra_search`
   completed fastest in that focused diagnostic. The direct cuVS `nn_descent`
   builder failed with `cudaErrorInvalidValue`, so it is explicit-only.
-- Public CPU NSG now uses the native faissR NSG-style route for all metrics.
+- Public CPU NSG now uses the distinct native faissR NSG/MRNG-derived route for all metrics.
   Large high-dimensional CPU NSG/Vamana use deterministic HNSW seeding before
   method-specific pruning/refinement to avoid all-pairs exact seed timeouts.
   Keep reporting recall before considering either route as a broad auto

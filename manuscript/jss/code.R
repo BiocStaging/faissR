@@ -4,10 +4,9 @@
 #'
 #' # Replication code for the faissR JSS article
 #'
-#' This compact entry point is intended for an ordinary CPU computer. It runs
-#' the executable article examples and records the R session. When
-#' `FAISSR_JSS_RESULTS_DIR` points to the frozen publication archive, it also
-#' checks the result schema and regenerates the held-out summary tables.
+#' This is the standalone entry point for both the reduced ordinary-computer
+#' replication and the frozen publication analysis. It never analyzes an
+#' archive until its SHA-256 digest has been verified.
 #'
 #' Full calibration and validation are deliberately not launched here. Their
 #' separate Slurm/Singularity commands are recorded in
@@ -20,10 +19,19 @@
 #' Sys.setenv(FAISSR_JSS_DERIVED_DIR = "/path/to/derived")
 #' ```
 #'
-#' To rebuild tables from frozen HPC results:
+#' To rebuild every manuscript table from the bundled frozen archive:
 #'
 #' ```r
-#' Sys.setenv(FAISSR_JSS_RESULTS_DIR = "/path/to/frozen/results")
+#' Sys.setenv(FAISSR_JSS_MODE = "archive")
+#' ```
+#'
+#' To use separately distributed files, also set:
+#'
+#' ```r
+#' Sys.setenv(
+#'   FAISSR_JSS_ARCHIVE = "/path/to/faissR_jss_frozen_results.tar.gz",
+#'   FAISSR_JSS_ARCHIVE_SHA256 = "/path/to/faissR_jss_frozen_results.tar.gz.sha256"
+#' )
 #' ```
 
 file_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)
@@ -43,8 +51,10 @@ if (!file.exists(replication_script)) {
   stop("Cannot find the authoritative article replication script: ",
        replication_script)
 }
+Sys.setenv(FAISSR_JSS_REPLICATION_SCRIPT = normalizePath(replication_script))
 
-#' Run the compact checks and, when requested, rebuild frozen-result summaries.
+#' Run the selected replication mode. `compact` is the default; `archive`
+#' requires no GPU and performs analysis only; `all` runs both paths.
 source(replication_script, chdir = TRUE)
 
 #' The compact example results and the complete software session are printed in
@@ -54,13 +64,29 @@ derived_dir <- Sys.getenv(
   "FAISSR_JSS_DERIVED_DIR",
   unset = file.path(dirname(replication_script), "derived")
 )
-example_summary <- utils::read.csv(
-  file.path(derived_dir, "article_example_summary.csv"),
-  stringsAsFactors = FALSE
+example_file <- file.path(derived_dir, "article_example_summary.csv")
+if (file.exists(example_file)) {
+  example_summary <- utils::read.csv(example_file, stringsAsFactors = FALSE)
+  print(example_summary, row.names = FALSE)
+}
+verification_file <- file.path(derived_dir, "archive_verification.csv")
+if (file.exists(verification_file)) {
+  archive_verification <- utils::read.csv(
+    verification_file, stringsAsFactors = FALSE
+  )
+  print(archive_verification, row.names = FALSE)
+}
+manifest_file <- file.path(
+  derived_dir, "manuscript_tables", "manuscript_table_manifest.csv"
 )
-print(example_summary, row.names = FALSE)
+if (file.exists(manifest_file)) {
+  table_manifest <- utils::read.csv(manifest_file, stringsAsFactors = FALSE)
+  print(table_manifest[, c("table_number", "file", "rows", "sha256")],
+        row.names = FALSE)
+}
 sessionInfo()
 
 #' The generated directory contains the example summary, `sessionInfo.txt`,
-#' and, for a frozen result root, combined results, checksums, and held-out
-#' analyses. Any schema, fingerprint, or aggregation failure stops execution.
+#' and, in archive mode, checksum verification, analysis outputs, all 15
+#' manuscript tables, and a table manifest. Any checksum, schema, fingerprint,
+#' aggregation, or table-audit failure stops execution.

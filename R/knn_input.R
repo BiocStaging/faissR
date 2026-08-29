@@ -160,7 +160,7 @@ nn_method_implementation_contract <- function(requested_method, backend_used) {
     return(list(
       method_family = "nsg",
       preferred_public_method = "nsg_style",
-      implementation_label = "faissR package-owned NSG/MRNG-style refinement",
+      implementation_label = "faissR package-owned NSG/MRNG-derived refinement",
       implementation_scope = "package_owned_style_implementation",
       canonical_reimplementation = FALSE,
       canonical_reference_name = "NSG"
@@ -170,7 +170,7 @@ nn_method_implementation_contract <- function(requested_method, backend_used) {
     return(list(
       method_family = "vamana",
       preferred_public_method = "vamana_style",
-      implementation_label = "faissR package-owned Vamana-style robust pruning",
+      implementation_label = "faissR package-owned Vamana-derived robust pruning",
       implementation_scope = "package_owned_style_implementation",
       canonical_reimplementation = FALSE,
       canonical_reference_name = "DiskANN/Vamana"
@@ -195,7 +195,7 @@ nn_method_implementation_contract <- function(requested_method, backend_used) {
     return(list(
       method_family = "nndescent",
       preferred_public_method = "nndescent_style",
-      implementation_label = "faissR package-owned NN-descent-style graph construction",
+      implementation_label = "faissR package-owned NN-descent-derived graph construction",
       implementation_scope = "package_owned_style_implementation",
       canonical_reimplementation = FALSE,
       canonical_reference_name = "NN-descent"
@@ -363,7 +363,7 @@ transformed_float32_cache_enabled <- function() {
 }
 
 transformed_float32_cache_limit <- function() {
-  value <- suppressWarnings(as.integer(faissr_option("cache_transformed_float32_max_entries", 4L)))
+  value <- faissr_quiet_warning(as.integer(faissr_option("cache_transformed_float32_max_entries", 4L)))
   if (length(value) != 1L || is.na(value) || !is.finite(value) || value < 0L) {
     return(4L)
   }

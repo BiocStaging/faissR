@@ -505,7 +505,7 @@ the script before datasets are loaded.
 The public `method = "grid"` route is also recorded as an expected skip for
 datasets that are not two- or three-dimensional, because that method is a
 native low-dimensional spatial search route.
-The public `method = "nsg"` route uses faissR's native NSG-style candidate
+The public `method = "nsg"` route uses faissR's distinct NSG/MRNG-derived candidate
 graph for all CPU metrics, so small datasets are tested through the same public
 route instead of being skipped for linked-FAISS NSG graph-construction limits.
 Large high-dimensional CPU NSG and Vamana rows use deterministic HNSW seed

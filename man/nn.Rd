@@ -68,10 +68,11 @@ L2 normalization, correlation by row centering plus L2 normalization
 followed by FastScan L2 search.
 The preferred names for package-owned graph refinement are
 `"nsg_style"`, `"vamana_style"`, and `"nndescent_style"`; the shorter
-names remain compatibility aliases. Native results explicitly report that
-they are style implementations rather than feature-complete canonical
-reproductions. CUDA cuVS NN-descent is identified separately as an
-external-provider implementation.}
+names remain compatibility aliases. The `_style` suffix is a scope marker,
+not an algorithm name: native results explicitly report a distinct
+package-owned derived graph-refinement algorithm rather than a
+feature-complete canonical reproduction. CUDA cuVS NN-descent is identified
+separately as an external-provider implementation.}
 
 \item{metric}{Distance metric. The intentionally small public set is
 `"euclidean"`, `"cosine"`, and `"correlation"`.
@@ -93,7 +94,9 @@ edge cases: two zero-normalized rows have distance `0`, while a
 zero-normalized row versus a nonzero row has distance `1`. CPU FAISS Flat
 uses the exact CPU scorer for those rows to preserve deterministic
 small-`k` tie handling; explicit CUDA routes error clearly instead of
-repairing those rows on CPU. CUDA FAISS/cuVS results carry
+repairing those rows on CPU. These finite values are software conventions
+for otherwise undefined cosine or correlation cases, not mathematical
+cosine similarities or Pearson correlations. CUDA FAISS/cuVS results carry
 `attr(result, "gpu_residency")` metadata with provider, index residency,
 host/device transfer strategy, query device reuse, and CPU fallback flags.
 CPU `method = "auto"` can use FAISS Flat for larger exact non-Euclidean
@@ -102,8 +105,10 @@ CPU NSG/Vamana refinement for selected larger self-KNN cases, and native
 CPU NN-descent for other large self-KNN cases. CPU `method = "hnsw"` uses
 FAISS HNSW for all three metrics. CUDA HNSW metadata records the available
 cuVS HNSW wrapper design.
-Unsupported backend combinations fail clearly instead of returning neighbours
-computed under a different metric.}
+Unsupported method/backend/metric combinations fail clearly instead of
+changing the requested metric, method, or device. Use
+\code{nn_capabilities(runtime = TRUE)} to preflight both design support and the
+libraries available in the current installation.}
 
 \item{tuning}{Tuning policy. `"auto"` uses deterministic compiled defaults
 selected from backend, method, metric, data shape, `k`, and
@@ -245,12 +250,13 @@ The public methods are:
   robust-pruned candidate graph inspired by DiskANN/Vamana, followed by CPU
   or CUDA candidate refinement. It is not a feature-complete Vamana
   reproduction.
-  \item `"nsg_style"` (`"nsg"` compatibility alias): a package-owned
-  NSG/MRNG-style candidate graph followed by CPU or CUDA candidate
-  refinement. It is not a feature-complete NSG reproduction.
-  \item `"nndescent_style"` (`"nndescent"` compatibility alias): the
-  package-owned CPU NN-descent-style graph route or direct external-provider
-  cuVS NN-descent on CUDA.
+  \item `"nsg_style"` (`"nsg"` compatibility alias): a distinct
+  package-owned candidate-graph algorithm derived from selected NSG/MRNG
+  pruning ideas, followed by CPU or CUDA candidate refinement. It is not a
+  feature-complete NSG reproduction.
+  \item `"nndescent_style"` (`"nndescent"` compatibility alias): a
+  distinct package-owned CPU graph-refinement algorithm derived from
+  NN-descent ideas, or direct external-provider cuVS NN-descent on CUDA.
   \item `"cagra"`: CUDA-only FAISS GPU CAGRA or direct cuVS CAGRA. Use
   `cagra_implementation` to request a provider explicitly.
 }

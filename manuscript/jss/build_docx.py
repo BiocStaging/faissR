@@ -158,13 +158,13 @@ def build_intermediate(source: str, architecture: Path, validation: Path) -> str
     body = replace_flow_figures(body, architecture, validation)
     body = normalize_body(body)
 
-    title = "faissR: Recall-Aware CPU and GPU Nearest-Neighbor Search in R"
+    title = "faissR: CPU and GPU Nearest-Neighbor Search with FAISS and cuVS in R"
     authors = (
         "Moussa Kassim (1,2; co-first); Martin Ocharo (1,2; co-first); "
         "Dalia Ahmed (1); Dupe Ojo (1); Alessia Vignoli (3,4); "
-        "Leonardo Tenori (3,4; co-corresponding); "
+        "Leonardo Tenori (3,4); "
         "Dinesh Gupta (20); Silvano Piazza (21,22); "
-        "Stefano Cacciatore (1,2; co-corresponding)"
+        "Stefano Cacciatore (1,2; corresponding)"
     )
     front = f"""\\documentclass{{article}}
 \\usepackage{{booktabs}}
@@ -196,11 +196,9 @@ Italy.
 
 Moussa Kassim and Martin Ocharo contributed equally and share first authorship.
 
-Co-corresponding authors:
+Corresponding author:
 
-Leonardo Tenori, \\texttt{{TENORI@CERM.UNIFI.IT}}
-
-Stefano Cacciatore, \\texttt{{STEFANO.CACCIATORE@ICGEB.ORG}}
+Stefano Cacciatore, \\texttt{{stefano.cacciatore@icgeb.org}}
 
 Author e-mails:
 
@@ -216,7 +214,7 @@ Alessia Vignoli, \\texttt{{VIGNOLI@CERM.UNIFI.IT}}
 
 Leonardo Tenori, \\texttt{{TENORI@CERM.UNIFI.IT}}
 
-Stefano Cacciatore, \\texttt{{STEFANO.CACCIATORE@ICGEB.ORG}}
+Stefano Cacciatore, \\texttt{{stefano.cacciatore@icgeb.org}}
 
 Stefano Cacciatore ORCID:
 \\url{{https://orcid.org/0000-0001-7052-7156}}.

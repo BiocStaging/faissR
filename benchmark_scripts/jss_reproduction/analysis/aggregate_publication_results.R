@@ -719,11 +719,14 @@ main <- function() {
   expected_repeats <- as.integer(args$expected_repeats %||% 3L)
   datasets <- split_values(args$datasets, "")
   datasets <- datasets[nzchar(datasets)]
+  metrics <- split_values(args$metrics, "euclidean,cosine,correlation")
+  metrics <- metrics[nzchar(metrics)]
 
   files <- list.files(root, pattern = "^jmlr_tuned_benchmark_results[.]csv$", recursive = TRUE, full.names = TRUE)
   files <- files[!grepl("/calibration/|/analysis/", files)]
   if (!length(files)) stop("No held-out publication result files were found under `results_root`.", call. = FALSE)
   combined <- read_union(files)
+  combined <- combined[combined$metric %in% metrics, , drop = FALSE]
   if (backend != "all") combined <- combined[combined$backend == backend, , drop = FALSE]
   if (length(datasets)) combined <- combined[combined$dataset %in% datasets, , drop = FALSE]
   if (!nrow(combined)) stop("No result rows match the requested backend.", call. = FALSE)
@@ -769,6 +772,7 @@ main <- function() {
   write_report(out_dir, files, combined, summary, best, routes, paired_summary, stability)
   writeLines(capture.output(sessionInfo()), file.path(out_dir, "sessionInfo.txt"))
   outputs <- list.files(out_dir, full.names = TRUE)
+  outputs <- outputs[!file.info(outputs)$isdir]
   checksums <- data.frame(file = basename(outputs), md5 = unname(tools::md5sum(outputs)), stringsAsFactors = FALSE)
   write.csv(checksums, file.path(out_dir, "checksums.csv"), row.names = FALSE)
   cat("Wrote held-out evidence to ", out_dir, "\n", sep = "")

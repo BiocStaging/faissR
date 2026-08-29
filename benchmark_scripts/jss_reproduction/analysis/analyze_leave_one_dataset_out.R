@@ -202,6 +202,23 @@ main <- function() {
   }
   evidence <- read.csv(robust_path, stringsAsFactors = FALSE, check.names = FALSE)
   combined <- read.csv(combined_path, stringsAsFactors = FALSE, check.names = FALSE)
+  backend <- tolower(args$backend %||% "cuda")
+  if (!backend %in% c("cpu", "cuda", "all")) {
+    stop("--backend must be cpu, cuda, or all.", call. = FALSE)
+  }
+  if (backend != "all") {
+    evidence <- evidence[evidence$backend == backend, , drop = FALSE]
+    combined <- combined[combined$backend == backend, , drop = FALSE]
+  }
+  metrics <- strsplit(args$metrics %||% "", ",", fixed = TRUE)[[1L]]
+  metrics <- trimws(metrics[nzchar(trimws(metrics))])
+  if (length(metrics)) {
+    evidence <- evidence[evidence$metric %in% metrics, , drop = FALSE]
+    combined <- combined[combined$metric %in% metrics, , drop = FALSE]
+  }
+  if (!nrow(evidence) || !nrow(combined)) {
+    stop("No evidence remains after applying the requested metric filter.", call. = FALSE)
+  }
   dims <- unique(combined[, c("dataset", "dataset_md5", "n", "p"), drop = FALSE])
   evidence <- merge(evidence, dims, by = c("dataset", "dataset_md5"), all.x = TRUE)
   evidence$shape_group <- mapply(shape_group, evidence$n, evidence$p, USE.NAMES = FALSE)

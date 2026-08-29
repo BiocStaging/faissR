@@ -1503,6 +1503,36 @@ summarize_results <- function(out_dir, methods, config) {
   invisible(res)
 }
 
+resume_result_lookup <- local({
+  cache <- NULL
+  function(result_path) {
+    if (is.null(cache)) {
+      roots <- strsplit(
+        Sys.getenv("RESUME_RESULTS_DIRS", unset = ""),
+        .Platform$path.sep,
+        fixed = TRUE
+      )[[1L]]
+      roots <- unique(roots[nzchar(roots) & dir.exists(roots)])
+      files <- unlist(lapply(roots, function(root) {
+        worker_dir <- if (basename(root) == "worker_results") {
+          root
+        } else {
+          file.path(root, "worker_results")
+        }
+        if (!dir.exists(worker_dir)) return(character())
+        list.files(worker_dir, pattern = "[.]csv$", full.names = TRUE)
+      }), use.names = FALSE)
+      keys <- sub("^[0-9]+_", "", basename(files))
+      cache <<- files[!duplicated(keys)]
+      names(cache) <<- keys[!duplicated(keys)]
+    }
+    key <- sub("^[0-9]+_", "", basename(result_path))
+    source <- unname(cache[[key]] %||% "")
+    if (!nzchar(source) || !file.exists(source)) return(FALSE)
+    isTRUE(file.copy(source, result_path, overwrite = FALSE)) || file.exists(result_path)
+  }
+})
+
 main <- function() {
   args <- parse_args()
   if (logical_arg(args$worker, FALSE, "worker")) {
@@ -1608,7 +1638,7 @@ main <- function() {
                 repeat_id
               )
             )
-            if (file.exists(result_path)) next
+            if (file.exists(result_path) || resume_result_lookup(result_path)) next
             cat(sprintf("[%s] %04d %s / %s / %s / k=%d / target=%s / seed=%d / rep=%d\n",
                         format(Sys.time(), "%Y-%m-%d %H:%M:%S"), total,
                         manifest_df$dataset[[di]], method$method_id, metric, kk,

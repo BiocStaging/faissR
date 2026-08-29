@@ -1,3 +1,19 @@
+# faissR 0.99.25
+
+* Restores native Windows eligibility by removing the unnecessary Unix-only
+  package restriction. Windows source builds use a compatible CPU FAISS
+  installation supplied through `FAISS_HOME` (or `CONDA_PREFIX`); automated
+  builders without FAISS compile explicit diagnostic stubs rather than using
+  invalid `/include` and `/lib` paths. Set `FAISSR_REQUIRE_FAISS=1` to require
+  a functional FAISS build and fail configuration when it is unavailable.
+
+# faissR 0.99.24
+
+* Adds the `FunctionalPrediction` Bioconductor view for the supervised kNN
+  interfaces.
+* Centralizes suppression of expected conversion and optional-runtime warnings
+  in one internal helper so warning handling is explicit and auditable.
+
 # faissR 0.99.23
 
 * Restricts the public nearest-neighbour metric contract to Euclidean, cosine,

@@ -265,19 +265,22 @@ not import Python.
 
 ## Windows
 
-`faissR` is marked `OS_type: unix` for automated Bioconductor/r-universe
-Windows builds because FAISS is a mandatory system dependency and the Windows
-builders do not provide a compatible FAISS development library. Automated
-Bioconductor macOS binary builds are marked unsupported through
+`faissR` supports Windows package installation and native CPU FAISS execution.
+Automated Windows builders may not provide a compatible FAISS development
+library. On those builders, the package compiles diagnostic stubs and reports
+FAISS as unavailable instead of failing with invalid `/include` and `/lib`
+paths. A functional Windows FAISS route requires an Rtools-compatible library;
+set `FAISSR_REQUIRE_FAISS=1` to make its absence a configuration error.
+
+Automated Bioconductor macOS binary builds are marked unsupported through
 `Config/Bioconductor/UnsupportedPlatforms: mac` and `.BBSoptions` because the
 r-universe macOS worker removes Homebrew and the CRAN-style macOS system-library
 bundle does not currently include FAISS. If that r-universe macOS job is still
 launched, `configure` emits diagnostic stubs so the binary can load and report
 FAISS as unavailable; it does not provide working FAISS methods. macOS users
 can still install from source with Homebrew or conda/mamba as described above.
-Windows users should use WSL2 for the supported Linux-style installation path,
-or maintain their own native FAISS/Rtools-compatible build and install from
-source manually.
+Windows users can use a native Rtools-compatible CPU build, or WSL2 for the
+Linux-style CPU and CUDA installation paths.
 
 ### Windows CPU/FAISS
 
@@ -297,11 +300,15 @@ Native Windows CPU install shape:
 
 ```bat
 set FAISS_HOME=C:\path\to\faiss
+set FAISSR_REQUIRE_FAISS=1
 R CMD INSTALL .
 ```
 
-The FAISS prefix must contain compatible headers and libraries. If the DLL is
-not on the runtime search path, add its directory to `PATH` before loading R:
+The FAISS prefix must contain `include/faiss/IndexFlat.h` (or
+`Library/include/faiss/IndexFlat.h`) and a MinGW/Rtools-compatible
+`libfaiss.a` or `libfaiss.dll.a`. A Microsoft Visual C++ `.lib` file is not
+assumed to be ABI-compatible with Rtools. If a FAISS DLL is not on the runtime
+search path, add its directory to `PATH` before loading R:
 
 ```bat
 set PATH=C:\path\to\faiss\bin;%PATH%

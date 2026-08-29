@@ -91,9 +91,12 @@ alternative.
 
 For package-owned graph refinement, prefer `"nsg_style"`,
 `"vamana_style"`, and `"nndescent_style"`. The shorter historical names remain
-compatibility aliases. Result fields `preferred_public_method`,
+compatibility aliases. The `_style` suffix is a scope marker rather than an
+algorithm name: package-owned routes are distinct derived graph-refinement
+algorithms, while CUDA `nndescent_style` can resolve to direct cuVS
+NN-descent. Result fields `preferred_public_method`,
 `implementation_label`, `implementation_scope`, and
-`canonical_reimplementation` distinguish these style implementations from
+`canonical_reimplementation` distinguish these derived algorithms from
 direct external-provider routes.
 
 Advanced tuning and cache knobs use `options(faissR.<name> = ...)`.
@@ -185,7 +188,7 @@ consume CUDA device pointers. It is never called automatically by `nn_gpu()`.
 
 | `method` | Description |
 | --- | --- |
-| `"auto"` | Shape-aware selector for the chosen backend. CPU auto uses exact search for tiny data, grid search for large 2D/3D Euclidean/cosine/correlation self-search, FAISS HNSW for most medium/high-dimensional CPU self-KNN, FAISS IVF for selected large low-dimensional Euclidean rows, native CPU NSG-style refinement for selected larger non-Euclidean self-KNN cases, and native CPU NN-descent for other large self-KNN cases [1-2,5,21]. CUDA auto uses CUDA grid for large 2D/3D Euclidean/cosine/correlation self-search; Euclidean non-grid self-KNN chooses exact Flat/brute force or IVF-Flat from the compiled shape/k/target-recall policy; non-grid cosine/correlation/IP stays on exact FAISS GPU Flat/cuVS brute force when available [1-3,13-16]. |
+| `"auto"` | Shape-aware selector for the chosen backend. CPU auto uses exact search for tiny data, grid search for large 2D/3D Euclidean/cosine/correlation self-search, FAISS HNSW for most medium/high-dimensional CPU self-KNN, FAISS IVF for selected large low-dimensional Euclidean rows, native CPU NSG/MRNG-derived refinement for selected larger non-Euclidean self-KNN cases, and native CPU NN-descent for other large self-KNN cases [1-2,5,21]. CUDA auto uses CUDA grid for large 2D/3D Euclidean/cosine/correlation self-search; Euclidean non-grid self-KNN chooses exact Flat/brute force or IVF-Flat from the compiled shape/k/target-recall policy; non-grid cosine/correlation/IP stays on exact FAISS GPU Flat/cuVS brute force when available [1-3,13-16]. |
 | `"grid"` | Native spatial grid search for 2D/3D Euclidean, cosine, and correlation self-KNN. Cosine/correlation use normalized Euclidean grid search. It is intended for low-dimensional spatial or simulated data and errors clearly outside supported dimensions. |
 
 Use `nn(..., exclude_self = TRUE)` for embedding

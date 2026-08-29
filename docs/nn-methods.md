@@ -63,8 +63,8 @@ layout support require `exclude_self = TRUE` and report an error otherwise.
 | `"ivf"` | approximate | FAISS IVF-Flat | FAISS GPU IVF-Flat | FAISS IVF [1-2,16] |
 | `"ivfpq"` | approximate | FAISS IVF-PQ | FAISS GPU IVF-PQ | product quantization [6,16] |
 | `"ivfpq_fastscan"` | approximate | FAISS IVFPQ FastScan with Flat refinement | cuVS IVF-PQ with 4-bit compressed codes | 4-bit IVFPQ compressed-code scan [6,34] |
-| `"vamana_style"` | approximate | package-owned Vamana-style candidate graph | package-owned Vamana-style candidate graph with CUDA refinement | DiskANN/Vamana [3,24] |
-| `"nsg_style"` | approximate | package-owned CPU NSG/MRNG-style candidate graph | package-owned CUDA NSG/MRNG-style candidate graph | NSG/FAISS [16,21,29] |
+| `"vamana_style"` | approximate | package-owned Vamana-derived candidate graph | package-owned Vamana-derived candidate graph with CUDA refinement | DiskANN/Vamana [3,24] |
+| `"nsg_style"` | approximate | package-owned CPU NSG/MRNG-derived candidate graph | package-owned CUDA NSG/MRNG-derived candidate graph | NSG/FAISS [16,21,29] |
 | `"cagra"` | approximate | unsupported | FAISS GPU CAGRA or cuVS CAGRA | FAISS/cuVS CAGRA [3,13-16] |
 
 For clarity, new code should use `"nsg_style"`, `"vamana_style"`, and
@@ -73,8 +73,9 @@ The shorter strings in the table remain compatibility aliases and resolve to
 the same internal method families. Native results record the preferred spelling
 in `preferred_public_method`, set
 `canonical_reimplementation = FALSE` and identify themselves as package-owned
-style implementations. Direct cuVS NN-descent is an external-provider route
-and is labelled separately.
+derived graph-refinement algorithms. The `_style` suffix is a scope marker,
+not an algorithm name. Direct cuVS NN-descent is an external-provider route and
+is labeled separately.
 
 ## Metric Support Matrix
 
@@ -94,8 +95,8 @@ documented distances.
 | `"ivf"` | euclidean, cosine, correlation | euclidean, cosine, correlation | FAISS IVF-Flat. |
 | `"ivfpq"` | euclidean, cosine, correlation | euclidean, cosine, correlation | FAISS IVF-PQ. |
 | `"ivfpq_fastscan"` | euclidean, cosine, correlation | euclidean, cosine, correlation | FAISS FastScan on CPU; cuVS 4-bit IVF-PQ on CUDA. |
-| `"vamana_style"` | euclidean, cosine, correlation | euclidean, cosine, correlation | Package-owned Vamana-style refinement. |
-| `"nsg_style"` | euclidean, cosine, correlation | euclidean, cosine, correlation | Package-owned NSG/MRNG-style refinement. |
+| `"vamana_style"` | euclidean, cosine, correlation | euclidean, cosine, correlation | Package-owned Vamana-derived refinement. |
+| `"nsg_style"` | euclidean, cosine, correlation | euclidean, cosine, correlation | Package-owned NSG/MRNG-derived refinement. |
 | `"nndescent_style"` | euclidean, cosine, correlation | euclidean, cosine, correlation | Package-owned CPU route; external-provider cuVS route on CUDA. |
 | `"cagra"` | unsupported | euclidean, cosine, correlation | CUDA-only FAISS GPU/cuVS graph search. |
 
@@ -122,7 +123,7 @@ arguments and collected runtime capability flags:
   Euclidean/cosine/correlation self-search, FAISS IVF for some million-row low-dimensional cases,
   FAISS HNSW for large high-dimensional self-search, including non-Euclidean
   HNSW when FAISS exposes it, FAISS Flat exact search for larger cosine,
-  NSG-style route for selected larger non-Euclidean self-KNN cases, and
+  NSG/MRNG-derived route for selected larger non-Euclidean self-KNN cases, and
   native CPU NN-descent for other large self-KNN cases, instead of exact brute
   force [1-2,5,16,21].
 - CUDA auto uses CUDA grid for large 2D/3D Euclidean/cosine/correlation
@@ -269,7 +270,7 @@ issues.
   before exact cuVS L2 search [1-3,16].
 
 This method is useful for comparing FAISS GPU Flat with direct cuVS exhaustive
-search. Both are exact-style routes, but implementation details, transfer
+search. Both are exhaustive routes, but implementation details, transfer
 costs, and batching can differ.
 
 ## `"grid"`
@@ -482,10 +483,10 @@ reports should include recall or another quality measure.
 
 ## `"vamana"`
 
-`method = "vamana"` requests a DiskANN/Vamana-style robust-pruned graph route
-implemented inside faissR [24].
+`method = "vamana"` requests a distinct robust-pruned graph algorithm
+implemented inside faissR and derived from selected DiskANN/Vamana ideas [24].
 
-- CPU `method = "vamana"` builds a candidate graph, applies Vamana-style
+- CPU `method = "vamana"` builds a candidate graph, applies Vamana-derived
   robust pruning controlled by `alpha`, and refines top-k neighbours inside
   each candidate row with faissR's CPU candidate KNN scorer. Large
   high-dimensional CPU inputs use deterministic HNSW seed neighbours before
@@ -526,19 +527,19 @@ the DiskANN/Vamana inspiration and cuVS build path in documentation.
 
 ## `"nsg"`
 
-`method = "nsg"` requests a Navigating Spreading-out Graph style approximate
-nearest-neighbour graph [21].
+`method = "nsg"` requests a distinct faissR-owned approximate candidate-graph
+algorithm derived from selected NSG/MRNG construction and pruning ideas [21].
 
-- CPU `method = "nsg"` uses faissR's native NSG-style self-KNN candidate graph
+- CPU `method = "nsg"` uses faissR's native NSG/MRNG-derived self-KNN candidate graph
   for all public metrics so public calls do not enter the unsafe linked-FAISS
   NSG graph builder [16,21,29]. Large high-dimensional CPU inputs use
-  deterministic HNSW seed neighbours before NSG/MRNG-style pruning; smaller
+  deterministic HNSW seed neighbours before derived graph pruning; smaller
   CPU inputs keep exact seed neighbours.
-- CUDA `method = "nsg"` uses faissR's native CUDA NSG-style self-KNN route. It
-  builds a candidate graph, prunes candidates with an NSG/MRNG-style rule, and
+- CUDA `method = "nsg"` uses faissR's native CUDA NSG/MRNG-derived self-KNN route. It
+  builds a candidate graph, prunes candidates with a derived NSG/MRNG rule, and
   refines rows with the native CUDA row-candidate KNN kernel.
-- The NSG-style pruning step protects the first `k` seed neighbours before
-  MRNG-style pruning. This keeps the route high-recall for small `k` while
+- The derived pruning step protects the first `k` seed neighbours before
+  the MRNG-derived pruning pass. This keeps the route high-recall for small `k` while
   preserving the same candidate-graph/refinement implementation.
 - Candidate pruning runs in compiled C++ over a compact column-major candidate
   matrix, then the same matrix is passed directly to CPU or CUDA candidate
@@ -571,8 +572,8 @@ neighbours and measure recall on a representative subset.
 
 ## `"nndescent"`
 
-`method = "nndescent"` requests NN-descent style approximate KNN graph
-construction [4].
+`method = "nndescent"` requests either faissR's distinct NN-descent-derived
+CPU graph-refinement algorithm or direct cuVS NN-descent on CUDA [4].
 
 - On CPU, faissR uses its native CPU NNDescent implementation by default.
 - On CUDA, faissR maps to direct RAPIDS cuVS NN-descent for Euclidean/L2

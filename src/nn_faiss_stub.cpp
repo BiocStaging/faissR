@@ -16,6 +16,8 @@ bool faiss_gpu_bfknn_float32_gpu_available_impl() {
 std::string faiss_info_json_impl() {
 #if defined(FAISSR_MACOS_CI_NO_FAISS)
   return "{\"available\":false,\"gpu\":false,\"gpu_cagra\":false,\"reason\":\"runiverse_macos_diagnostic_stub_no_faiss\"}";
+#elif defined(FAISSR_WINDOWS_NO_FAISS)
+  return "{\"available\":false,\"gpu\":false,\"gpu_cagra\":false,\"reason\":\"windows_diagnostic_stub_no_faiss\"}";
 #elif defined(FAISSR_WASM_UNSUPPORTED)
   return "{\"available\":false,\"gpu\":false,\"gpu_cagra\":false,\"reason\":\"webassembly_diagnostic_stub_no_faiss\"}";
 #else

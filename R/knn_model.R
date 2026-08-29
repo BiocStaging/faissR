@@ -704,7 +704,7 @@ knn_fitted_index_resolves_to_stored_backend <- function(object, backend, k) {
 }
 
 knn_scalar_int <- function(value, default = NA_integer_) {
-  value <- suppressWarnings(as.integer(value))
+  value <- faissr_quiet_warning(as.integer(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value)) {
     return(as.integer(default))
   }
@@ -871,7 +871,7 @@ knn_predict_with_fitted_faiss_index <- function(object,
       query,
       as.integer(k),
       FALSE,
-      suppressWarnings(as.integer(search_width)),
+      faissr_quiet_warning(as.integer(search_width)),
       as.integer(object$n_threads),
       "double"
     ),
@@ -1076,7 +1076,7 @@ model_Ytrain <- function(object) {
 }
 
 normalize_knn_model_k <- function(k, n_train) {
-  k <- suppressWarnings(as.numeric(k))
+  k <- faissr_quiet_warning(as.numeric(k))
   if (length(k) != 1L || is.na(k) || !is.finite(k) || k < 1L ||
       abs(k - round(k)) > sqrt(.Machine$double.eps)) {
     stop("`k` must be a positive integer.", call. = FALSE)

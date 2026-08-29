@@ -26,8 +26,8 @@ def word_source(source: str) -> str:
         source,
     )
     source = source.replace(r"\textsuperscript{\(\dagger\)}", " ")
-    source = source.replace(r"\dagger", "co-first")
-    source = source.replace(r"\ast", "corresponding")
+    source = source.replace(r"\dagger", "")
+    source = source.replace(r"\ast", "")
     source = re.sub(r"\$\^\{([^}]+)\}\$", r" (\1)", source)
     source = source.replace(r"\newcolumntype{Y}{>{\raggedright\arraybackslash}X}", "")
     source = source.replace(
@@ -37,6 +37,10 @@ def word_source(source: str) -> str:
     source = source.replace(
         r"\begin{tabularx}{\linewidth}{p{0.27\linewidth}Y}",
         r"\begin{tabular}{p{0.27\linewidth}p{0.63\linewidth}}",
+    )
+    source = source.replace(
+        r"\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.42\textwidth}Y@{}}",
+        r"\begin{tabular}{p{0.42\textwidth}p{0.48\textwidth}}",
     )
     source = source.replace(
         r"\begin{tabularx}{\linewidth}{P{0.30\linewidth}Y}",
@@ -67,6 +71,22 @@ def word_source(source: str) -> str:
     source = source.replace(
         r"\begin{tabularx}{\linewidth}{P{0.32\linewidth}P{0.18\linewidth}Y}",
         r"\begin{tabular}{p{0.32\linewidth}p{0.18\linewidth}p{0.40\linewidth}}",
+    )
+    source = source.replace(
+        r"\begin{tabularx}{\textwidth}{@{}lY@{}}",
+        r"\begin{tabular}{@{}lp{0.72\textwidth}@{}}",
+    )
+    source = source.replace(
+        r"\begin{tabularx}{\textwidth}{@{}Yrr@{}}",
+        r"\begin{tabular}{@{}p{0.62\textwidth}rr@{}}",
+    )
+    source = source.replace(
+        r"\begin{tabularx}{\textwidth}{@{}Xrr@{}}",
+        r"\begin{tabular}{@{}p{0.62\textwidth}rr@{}}",
+    )
+    source = source.replace(
+        r"\begin{tabularx}{\textwidth}{@{}Xrrrr@{}}",
+        r"\begin{tabular}{@{}p{0.42\textwidth}rrrr@{}}",
     )
     source = source.replace(
         r"\begin{longtable}{P{0.22\linewidth}P{0.31\linewidth}P{0.37\linewidth}}",
@@ -164,6 +184,10 @@ def polish(path: Path) -> None:
                         for run in paragraph.runs:
                             run.font.size = Pt(8.5)
         table_widths = {
+            ("Component", "Configuration"): [2400, 6960],
+            ("Method", "Tuned quantities"): [2500, 6860],
+            ("Evidence", "Passing or completed", "Total"):
+                [5600, 2160, 1600],
             ("Function", "Role"): [2500, 6860],
             ("Method", "CPU route", "CUDA route"): [1600, 3380, 4380],
             ("Dataset", "Rows", "Columns"): [4000, 2680, 2680],

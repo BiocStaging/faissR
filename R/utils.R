@@ -2,6 +2,13 @@
   if (is.null(x) || length(x) == 0L) y else x
 }
 
+faissr_quiet_warning <- function(expr) {
+  withCallingHandlers(
+    expr,
+    warning = function(condition) invokeRestart("muffleWarning")
+  )
+}
+
 nn_gpu_exact_provider <- function(metric, p, faiss_gpu = faiss_gpu_available()) {
   metric <- normalize_nn_metric(metric)
   p <- normalize_nn_positive_integer(

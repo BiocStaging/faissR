@@ -1,0 +1,61 @@
+#!/bin/sh
+
+set -eu
+
+write_diagnostic_makevars() {
+  cat > src/Makevars.win <<'EOF'
+CXX_STD = CXX20
+PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS)
+PKG_CPPFLAGS = -DFAISSR_WINDOWS_NO_FAISS
+PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS)
+OBJECTS = RcppExports.o embedding_utils.o nn.o nn_auto_select.o nn_fortran.o nn_faiss_bridge.o nn_faiss_stub.o nn_cuvs_bridge.o nn_cuvs_stub.o nn_cuda_bridge.o nn_cuda_stub.o
+EOF
+}
+
+faiss_prefix=${FAISS_HOME:-${CONDA_PREFIX:-}}
+faiss_include=""
+faiss_libdir=""
+
+if [ -n "$faiss_prefix" ]; then
+  for candidate in "$faiss_prefix/include" "$faiss_prefix/Library/include"; do
+    if [ -f "$candidate/faiss/IndexFlat.h" ]; then
+      faiss_include=$candidate
+      break
+    fi
+  done
+
+  for candidate in \
+    "$faiss_prefix/lib" \
+    "$faiss_prefix/lib64" \
+    "$faiss_prefix/Library/lib"; do
+    if [ -f "$candidate/libfaiss.a" ] || \
+       [ -f "$candidate/libfaiss.dll.a" ]; then
+      faiss_libdir=$candidate
+      break
+    fi
+  done
+fi
+
+if [ -n "$faiss_include" ] && [ -n "$faiss_libdir" ]; then
+  cat > src/Makevars.win <<EOF
+CXX_STD = CXX20
+PKG_CXXFLAGS = \$(SHLIB_OPENMP_CXXFLAGS)
+PKG_CPPFLAGS = -DFAISSR_HAS_FAISS -I"$faiss_include"
+PKG_LIBS = \$(SHLIB_OPENMP_CXXFLAGS) -L"$faiss_libdir" -lfaiss \$(LAPACK_LIBS) \$(BLAS_LIBS) \$(FLIBS)
+OBJECTS = RcppExports.o embedding_utils.o nn.o nn_auto_select.o nn_fortran.o nn_faiss_bridge.o nn_faiss_impl.o nn_cuvs_bridge.o nn_cuvs_stub.o nn_cuda_bridge.o nn_cuda_stub.o
+EOF
+  echo "Windows CPU FAISS build enabled from $faiss_prefix." >&2
+  exit 0
+fi
+
+if [ "${FAISSR_REQUIRE_FAISS:-0}" = "1" ]; then
+  echo "FAISSR_REQUIRE_FAISS=1, but a compatible Windows FAISS CPU build was not found." >&2
+  echo "Set FAISS_HOME to a prefix containing include/faiss/IndexFlat.h and" >&2
+  echo "lib/libfaiss.a (or libfaiss.dll.a) built for the active Rtools toolchain." >&2
+  exit 1
+fi
+
+echo "Windows FAISS development files were not found; building diagnostic stubs." >&2
+echo "For functional CPU FAISS methods, provide an Rtools-compatible FAISS build" >&2
+echo "through FAISS_HOME and set FAISSR_REQUIRE_FAISS=1." >&2
+write_diagnostic_makevars

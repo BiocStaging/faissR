@@ -1,9 +1,22 @@
 options(prompt = "R> ", continue = "+  ", width = 70,
         useFancyQuotes = FALSE)
 
-if (!requireNamespace("faissR", quietly = TRUE)) {
-  stop("Install faissR before running the article replication script.")
+explicit_script <- Sys.getenv("FAISSR_JSS_REPLICATION_SCRIPT", unset = "")
+file_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)
+script_path <- if (nzchar(explicit_script)) {
+  normalizePath(explicit_script, mustWork = TRUE)
+} else if (length(file_arg) && file.exists(sub("^--file=", "", file_arg[[1L]]))) {
+  normalizePath(sub("^--file=", "", file_arg[[1L]]), mustWork = TRUE)
+} else {
+  normalizePath("replication_article.R", mustWork = TRUE)
 }
+package_root <- dirname(dirname(dirname(script_path)))
+mode <- tolower(Sys.getenv("FAISSR_JSS_MODE", unset = "compact"))
+if (!mode %in% c("compact", "archive", "all")) {
+  stop("FAISSR_JSS_MODE must be compact, archive, or all.")
+}
+run_compact <- mode %in% c("compact", "all")
+run_archive <- mode %in% c("archive", "all")
 
 out_dir <- Sys.getenv(
   "FAISSR_JSS_DERIVED_DIR",
@@ -39,6 +52,60 @@ sha256_files <- function(paths) {
   rep(NA_character_, length(paths))
 }
 
+read_expected_sha256 <- function(path) {
+  value <- trimws(readLines(path, warn = FALSE))
+  value <- value[nzchar(value) & !startsWith(value, "#")]
+  if (!length(value)) stop("The SHA-256 ledger is empty: ", path)
+  hash <- tolower(strsplit(value[[1L]], "[[:space:]]+")[[1L]][[1L]])
+  if (!grepl("^[0-9a-f]{64}$", hash)) {
+    stop("The SHA-256 ledger does not begin with a valid digest: ", path)
+  }
+  hash
+}
+
+archive_dir <- NULL
+if (run_archive) {
+  archive <- Sys.getenv(
+    "FAISSR_JSS_ARCHIVE",
+    unset = file.path(dirname(script_path), "faissR_jss_frozen_results.tar.gz")
+  )
+  ledger <- Sys.getenv(
+    "FAISSR_JSS_ARCHIVE_SHA256",
+    unset = paste0(archive, ".sha256")
+  )
+  archive <- normalizePath(archive, mustWork = TRUE)
+  ledger <- normalizePath(ledger, mustWork = TRUE)
+  expected_hash <- read_expected_sha256(ledger)
+  observed_hash <- unname(sha256_files(archive))
+  if (is.na(observed_hash) || !identical(tolower(observed_hash), expected_hash)) {
+    stop(
+      "Frozen archive SHA-256 mismatch. No archive content was extracted or analyzed.\n",
+      "Expected: ", expected_hash, "\nObserved: ", observed_hash
+    )
+  }
+  write.csv(
+    data.frame(
+      archive = basename(archive), expected_sha256 = expected_hash,
+      observed_sha256 = observed_hash, bytes = file.info(archive)$size,
+      verification_pass = TRUE, stringsAsFactors = FALSE
+    ),
+    file.path(out_dir, "archive_verification.csv"), row.names = FALSE
+  )
+  archive_dir <- tempfile("faissR_jss_frozen_")
+  dir.create(archive_dir, recursive = TRUE)
+  status <- system2("tar", c("-xzf", shQuote(archive), "-C", shQuote(archive_dir)))
+  if (!identical(status, 0L)) stop("Could not extract the verified frozen archive.")
+  campaigns <- list.dirs(archive_dir, recursive = TRUE, full.names = TRUE)
+  campaigns <- campaigns[
+    dir.exists(file.path(campaigns, "held_out")) &
+      dir.exists(file.path(campaigns, "calibration"))
+  ]
+  if (length(campaigns) != 1L) {
+    stop("The verified archive must contain exactly one final_campaign directory.")
+  }
+  Sys.setenv(FAISSR_JSS_RESULTS_DIR = campaigns[[1L]])
+}
+
 latest_method_runs <- function(x) {
   suite <- if ("dataset_suite" %in% names(x)) {
     value <- as.character(x$dataset_suite)
@@ -59,6 +126,11 @@ latest_method_runs <- function(x) {
     ii[x$run_root[ii] == roots[[which.max(root_time)]]]
   }), use.names = FALSE)
   x[sort(selected), , drop = FALSE]
+}
+
+if (run_compact) {
+if (!requireNamespace("faissR", quietly = TRUE)) {
+  stop("Install faissR before running compact replication mode.")
 }
 
 x <- scale(as.matrix(iris[, 1:4]))
@@ -169,6 +241,7 @@ write.csv(
   file.path(out_dir, "article_example_summary.csv"),
   row.names = FALSE
 )
+}
 
 results_root <- Sys.getenv("FAISSR_JSS_RESULTS_DIR", unset = "")
 if (nzchar(results_root)) {
@@ -236,13 +309,16 @@ if (nzchar(results_root)) {
   )
   if (anyDuplicated(key)) {
     duplicate_rows <- combined[duplicated(key) | duplicated(key, fromLast = TRUE),
-                               key_columns, drop = FALSE]
+                               c(key_columns, "source_file"), drop = FALSE]
     write.csv(
       duplicate_rows,
       file.path(out_dir, "duplicate_publication_result_keys.csv"),
       row.names = FALSE
     )
-    stop("The selected newest publication runs contain duplicate benchmark keys.")
+    # Resumed jobs append replacement attempts. The final row is the frozen
+    # campaign's authoritative attempt, matching the downstream aggregators.
+    keep <- !duplicated(key, fromLast = TRUE)
+    combined <- combined[keep, , drop = FALSE]
   }
 
   dataset_manifest <- Sys.getenv("FAISSR_JSS_DATASET_MANIFEST", unset = "")
@@ -310,9 +386,6 @@ if (nzchar(results_root)) {
     }
   }
 
-  file_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)
-  script_path <- if (length(file_arg)) normalizePath(sub("^--file=", "", file_arg[[1L]])) else ""
-  package_root <- if (nzchar(script_path)) dirname(dirname(dirname(script_path))) else getwd()
   aggregator <- Sys.getenv(
     "FAISSR_JSS_AGGREGATOR",
     unset = file.path(
@@ -329,10 +402,174 @@ if (nzchar(results_root)) {
       paste0("--results_root=", normalizePath(results_root, mustWork = TRUE)),
       paste0("--out_dir=", analysis_dir),
       "--backend=all", "--target_recalls=0.9,0.95,0.99",
+      "--metrics=euclidean,cosine,correlation",
       "--expected_seeds=2", "--expected_repeats=3"
     ), shQuote, character(1L))
   )
   if (!identical(status, 0L)) stop("Independent validation aggregation failed with status ", status)
+
+  loodo <- file.path(
+    package_root, "benchmark_scripts", "jss_reproduction",
+    "analysis", "analyze_leave_one_dataset_out.R"
+  )
+  if (!file.exists(loodo)) stop("Cannot find leave-one-dataset-out analysis: ", loodo)
+  loodo_status <- system2(
+    "Rscript",
+    vapply(c(
+      loodo,
+      paste0("--analysis_dir=", analysis_dir),
+      paste0("--out_dir=", file.path(analysis_dir, "leave_one_dataset_out")),
+      "--backend=cuda",
+      "--metrics=euclidean,cosine,correlation"
+    ), shQuote, character(1L))
+  )
+  if (!identical(loodo_status, 0L)) {
+    stop("Leave-one-dataset-out analysis failed with status ", loodo_status)
+  }
+
+  auto_analysis <- file.path(
+    package_root, "benchmark_scripts", "jss_reproduction",
+    "analysis", "analyze_cuda_auto_selection.R"
+  )
+  if (!file.exists(auto_analysis)) stop("Cannot find CUDA auto analysis: ", auto_analysis)
+  auto_status <- system2(
+    "Rscript",
+    vapply(c(
+      auto_analysis,
+      paste0("--analysis_dir=", analysis_dir),
+      paste0("--out_dir=", file.path(analysis_dir, "cuda_auto_selection")),
+      paste0("--package_root=", package_root),
+      "--metrics=euclidean,cosine,correlation"
+    ), shQuote, character(1L))
+  )
+  if (!identical(auto_status, 0L)) {
+    stop("CUDA automatic-selection decomposition failed with status ", auto_status)
+  }
+
+  held_out_root <- if (basename(normalizePath(results_root, mustWork = TRUE)) == "held_out") {
+    normalizePath(results_root, mustWork = TRUE)
+  } else {
+    candidate <- file.path(results_root, "held_out")
+    if (!dir.exists(candidate)) {
+      stop("Cannot find the held_out directory under FAISSR_JSS_RESULTS_DIR.")
+    }
+    normalizePath(candidate, mustWork = TRUE)
+  }
+  per_dataset_analysis <- file.path(
+    package_root, "benchmark_scripts", "jss_reproduction",
+    "analysis", "analyze_per_dataset_performance.R"
+  )
+  if (!file.exists(per_dataset_analysis)) {
+    stop("Cannot find per-dataset performance analysis: ", per_dataset_analysis)
+  }
+  per_dataset_status <- system2(
+    "Rscript",
+    vapply(c(
+      per_dataset_analysis,
+      paste0("--held_out_root=", held_out_root),
+      paste0("--out_dir=", file.path(analysis_dir, "per_dataset"))
+    ), shQuote, character(1L))
+  )
+  if (!identical(per_dataset_status, 0L)) {
+    stop("Per-dataset performance analysis failed with status ", per_dataset_status)
+  }
+
+  campaign_root <- if (basename(normalizePath(results_root, mustWork = TRUE)) == "held_out") {
+    dirname(normalizePath(results_root, mustWork = TRUE))
+  } else {
+    normalizePath(results_root, mustWork = TRUE)
+  }
+  calibration_root <- Sys.getenv(
+    "FAISSR_JSS_CALIBRATION_ROOT",
+    unset = file.path(campaign_root, "calibration", "real")
+  )
+  calibration_audit_dir <- Sys.getenv("FAISSR_JSS_CALIBRATION_AUDIT_DIR", unset = "")
+  if (!nzchar(calibration_audit_dir)) {
+    audit_candidates <- list.dirs(file.path(campaign_root, "analysis"), recursive = TRUE)
+    audit_candidates <- audit_candidates[file.exists(file.path(
+      audit_candidates, "jss_calibration_recommendations.csv"
+    )) & file.exists(file.path(audit_candidates, "jss_calibration_missing_cells.csv"))]
+    if (!length(audit_candidates)) {
+      stop("Cannot find a calibration audit directory under the campaign analysis tree.")
+    }
+    public_counts <- vapply(audit_candidates, function(path) {
+      value <- read.csv(
+        file.path(path, "jss_calibration_recommendations.csv"),
+        stringsAsFactors = FALSE
+      )
+      sum(value$metric %in% c("euclidean", "cosine", "correlation"))
+    }, integer(1L))
+    calibration_audit_dir <- audit_candidates[[which.max(public_counts)]]
+  }
+  stability_analysis <- file.path(
+    package_root, "benchmark_scripts", "jss_reproduction",
+    "analysis", "analyze_calibration_completeness_stability.R"
+  )
+  if (!file.exists(stability_analysis)) {
+    stop("Cannot find calibration completeness analysis: ", stability_analysis)
+  }
+  stability_status <- system2(
+    "Rscript",
+    vapply(c(
+      stability_analysis,
+      paste0("--calibration_root=", normalizePath(calibration_root, mustWork = TRUE)),
+      paste0(
+        "--calibration_audit_dir=",
+        normalizePath(calibration_audit_dir, mustWork = TRUE)
+      ),
+      paste0("--held_out_root=", held_out_root),
+      paste0("--out_dir=", file.path(analysis_dir, "calibration_stability"))
+    ), shQuote, character(1L))
+  )
+  if (!identical(stability_status, 0L)) {
+    stop("Calibration completeness and stability analysis failed with status ",
+         stability_status)
+  }
+
+  external_results <- Sys.getenv("FAISSR_JSS_EXTERNAL_R_RESULTS", unset = "")
+  if (nzchar(external_results)) {
+    external_analysis <- file.path(
+      package_root, "benchmark_scripts", "jss_reproduction",
+      "analysis", "analyze_external_r_comparison.R"
+    )
+    if (!file.exists(external_analysis)) {
+      stop("Cannot find external R comparison analysis: ", external_analysis)
+    }
+    external_status <- system2(
+      "Rscript",
+      vapply(c(
+        external_analysis,
+        paste0(
+          "--results_root=",
+          normalizePath(external_results, mustWork = TRUE)
+        ),
+        paste0(
+          "--out_dir=",
+          file.path(analysis_dir, "external_r_comparison")
+        )
+      ), shQuote, character(1L))
+    )
+    if (!identical(external_status, 0L)) {
+      stop("External R comparison analysis failed with status ", external_status)
+    }
+  }
+
+  table_builder <- file.path(dirname(script_path), "build_manuscript_tables.R")
+  if (!file.exists(table_builder)) {
+    stop("Cannot find manuscript table builder: ", table_builder)
+  }
+  table_status <- system2(
+    "Rscript",
+    vapply(c(
+      table_builder,
+      paste0("--campaign_root=", campaign_root),
+      paste0("--analysis_dir=", analysis_dir),
+      paste0("--out_dir=", file.path(out_dir, "manuscript_tables"))
+    ), shQuote, character(1L))
+  )
+  if (!identical(table_status, 0L)) {
+    stop("Manuscript table reconstruction failed with status ", table_status)
+  }
 }
 
 writeLines(

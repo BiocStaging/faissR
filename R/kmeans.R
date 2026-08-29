@@ -281,7 +281,7 @@ kmeans_shape_int <- function(x) {
   if (is.null(x)) {
     return(NA_integer_)
   }
-  x <- suppressWarnings(as.integer(x[1L]))
+  x <- faissr_quiet_warning(as.integer(x[1L]))
   if (length(x) != 1L || is.na(x)) {
     return(NA_integer_)
   }
@@ -632,8 +632,8 @@ finish_trivial_singleton_kmeans <- function(x,
 }
 
 kmeans_hit_max_iter <- function(iter, max_iter) {
-  iter <- suppressWarnings(as.integer(iter))
-  max_iter <- suppressWarnings(as.integer(max_iter))
+  iter <- faissr_quiet_warning(as.integer(iter))
+  max_iter <- faissr_quiet_warning(as.integer(max_iter))
   if (length(iter) != 1L || length(max_iter) != 1L ||
       is.na(iter) || is.na(max_iter) || max_iter < 1L) {
     return(NA)
@@ -732,7 +732,7 @@ normalize_kmeans_positive_int <- function(x, fallback, arg = "value") {
 }
 
 normalize_kmeans_seed <- function(seed) {
-  seed <- suppressWarnings(as.numeric(seed))
+  seed <- faissr_quiet_warning(as.numeric(seed))
   if (length(seed) != 1L || is.na(seed) || !is.finite(seed) ||
       abs(seed - round(seed)) > sqrt(.Machine$double.eps)) {
     stop("`seed` must be a single finite integer.", call. = FALSE)
@@ -753,7 +753,7 @@ normalize_kmeans_tol <- function(x, fallback) {
   if (is.character(x) && length(x) == 1L && identical(tolower(x), "auto")) {
     return(as.numeric(fallback))
   }
-  x <- suppressWarnings(as.numeric(x))
+  x <- faissr_quiet_warning(as.numeric(x))
   if (length(x) != 1L || is.na(x) || !is.finite(x) || x < 0) {
     stop("`tol` must be `auto` or a single non-negative finite number.", call. = FALSE)
   }
@@ -768,7 +768,7 @@ normalize_kmeans_whole_number <- function(x,
                                           arg,
                                           min_value = 1L,
                                           message = NULL) {
-  value <- suppressWarnings(as.numeric(x))
+  value <- faissr_quiet_warning(as.numeric(x))
   if (length(value) != 1L || is.na(value) || !is.finite(value) ||
       value < min_value || abs(value - round(value)) > sqrt(.Machine$double.eps)) {
     if (is.null(message)) {
@@ -791,7 +791,7 @@ kmeans_value_source <- function(x) {
 }
 
 kmeans_option_number <- function(name, default, min_value = -Inf) {
-  value <- suppressWarnings(as.numeric(faissr_option(name, default)))
+  value <- faissr_quiet_warning(as.numeric(faissr_option(name, default)))
   if (length(value) != 1L || is.na(value) || !is.finite(value) || value < min_value) {
     return(default)
   }

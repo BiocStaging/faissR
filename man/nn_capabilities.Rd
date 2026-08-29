@@ -40,10 +40,10 @@ CAGRA and NNDescent support cosine and correlation by using normalized
 Euclidean graph search. Public CUDA HNSW
 uses RAPIDS cuVS HNSW from a CAGRA seed graph with a cuVS CPU hierarchy and records that wrapper design
 in metadata rather than presenting it as a pure all-GPU HNSW implementation.
-Public CPU NSG uses faissR's native
-NSG-style route for all metrics because linked FAISS graph builders can abort
+Public CPU NSG uses faissR's distinct native NSG/MRNG-derived route for all
+metrics because linked FAISS graph builders can abort
 during graph construction; large high-dimensional CPU inputs use deterministic
-FAISS HNSW seeding before NSG/MRNG-style pruning.
+FAISS HNSW seeding before the derived pruning pass.
 Public CUDA \code{method = "cagra"} can resolve to FAISS GPU CAGRA or direct
 cuVS CAGRA; \code{options(faissR.cagra_implementation = "faiss_gpu")} or
 \code{"cuvs"} forces one provider, while \code{"auto"} uses a deterministic

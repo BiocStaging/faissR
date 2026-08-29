@@ -276,7 +276,12 @@ handled explicitly: two zero-normalized rows have distance `0`, while a
 zero-normalized row versus a nonzero row has distance `1`. CPU FAISS Flat uses
 the exact CPU scorer for this degenerate case to preserve deterministic
 small-`k` tie handling; explicit CUDA routes do not perform CPU repair and
-therefore error clearly for these degenerate normalized rows.
+therefore error clearly for these degenerate normalized rows. The finite CPU
+values are software conventions for otherwise undefined cosine or correlation
+cases, not mathematical cosine similarities or Pearson correlations.
+Unsupported method/backend/metric combinations fail without changing the
+requested metric, method, or device; use `nn_capabilities(runtime = TRUE)` to
+preflight both design support and locally available providers.
 
 Every KNN result makes the value contract machine-readable through
 `distance_is_metric`, `distance_semantics`,
@@ -289,12 +294,16 @@ method and cites the relevant algorithm/software references.
 The preferred public spellings for faissR-owned candidate-graph refinements
 are `method = "nsg_style"`, `"vamana_style"`, and `"nndescent_style"`.
 The historical `"nsg"`, `"vamana"`, and `"nndescent"` spellings remain
-compatibility aliases. Native results report
+compatibility aliases. Here `_style` is a scope marker, not an algorithm name:
+the package-owned CPU routes are distinct graph-refinement algorithms derived
+from selected ideas in the named canonical algorithms, not feature-complete
+reimplementations. CUDA `nndescent_style` may resolve to direct external cuVS
+NN-descent. Native results report
 `preferred_public_method`,
 `implementation_scope = "package_owned_style_implementation"`, a qualified
 `implementation_label`, and `canonical_reimplementation = FALSE`; `print()`
-also states that the route is not a canonical reproduction. Direct cuVS
-NN-descent is labelled separately as an external-provider implementation.
+also states that the route is a package-owned derived algorithm. Direct cuVS
+NN-descent is labeled separately as an external-provider implementation.
 The [Autotuning guide](docs/autotuning.md) explains how the HPC target-recall
 sweeps convert speed, recall, failure, and shape-summary tables into
 deterministic C++ defaults for each method and backend.
@@ -314,14 +323,16 @@ through `pkg-config` or standard compiler paths, set `FAISS_HOME`:
 FAISS_HOME=/path/to/faiss R CMD INSTALL .
 ```
 
-Automated Bioconductor/r-universe Windows binary builds are skipped with
-`OS_type: unix` because FAISS is mandatory and those builders do not provide a
-compatible FAISS development library. Automated Bioconductor macOS binary builds
-are also marked unsupported until the Bioconductor/r-universe macOS
-system-library bundle provides FAISS. User macOS source installs remain
-supported with Homebrew or an active conda/mamba environment. Windows users
-should use WSL2 for the supported Linux path, or provide a native
-Rtools-compatible FAISS build and install from source manually.
+Linux, macOS, and Windows are eligible package platforms. Native Windows CPU
+builds require an Rtools-compatible FAISS library supplied through
+`FAISS_HOME`; WSL2 remains the practical route for CUDA/cuVS. Automated
+Windows builders that do not provide FAISS compile a diagnostic build that
+loads and reports the missing system capability. Set
+`FAISSR_REQUIRE_FAISS=1` when installation must fail unless a functional FAISS
+backend is linked. Automated Bioconductor macOS binary builds remain marked
+unsupported until their system-library bundle provides FAISS. User macOS
+source installs remain supported with Homebrew or an active conda/mamba
+environment.
 
 On macOS with Homebrew, install FAISS and the OpenMP runtime first:
 

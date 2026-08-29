@@ -31,3 +31,17 @@ test_that("seeded helpers do not create a lasting RNG state", {
 
   expect_false(exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE))
 })
+
+test_that("expected warning handling preserves values and errors", {
+  expect_no_warning(
+    value <- faissR:::faissr_quiet_warning({
+      warning("expected conversion warning")
+      7L
+    })
+  )
+  expect_identical(value, 7L)
+  expect_error(
+    faissR:::faissr_quiet_warning(stop("real failure")),
+    "real failure"
+  )
+})

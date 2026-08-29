@@ -83,7 +83,7 @@ Supported CPU routes include:
 
 - FAISS CPU Flat, IVF-Flat, IVF-PQ, IVFPQ FastScan, HNSW, NSG, and NN-Descent
   when present in the linked FAISS build [1-6,16,34];
-- faissR-native dense, NN-descent, Vamana, NSG-style, and candidate-refinement
+- faissR-native dense, NN-descent-derived, Vamana-derived, NSG/MRNG-derived, and candidate-refinement
   routines used where they are distinct from the FAISS indexes;
 - exact 2D/3D grid routes for low-dimensional Euclidean, cosine, and
   correlation self-KNN.
@@ -107,6 +107,9 @@ FAISS IP-capable approximate routes implement cosine by row L2
 `1 - similarity` distances. All-zero cosine rows and constant correlation rows
 are zero-normalized edge cases. faissR treats two zero-normalized rows as
 distance `0` and a zero-normalized row versus a nonzero row as distance `1`.
+These finite values are software conventions for otherwise undefined cosine or
+correlation cases, not mathematical cosine similarities or Pearson
+correlations.
 CPU FAISS Flat uses the exact CPU scorer for those rows to preserve
 deterministic small-`k` tie handling; explicit CUDA routes do not perform
 CPU repair and therefore error clearly for those degenerate normalized rows.
@@ -119,7 +122,7 @@ Direct cuVS IVF/PQ use normalized Euclidean search for cosine/correlation and
 product before building the L2 index. Direct cuVS CAGRA and NN-Descent use
 supported only through routes with an implemented transform or native scorer:
 that metric.
-Graph-style routes that implement cosine/correlation through normalized
+Graph-refinement routes that implement cosine/correlation through normalized
 Euclidean search convert returned neighbour distances back to `1 - similarity`
 with the stable formula
 `normalized_euclidean_squared_over_2_to_1_minus_similarity`. Those results
@@ -427,9 +430,10 @@ and `tuning_benchmark_target_met = FALSE` for those seeded rows.
 
 The preferred public names for the package-owned candidate-graph routes are
 `nsg_style`, `vamana_style`, and `nndescent_style`. The historical shorter
-spellings remain compatibility aliases. These routes are style/refinement
-implementations, not feature-complete reproductions of NSG, DiskANN/Vamana, or
-NN-descent. Host results expose `preferred_public_method`,
+spellings remain compatibility aliases. The suffix is a scope marker rather
+than an algorithm name. These routes are distinct package-owned derived
+graph-refinement algorithms, not feature-complete reproductions of NSG,
+DiskANN/Vamana, or NN-descent. Host results expose `preferred_public_method`,
 `implementation_label`, `implementation_scope`, and
 `canonical_reimplementation`; printed package-owned results state
 `canonical reproduction: no`. Direct cuVS NN-descent is labelled separately

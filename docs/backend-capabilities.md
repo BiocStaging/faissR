@@ -1,8 +1,12 @@
 # Backend Capabilities
 
-For cosine and correlation, zero-normalized edge cases have explicit semantics;
-CUDA routes fail clearly when preserving those semantics would require hidden
-CPU repair.
+For cosine and correlation, zero-normalized edge cases have explicit semantics:
+two zero-normalized rows have distance `0`, and a zero-normalized row versus a
+nonzero row has distance `1`. These are software conventions for otherwise
+undefined cases. Explicit CUDA routes fail clearly when preserving them would
+require hidden CPU repair. Unsupported method/backend/metric combinations fail
+without changing the requested metric, method, or device; use
+`nn_capabilities(runtime = TRUE)` for preflight checks.
 
 CUDA exact and brute-force requests use direct cuVS brute force when available,
 while FAISS GPU Flat remains the provider-backed alternative.
@@ -31,7 +35,9 @@ while FAISS GPU Flat remains the provider-backed alternative.
 
 For package-owned candidate-graph routes, the preferred aliases are
 `"nsg_style"`, `"vamana_style"`, and `"nndescent_style"`. The historical
-shorter names remain accepted. Results make the qualification explicit through
+shorter names remain accepted. The suffix is a scope marker, not an algorithm
+name: package-owned routes are distinct algorithms derived from selected ideas
+in the named canonical algorithms. Results make the qualification explicit through
 `preferred_public_method`, `implementation_label`, `implementation_scope`, and
 `canonical_reimplementation = FALSE`; direct cuVS NN-descent is labelled as an
 external-provider implementation instead.
@@ -76,7 +82,7 @@ with method-specific parameters.
 | --- | --- | --- | --- |
 | `"auto"` | Shape-aware exact/grid/FAISS HNSW/FAISS IVF selector. | Shape-aware CUDA grid for Euclidean/cosine/correlation 2D/3D self-KNN; Euclidean CUDA auto chooses exact Flat/brute force for measured small, medium, and high-dimensional accuracy-first shapes and IVF-Flat for large low-dimensional shapes; non-Euclidean auto keeps exact FAISS GPU Flat/cuVS brute force where available. Explicit CUDA exact/brute-force calls can use transformed cuVS brute force. | Default general-purpose choice. |
 | `"grid"` | Native exact 2D/3D grid for Euclidean, cosine, and correlation. | Native CUDA 2D/3D grid for Euclidean, cosine, and correlation. | Low-dimensional spatial or simulated data; cosine/correlation use normalized Euclidean grid search; explicit grid requests error outside two or three columns. |
-| `"vamana_style"` (`"vamana"` alias) | Package-owned DiskANN/Vamana-style robust-pruned candidate graph with CPU candidate refinement. | Package-owned Vamana-style graph with CUDA row-candidate refinement. | Not a feature-complete Vamana reproduction. Large high-dimensional CPU inputs use deterministic HNSW seed neighbours before robust pruning, while smaller CPU inputs keep exact seed neighbours. Robust pruning runs in compiled C++ over a compact candidate matrix, protects the first `k` seed neighbours, and then refines candidates on CPU or CUDA. CPU/CUDA tuning uses compiled shape/k/target-recall tables; seeded CUDA metric rows remain marked validation-pending [3,5,24]. |
+| `"vamana_style"` (`"vamana"` alias) | Package-owned DiskANN/Vamana-derived robust-pruned candidate graph with CPU candidate refinement. | Package-owned Vamana-derived graph with CUDA row-candidate refinement. | A distinct algorithm, not a feature-complete Vamana reproduction. Large high-dimensional CPU inputs use deterministic HNSW seed neighbours before robust pruning, while smaller CPU inputs keep exact seed neighbours. Robust pruning runs in compiled C++ over a compact candidate matrix, protects the first `k` seed neighbours, and then refines candidates on CPU or CUDA. CPU/CUDA tuning uses compiled shape/k/target-recall tables; seeded CUDA metric rows remain marked validation-pending [3,5,24]. |
 
 Unsupported combinations fail before computation. For example,
 `nn(x, backend = "cpu", method = "cagra")` errors because CAGRA is CUDA-only,
@@ -92,9 +98,9 @@ errors because the grid route is geometric Euclidean/cosine/correlation search.
 | FAISS IVF-Flat | yes | yes, if FAISS GPU is built | Inverted-file approximate L2/IP search; cosine/correlation use normalized IP [1-2,16]. |
 | FAISS IVF-PQ | yes | yes, if FAISS GPU is built | Product-quantized approximate L2/IP search; cosine/correlation use normalized IP [6,16]. |
 | FAISS HNSW | yes, if exposed by FAISS | no | Approximate CPU graph-search index with L2/IP and normalized-IP metric transforms [5,16]. |
-| FAISS NSG | yes, if exposed by FAISS | no | Optional internal CPU graph-search index for Euclidean/L2 only; public CPU NSG requests use faissR's native NSG-style route instead [16,21,29]. |
-| faissR Vamana-style route | yes | optional CUDA refinement | Package-owned DiskANN/Vamana-style robust-pruned candidate graph, not a feature-complete Vamana reproduction; large high-dimensional CPU inputs use deterministic HNSW seeding before robust pruning, and CUDA refines candidate rows [5,24]. |
-| FAISS NNDescent | experimental opt-in | no | Disabled by default because linked FAISS builds can abort during graph construction; public CPU `method = "nndescent_style"` (or compatibility alias `"nndescent"`) uses the package-owned style implementation [4,16]. |
+| FAISS NSG | yes, if exposed by FAISS | no | Optional internal CPU graph-search index for Euclidean/L2 only; public CPU NSG requests use faissR's distinct NSG/MRNG-derived algorithm instead [16,21,29]. |
+| faissR Vamana-derived route | yes | optional CUDA refinement | Package-owned DiskANN/Vamana-derived robust-pruned candidate graph, not a feature-complete Vamana reproduction; large high-dimensional CPU inputs use deterministic HNSW seeding before robust pruning, and CUDA refines candidate rows [5,24]. |
+| FAISS NNDescent | experimental opt-in | no | Disabled by default because linked FAISS builds can abort during graph construction; public CPU `method = "nndescent_style"` (or compatibility alias `"nndescent"`) uses the distinct package-owned NN-descent-derived algorithm [4,16]. |
 | RAPIDS cuVS HNSW | no | yes, if cuVS is built with HNSW headers | Exposed as CUDA `method = "hnsw"`. The cuVS HNSW C API converts a CAGRA index to an HNSW wrapper and searches host-compatible tensors; faissR records this in metadata instead of benchmarking it as a pure all-GPU method [22]. |
 
 Affected cuVS builds can fail in direct NN-descent on high-dimensional FP32 L2

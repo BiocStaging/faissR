@@ -40,4 +40,7 @@ manuscript/jss/*
 !manuscript/jss/jss.cls
 !manuscript/jss/jsslogo.jpg
 !manuscript/jss/replication_article.R
+!manuscript/jss/build_manuscript_tables.R
+!manuscript/jss/faissR_jss_frozen_results.tar.gz
+!manuscript/jss/faissR_jss_frozen_results.tar.gz.sha256
 benchmark_scripts/jmlr_mloss_inner_product_shape_tuning_defaults_candidate_audit.csv

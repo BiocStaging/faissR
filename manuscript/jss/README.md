@@ -5,8 +5,14 @@ This directory contains the JSS-format manuscript source:
 - `faissR_jss.tex`: article source in the official JSS LaTeX class.
 - `faissR_jss.bib`: references used by the article.
 - `faissR_jss_supplement.tex`: supplementary-material source.
-- `code.R` and `code.html`: compact article replication entry points.
-- `replication_article.R`: frozen-result validation and collation.
+- `code.R` and `code.html`: commented standalone replication entry point and
+  freshly executed output.
+- `replication_article.R`: compact examples, pre-analysis archive verification,
+  frozen-result validation, and analysis orchestration.
+- `build_manuscript_tables.R`: recreates every article and supplement table
+  and writes a checksum manifest.
+- `faissR_jss_frozen_results.tar.gz` and its `.sha256` file: frozen campaign
+  evidence and required pre-analysis digest.
 - `practical_cpu_example.R`: executable 20,000-row Letter Recognition example
   covering exact search, three recall-targeted auto calls, observed recall,
   returned evidence, and fitted-index reuse.
@@ -39,6 +45,22 @@ Rscript code.R
 Rscript -e 'knitr::spin("code.R", knit = TRUE)'
 ```
 
+Recreate all 15 manuscript and supplement tables from the frozen archive on a
+regular computer with:
+
+```sh
+FAISSR_JSS_MODE=archive \
+FAISSR_JSS_DERIVED_DIR=derived \
+Rscript code.R
+```
+
+The archive digest is checked before extraction. A mismatch stops the script
+before any result is read. Successful execution writes
+`archive_verification.csv`, `manuscript_tables/manuscript_table_manifest.csv`,
+`manuscript_tables/MANUSCRIPT_TABLE_AUDIT.txt`, and a fresh `sessionInfo.txt`.
+Use `FAISSR_JSS_MODE=all` to run the compact package examples and archive
+reconstruction in one process.
+
 Run the practical CPU example after installing the optional `mlbench` package:
 
 ```sh
@@ -49,7 +71,7 @@ Set `FAISSR_JSS_EXAMPLE_OUT` to retain its CSV summaries and provenance file.
 The example timings explain the public API and are not treated as formal
 cross-package benchmark evidence.
 
-The full special-hardware replication uses
+The full special-hardware experiment uses
 `benchmark_scripts/jss_reproduction/final_campaign/submit_campaign.R`.
 That single commented entry point validates the frozen image and submits the
 existing independent CPU/CUDA launchers one phase at a time; it does not hide
@@ -69,9 +91,9 @@ QA, exact-reference and calibration audits, held-out evaluation, reusable-index
 experiments, auto-versus-oracle analysis, and archive checksums. Only evidence
 that passes the corresponding audit is eligible for a reported result.
 
-The current JSS instructions require a PDF in JSS style, software source, and
-replication materials for every reported result:
-<https://www.jstatsoft.org/guides/submission>.
+The current JSS instructions request a commented replication script, rendered
+output, session information, and a feasible reduced path when full experiments
+need special hardware: <https://www.jstatsoft.org/authors>.
 
 The publication campaign must use a container containing the exact package
 version and commit named by the route-QA launchers. After any executable

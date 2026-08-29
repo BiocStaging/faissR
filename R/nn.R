@@ -20,7 +20,7 @@ fitted_nn_index_cache_enabled <- function() {
 }
 
 with_faiss_query_batch_size <- function(params, expr) {
-  size <- suppressWarnings(as.integer(params$faiss_query_batch_size %||% NA_integer_))
+  size <- faissr_quiet_warning(as.integer(params$faiss_query_batch_size %||% NA_integer_))
   if (length(size) != 1L || is.na(size) || !is.finite(size) || size < 1L) {
     return(force(expr))
   }
@@ -52,7 +52,7 @@ with_faiss_gpu_runtime <- function(params, expr) {
       }
     }
   }, add = TRUE)
-  size <- suppressWarnings(as.integer(params$faiss_gpu_query_batch_size %||% NA_integer_))
+  size <- faissr_quiet_warning(as.integer(params$faiss_gpu_query_batch_size %||% NA_integer_))
   if (length(size) == 1L && !is.na(size) && is.finite(size) && size >= 1L) {
     set_env_var("FAISSR_FAISS_GPU_QUERY_BATCH_SIZE", size)
   }
@@ -71,7 +71,7 @@ with_cuvs_ivf_batch_size <- function(params, expr) {
     params$tuning$cuvs_ivf_batch_size %||%
     params$ivf$cuvs_ivf_batch_size %||%
     NA_integer_
-  size <- suppressWarnings(as.integer(size))
+  size <- faissr_quiet_warning(as.integer(size))
   if (length(size) != 1L || is.na(size) || !is.finite(size) || size < 1L) {
     return(force(expr))
   }
@@ -90,7 +90,7 @@ with_cuvs_ivf_batch_size <- function(params, expr) {
 cpu_exact_params <- function(n, p, k, metric = "euclidean", target_recall = 0.99) {
   nn_tune_cpu_exact_cpp(
     as.integer(n),
-    suppressWarnings(as.integer(p)),
+    faissr_quiet_warning(as.integer(p)),
     as.integer(k),
     normalize_nn_metric(metric),
     as.numeric(normalize_hnsw_target_recall(target_recall))
@@ -100,7 +100,7 @@ cpu_exact_params <- function(n, p, k, metric = "euclidean", target_recall = 0.99
 cuda_exact_params <- function(n, p, k, metric = "euclidean", target_recall = 0.99) {
   nn_tune_cuda_exact_cpp(
     as.integer(n),
-    suppressWarnings(as.integer(p)),
+    faissr_quiet_warning(as.integer(p)),
     as.integer(k),
     normalize_nn_metric(metric),
     as.numeric(normalize_hnsw_target_recall(target_recall))
@@ -110,7 +110,7 @@ cuda_exact_params <- function(n, p, k, metric = "euclidean", target_recall = 0.9
 cuda_flat_params <- function(n, p, k, metric = "euclidean", target_recall = 0.99) {
   nn_tune_cuda_flat_cpp(
     as.integer(n),
-    suppressWarnings(as.integer(p)),
+    faissr_quiet_warning(as.integer(p)),
     as.integer(k),
     normalize_nn_metric(metric),
     as.numeric(normalize_hnsw_target_recall(target_recall))
@@ -120,7 +120,7 @@ cuda_flat_params <- function(n, p, k, metric = "euclidean", target_recall = 0.99
 cuda_bruteforce_params <- function(n, p, k, metric = "euclidean", target_recall = 0.99) {
   nn_tune_cuda_bruteforce_cpp(
     as.integer(n),
-    suppressWarnings(as.integer(p)),
+    faissr_quiet_warning(as.integer(p)),
     as.integer(k),
     normalize_nn_metric(metric),
     as.numeric(normalize_hnsw_target_recall(target_recall))
@@ -130,7 +130,7 @@ cuda_bruteforce_params <- function(n, p, k, metric = "euclidean", target_recall 
 cpu_flat_params <- function(n, p, k, metric = "euclidean", target_recall = 0.99) {
   nn_tune_cpu_flat_cpp(
     as.integer(n),
-    suppressWarnings(as.integer(p)),
+    faissr_quiet_warning(as.integer(p)),
     as.integer(k),
     normalize_nn_metric(metric),
     as.numeric(normalize_hnsw_target_recall(target_recall))
@@ -140,7 +140,7 @@ cpu_flat_params <- function(n, p, k, metric = "euclidean", target_recall = 0.99)
 cpu_bruteforce_params <- function(n, p, k, metric = "euclidean", target_recall = 0.99) {
   nn_tune_cpu_bruteforce_cpp(
     as.integer(n),
-    suppressWarnings(as.integer(p)),
+    faissr_quiet_warning(as.integer(p)),
     as.integer(k),
     normalize_nn_metric(metric),
     as.numeric(normalize_hnsw_target_recall(target_recall))
@@ -338,7 +338,7 @@ attach_cuda_exact_tuning <- function(result, params, output, n_threads, extra = 
 }
 
 fitted_nn_index_cache_limit <- function() {
-  value <- suppressWarnings(as.integer(faissr_option("cache_fitted_nn_indexes_max_entries", 2L)))
+  value <- faissr_quiet_warning(as.integer(faissr_option("cache_fitted_nn_indexes_max_entries", 2L)))
   if (length(value) != 1L || is.na(value) || !is.finite(value) || value < 0L) {
     return(2L)
   }
@@ -845,7 +845,7 @@ cuvs_ivfpq_index_cache_enabled <- function() {
 }
 
 cuvs_ivfpq_index_cache_limit <- function() {
-  value <- suppressWarnings(as.integer(faissr_option(
+  value <- faissr_quiet_warning(as.integer(faissr_option(
     "cache_fitted_cuda_ivfpq_indexes_max_entries",
     1L
   )))
@@ -2078,7 +2078,7 @@ nn_compute <- function(data,
     }
     if (backend %in% c("cuda_cuvs_ivfpq_fastscan", "cuvs_ivfpq_fastscan")) {
       if (!metric %in% c("euclidean", "cosine", "correlation", "inner_product")) {
-        stop("float32 CUDA cuVS IVFPQ FastScan-style input currently supports `metric = \"euclidean\"`, `\"cosine\"`, `\"correlation\"`, or `\"inner_product\"`.", call. = FALSE)
+        stop("float32 CUDA cuVS IVFPQ FastScan input currently supports `metric = \"euclidean\"`, `\"cosine\"`, `\"correlation\"`, or `\"inner_product\"`.", call. = FALSE)
       }
       require_cuvs_backend("CUDA cuVS 4-bit IVF-PQ")
       metric_inputs <- NULL
@@ -4217,12 +4217,12 @@ nn_compute <- function(data,
       tuning_metadata <- tuned$tuning
       if (is.list(tuning_metadata) && !identical(tuning_metadata$status, "target_met")) {
         best_recall <- if (is.data.frame(tuning_metadata$results) && "recall" %in% names(tuning_metadata$results)) {
-          suppressWarnings(max(tuning_metadata$results$recall, na.rm = TRUE))
+          faissr_quiet_warning(max(tuning_metadata$results$recall, na.rm = TRUE))
         } else {
           NA_real_
         }
         min_recall <- faissr_option("cuvs_cagra_tune_min_recall", tuning_metadata$target_recall)
-        min_recall <- suppressWarnings(as.numeric(min_recall))
+        min_recall <- faissr_quiet_warning(as.numeric(min_recall))
         if (length(min_recall) != 1L || is.na(min_recall) || !is.finite(min_recall)) {
           min_recall <- 0.985
         }
@@ -4403,7 +4403,7 @@ nn_compute <- function(data,
 
   if (backend %in% c("cuda_cuvs_ivfpq_fastscan", "cuvs_ivfpq_fastscan")) {
     if (!metric %in% c("euclidean", "cosine", "correlation", "inner_product")) {
-      stop("CUDA cuVS IVFPQ FastScan-style input currently supports `metric = \"euclidean\"`, `\"cosine\"`, `\"correlation\"`, or `\"inner_product\"`.", call. = FALSE)
+      stop("CUDA cuVS IVFPQ FastScan input currently supports `metric = \"euclidean\"`, `\"cosine\"`, `\"correlation\"`, or `\"inner_product\"`.", call. = FALSE)
     }
     require_cuvs_backend("CUDA cuVS 4-bit IVF-PQ")
     metric_inputs <- NULL
@@ -5099,7 +5099,7 @@ normalize_nn_method <- function(method) {
 
 validate_public_nn_method_shape <- function(data, method) {
   if (!identical(method, "grid")) return(invisible(TRUE))
-  p <- suppressWarnings(as.integer(ncol(data)))
+  p <- faissr_quiet_warning(as.integer(ncol(data)))
   if (length(p) != 1L || is.na(p) || !p %in% c(2L, 3L)) {
     stop(
       "`method = \"grid\"` supports only two- or three-column matrices. ",
@@ -5259,7 +5259,7 @@ cuvs_cagra_build_algo_for_shape <- function(n, p, k, self_query, params = NULL) 
   }
   nn_tune_cuvs_cagra_build_algo_cpp(
     as.integer(n),
-    suppressWarnings(as.integer(p)),
+    faissr_quiet_warning(as.integer(p)),
     as.integer(k),
     isTRUE(self_query),
     isTRUE(params$tuning_compact_build %||% FALSE),
@@ -5297,9 +5297,9 @@ cuda_cagra_auto_prefers_cuvs <- function(n = NULL,
                                          self_query = NULL) {
   if (!isTRUE(self_query)) return(FALSE)
   if (is.null(n) || is.null(p) || is.null(k)) return(FALSE)
-  n <- suppressWarnings(as.numeric(n))
-  p <- suppressWarnings(as.numeric(p))
-  k <- suppressWarnings(as.numeric(k))
+  n <- faissr_quiet_warning(as.numeric(n))
+  p <- faissr_quiet_warning(as.numeric(p))
+  k <- faissr_quiet_warning(as.numeric(k))
   if (length(n) != 1L || length(p) != 1L || length(k) != 1L) return(FALSE)
   if (!is.finite(n) || !is.finite(p) || !is.finite(k)) return(FALSE)
   compact_n <- faiss_option_int("cuda_cagra_cuvs_compact_n", 10000L, min_value = 100L, max_value = 1000000L)
@@ -5713,9 +5713,9 @@ nn_capability_row <- function(method, backend, metric) {
       "native CUDA NSG candidate graph"
     }
     notes <- if (identical(backend, "cpu")) {
-      "Public CPU NSG uses faissR's native NSG-style candidate graph for all metrics to avoid unsafe linked-FAISS graph construction; large high-dimensional CPU inputs use a deterministic FAISS HNSW seed before compiled C++ NSG/MRNG-style pruning over compact candidate storage."
+      "Public CPU NSG uses faissR's distinct NSG/MRNG-derived candidate-graph algorithm for all metrics to avoid unsafe linked-FAISS graph construction; large high-dimensional CPU inputs use a deterministic FAISS HNSW seed before compiled C++ derived pruning over compact candidate storage."
     } else if (supported) {
-      "CUDA NSG builds an NSG-style candidate graph, prunes it in compiled C++ over compact candidate storage, and refines candidates with the native CUDA row-candidate kernel; cosine/correlation use normalized Euclidean search."
+      "CUDA NSG builds faissR's distinct NSG/MRNG-derived candidate graph, prunes it in compiled C++ over compact candidate storage, and refines candidates with the native CUDA row-candidate kernel; cosine/correlation use normalized Euclidean search."
     } else {
       "Unsupported CUDA NSG metric."
     }
@@ -5728,9 +5728,9 @@ nn_capability_row <- function(method, backend, metric) {
       "native Vamana candidate graph with CUDA refinement"
     }
     notes <- if (identical(backend, "cpu")) {
-      "Builds a DiskANN/Vamana-style robust-pruned candidate graph using compiled C++ pruning over compact candidate storage and refines top-k within candidate rows on CPU; large high-dimensional CPU inputs use a deterministic FAISS HNSW seed before robust pruning. Cosine/correlation use normalized Euclidean search."
+      "Builds faissR's distinct DiskANN/Vamana-derived robust-pruned candidate graph using compiled C++ pruning over compact candidate storage and refines top-k within candidate rows on CPU; large high-dimensional CPU inputs use a deterministic FAISS HNSW seed before robust pruning. Cosine/correlation use normalized Euclidean search."
     } else {
-      "Builds a Vamana-style candidate graph using compiled C++ pruning over compact candidate storage and refines candidate rows with the native CUDA row-candidate kernel; cuVS Vamana currently builds/serializes DiskANN-compatible indexes but does not expose KNN search."
+      "Builds faissR's distinct Vamana-derived candidate graph using compiled C++ pruning over compact candidate storage and refines candidate rows with the native CUDA row-candidate kernel; cuVS Vamana currently builds/serializes DiskANN-compatible indexes but does not expose KNN search."
     }
   } else if (identical(method, "nndescent")) {
     supported <- all_metrics
@@ -5811,7 +5811,7 @@ normalize_hnsw_target_recall <- function(target_recall) {
   if (is.null(target_recall)) {
     target_recall <- faissr_option("hnsw_target_recall", 0.99)
   }
-  value <- suppressWarnings(as.numeric(target_recall))
+  value <- faissr_quiet_warning(as.numeric(target_recall))
   if (length(value) != 1L || is.na(value) || !is.finite(value)) {
     stop("`target_recall` must be one of 0.9, 0.95, or 0.99.", call. = FALSE)
   }
@@ -6156,7 +6156,7 @@ select_cuvs_auto_backend <- function(self_query,
 
 native_nsg_option_int <- function(name, default, min_value = 1L, max_value = .Machine$integer.max) {
   value <- faissr_option(name, NULL)
-  value <- if (is.null(value)) default else suppressWarnings(as.integer(value))
+  value <- if (is.null(value)) default else faissr_quiet_warning(as.integer(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value)) value <- default
   as.integer(max(min_value, min(max_value, value)))
 }
@@ -6188,7 +6188,7 @@ select_cpu_auto_backend <- function(self_query,
 
 cpu_auto_faiss_flat_work_threshold <- function() {
   value <- faissr_option("cpu_auto_faiss_flat_work", 5e7)
-  value <- suppressWarnings(as.numeric(value))
+  value <- faissr_quiet_warning(as.numeric(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value) || value < 0) {
     value <- 5e7
   }
@@ -6412,7 +6412,7 @@ nn_auto_select_shape_cpp <- function(resolved_backend,
                                      faiss_available_value = faiss_available(),
                                      faiss_gpu_available_value = faiss_gpu_available()) {
   numeric_option <- function(name, default) {
-    value <- suppressWarnings(as.numeric(faissr_option(name, default)))
+    value <- faissr_quiet_warning(as.numeric(faissr_option(name, default)))
     if (length(value) != 1L || is.na(value) || !is.finite(value)) default else value
   }
   out <- nn_auto_select_backend_cpp(
@@ -6468,7 +6468,7 @@ nn_runtime_cpu_model <- function() {
     if (length(hit)) value <- trimws(sub("^[^:]+:", "", hit[[1L]]))
   } else if (identical(Sys.info()[["sysname"]], "Darwin")) {
     value <- tryCatch(
-      suppressWarnings(trimws(system2(
+      faissr_quiet_warning(trimws(system2(
         "sysctl", c("-n", "machdep.cpu.brand_string"), stdout = TRUE, stderr = FALSE
       )[1L])),
       error = function(e) NA_character_
@@ -6522,7 +6522,7 @@ nn_auto_hardware_metadata <- function(route) {
   }
   route$runtime_hardware_device <- device
   route$runtime_hardware_model <- runtime_model
-  route$runtime_logical_cores <- suppressWarnings(as.integer(parallel::detectCores(logical = TRUE)))
+  route$runtime_logical_cores <- faissr_quiet_warning(as.integer(parallel::detectCores(logical = TRUE)))
   route$hardware_match_status <- match_status
   route$hardware_evidence <- if (identical(match_status, "matched")) {
     "calibration_hardware_matched"
@@ -6636,8 +6636,8 @@ nn_auto_selection_metadata <- function(data,
 
 normalize_nn_threads <- function(n_threads) {
   if (is.null(n_threads)) {
-    n_threads <- suppressWarnings(parallel::detectCores(logical = FALSE))
-    n_threads <- suppressWarnings(as.integer(n_threads))
+    n_threads <- faissr_quiet_warning(parallel::detectCores(logical = FALSE))
+    n_threads <- faissr_quiet_warning(as.integer(n_threads))
     if (length(n_threads) != 1L || is.na(n_threads) || !is.finite(n_threads) || n_threads < 1L) {
       n_threads <- 1L
     }
@@ -6652,7 +6652,7 @@ normalize_nn_threads <- function(n_threads) {
 }
 
 normalize_nn_positive_integer <- function(x, arg, message) {
-  value <- suppressWarnings(as.numeric(x))
+  value <- faissr_quiet_warning(as.numeric(x))
   if (length(value) != 1L || is.na(value) || !is.finite(value) ||
       value < 1L || abs(value - round(value)) > sqrt(.Machine$double.eps)) {
     stop(message, call. = FALSE)
@@ -6709,7 +6709,7 @@ grid_bins_per_dim <- function(n, k, p) {
   value <- faissr_option(sprintf("grid%dd_bins_per_dim", p), NULL)
   if (is.null(value)) value <- faissr_option("grid_bins_per_dim", NULL)
   if (!is.null(value)) {
-    value <- suppressWarnings(as.integer(value))
+    value <- faissr_quiet_warning(as.integer(value))
     if (length(value) == 1L && is.finite(value) && !is.na(value) && value > 0L) {
       return(as.integer(value))
     }
@@ -6723,7 +6723,7 @@ grid_bins_per_dim <- function(n, k, p) {
       max(4, min(16, as.numeric(k) / 10))
     }
   }
-  target_occupancy <- suppressWarnings(as.numeric(target_occupancy))
+  target_occupancy <- faissr_quiet_warning(as.numeric(target_occupancy))
   if (length(target_occupancy) != 1L || !is.finite(target_occupancy) ||
       is.na(target_occupancy) || target_occupancy <= 0) {
     target_occupancy <- if (identical(p, 3L)) {
@@ -6921,7 +6921,7 @@ mips_l2_metric_inputs <- function(data, points, self_query) {
   storage.mode(points) <- "double"
   data_norm2 <- row_inner_product_norm2(data)
   points_norm2 <- if (isTRUE(self_query)) data_norm2 else row_inner_product_norm2(points)
-  radius2 <- suppressWarnings(max(data_norm2, 0, na.rm = TRUE))
+  radius2 <- faissr_quiet_warning(max(data_norm2, 0, na.rm = TRUE))
   if (!is.finite(radius2) || radius2 < 0) radius2 <- 0
   extra <- sqrt(pmax(0, radius2 - data_norm2))
   data_metric <- cbind(data, extra)
@@ -7765,7 +7765,7 @@ should_use_clustered_self_knn <- function(backend,
 
 fast_knn_approx_seed <- function() {
   value <- faissr_option("approx_knn_seed", 4L)
-  value <- suppressWarnings(as.integer(value))
+  value <- faissr_quiet_warning(as.integer(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value)) 4L else value
 }
 
@@ -7843,13 +7843,13 @@ nsg_prune_candidate_graph <- function(data,
                                       protect_top = 0L) {
   n <- nrow(seed_indices)
   r <- as.integer(min(max(1L, r), ncol(seed_indices), max(1L, n - 1L)))
-  protect_top <- suppressWarnings(as.integer(protect_top))
+  protect_top <- faissr_quiet_warning(as.integer(protect_top))
   if (length(protect_top) != 1L || is.na(protect_top) || !is.finite(protect_top)) {
     protect_top <- 0L
   }
   protect_top <- as.integer(max(0L, min(protect_top, r, ncol(seed_indices))))
   max_exact_work <- faissr_option("cuda_nsg_prune_max_work", 2e8)
-  max_exact_work <- suppressWarnings(as.numeric(max_exact_work))
+  max_exact_work <- faissr_quiet_warning(as.numeric(max_exact_work))
   if (length(max_exact_work) != 1L || is.na(max_exact_work) || !is.finite(max_exact_work)) {
     max_exact_work <- 2e8
   }
@@ -7913,7 +7913,7 @@ vamana_robust_prune_candidate_graph <- function(data,
                                                 protect_top = 0L) {
   n <- nrow(seed_indices)
   r <- as.integer(min(max(1L, r), ncol(seed_indices), max(1L, n - 1L)))
-  protect_top <- suppressWarnings(as.integer(protect_top))
+  protect_top <- faissr_quiet_warning(as.integer(protect_top))
   if (length(protect_top) != 1L || is.na(protect_top) || !is.finite(protect_top)) {
     protect_top <- 0L
   }
@@ -7921,7 +7921,7 @@ vamana_robust_prune_candidate_graph <- function(data,
   alpha <- as.numeric(alpha)
   if (length(alpha) != 1L || is.na(alpha) || !is.finite(alpha) || alpha < 1) alpha <- 1.2
   max_exact_work <- faissr_option("vamana_prune_max_work", 2e8)
-  max_exact_work <- suppressWarnings(as.numeric(max_exact_work))
+  max_exact_work <- faissr_quiet_warning(as.numeric(max_exact_work))
   if (length(max_exact_work) != 1L || is.na(max_exact_work) || !is.finite(max_exact_work)) {
     max_exact_work <- 2e8
   }
@@ -8243,7 +8243,7 @@ native_nsg_self_knn <- function(data,
 
 knn_recall_subset_size <- function(n) {
   value <- faissr_option("approx_recall_sample", 512L)
-  value <- suppressWarnings(as.integer(value))
+  value <- faissr_quiet_warning(as.integer(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value) || value < 1L) {
     value <- 512L
   }
@@ -8574,7 +8574,7 @@ cpu_nndescent_params <- function(n, k, p = NA_integer_,
                                  target_recall = 0.99) {
   n <- as.integer(n)
   k <- as.integer(k)
-  p <- suppressWarnings(as.integer(p))
+  p <- faissr_quiet_warning(as.integer(p))
   metric <- normalize_nn_metric(metric)
   target_recall <- normalize_hnsw_target_recall(target_recall)
   tune <- nn_tune_cpu_nndescent_cpp(
@@ -8642,7 +8642,7 @@ nndescent_self_knn <- function(data,
     stop("`k` must be in [1, nrow(data) - 1].", call. = FALSE)
   }
   if (is.null(n_threads)) {
-    n_threads <- suppressWarnings(parallel::detectCores(logical = FALSE))
+    n_threads <- faissr_quiet_warning(parallel::detectCores(logical = FALSE))
     if (length(n_threads) != 1L || is.na(n_threads) || !is.finite(n_threads)) {
       n_threads <- 1L
     }
@@ -8812,7 +8812,7 @@ clustered_self_knn <- function(data,
 nn_option_int_or_na <- function(name) {
   value <- faissr_option(name, NULL)
   if (is.null(value)) return(NA_integer_)
-  value <- suppressWarnings(as.integer(value))
+  value <- faissr_quiet_warning(as.integer(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value)) {
     return(NA_integer_)
   }
@@ -8822,7 +8822,7 @@ nn_option_int_or_na <- function(name) {
 nn_option_double_or_na <- function(name) {
   value <- faissr_option(name, NULL)
   if (is.null(value)) return(NA_real_)
-  value <- suppressWarnings(as.numeric(value))
+  value <- faissr_quiet_warning(as.numeric(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value)) {
     return(NA_real_)
   }
@@ -8865,7 +8865,7 @@ faiss_ivf_params <- function(n, k, metric = "euclidean",
   target_recall <- normalize_hnsw_target_recall(target_recall)
   nn_tune_faiss_ivf_cpp(
     as.integer(n),
-    suppressWarnings(as.integer(p)),
+    faissr_quiet_warning(as.integer(p)),
     as.integer(k),
     metric,
     as.numeric(target_recall),
@@ -8930,7 +8930,7 @@ cuda_ivf_manual_params <- function() {
 cuvs_ivfpq_params <- function(p, n = NULL) {
   nn_tune_cuvs_ivfpq_cpp(
     as.integer(p),
-    suppressWarnings(as.integer(n %||% NA_integer_)),
+    faissr_quiet_warning(as.integer(n %||% NA_integer_)),
     nn_option_int_or_na(c("cuvs_ivfpq_pq_dim", "ivfpq_pq_dim")),
     nn_option_int_or_na(c("cuvs_ivfpq_pq_bits", "ivfpq_pq_bits")),
     nn_any_options(c(
@@ -8944,8 +8944,8 @@ cuvs_ivfpq_params <- function(p, n = NULL) {
 
 cuvs_ivfpq_align_params <- function(pq, p) {
   p <- as.integer(max(1L, p))
-  pq_dim <- suppressWarnings(as.integer(pq$pq_dim %||% 0L))
-  pq_bits <- suppressWarnings(as.integer(pq$pq_bits %||% 8L))
+  pq_dim <- faissr_quiet_warning(as.integer(pq$pq_dim %||% 0L))
+  pq_bits <- faissr_quiet_warning(as.integer(pq$pq_bits %||% 8L))
   if (length(pq_dim) != 1L || is.na(pq_dim)) pq_dim <- 0L
   if (length(pq_bits) != 1L || is.na(pq_bits)) pq_bits <- 8L
   original_dim <- pq_dim
@@ -8994,13 +8994,13 @@ cuvs_ivfpq_align_params <- function(pq, p) {
 
 ivfpq_fastscan_option_int <- function(name, default, min_value = 1L, max_value = .Machine$integer.max) {
   value <- faissr_option(name, NULL)
-  value <- if (is.null(value)) default else suppressWarnings(as.integer(value))
+  value <- if (is.null(value)) default else faissr_quiet_warning(as.integer(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value)) value <- default
   as.integer(max(min_value, min(max_value, value)))
 }
 
 ivfpq_fastscan_default_int <- function(value, default) {
-  value <- suppressWarnings(as.integer(value %||% default))
+  value <- faissr_quiet_warning(as.integer(value %||% default))
   if (length(value) != 1L || is.na(value) || !is.finite(value)) {
     value <- default
   }
@@ -9072,8 +9072,8 @@ ivfpq_fastscan_cuda_params <- function(n, p, k, target_recall = 0.99,
     "cuvs_ivfpq_pq_bits",
     "ivfpq_pq_bits"
   ))
-  tuned_pq_dim <- suppressWarnings(as.integer(ivf$pq_m %||% NA_integer_))
-  tuned_pq_bits <- suppressWarnings(as.integer(ivf$pq_nbits %||% 4L))
+  tuned_pq_dim <- faissr_quiet_warning(as.integer(ivf$pq_m %||% NA_integer_))
+  tuned_pq_bits <- faissr_quiet_warning(as.integer(ivf$pq_nbits %||% 4L))
   if (!manual_pq && length(tuned_pq_dim) == 1L && !is.na(tuned_pq_dim) &&
       is.finite(tuned_pq_dim) && tuned_pq_dim > 0L) {
     pq$pq_dim <- as.integer(tuned_pq_dim)
@@ -9099,7 +9099,7 @@ ivfpq_fastscan_cuda_params <- function(n, p, k, target_recall = 0.99,
   pq$tuning_benchmark_target_met <- ivf$tuning_benchmark_target_met %||% FALSE
   pq$tuning_benchmark_source <- ivf$tuning_benchmark_source %||% NA_character_
   pq <- cuvs_ivfpq_align_params(pq, p)
-  batch_size <- suppressWarnings(as.integer(ivf$cuvs_ivf_batch_size %||% NA_integer_))
+  batch_size <- faissr_quiet_warning(as.integer(ivf$cuvs_ivf_batch_size %||% NA_integer_))
   if (length(batch_size) != 1L || is.na(batch_size) || !is.finite(batch_size) || batch_size < 1L) {
     batch_size <- NA_integer_
   }
@@ -9164,7 +9164,7 @@ faiss_gpu_ivf_should_tune <- function(data, k, self_query, tuning = "auto", metr
   enabled <- faissr_option("faiss_gpu_ivf_tune", TRUE)
   if (!isTRUE(enabled)) return(FALSE)
   threshold <- faissr_option("faiss_gpu_ivf_tune_threshold", 20000L)
-  threshold <- suppressWarnings(as.integer(threshold))
+  threshold <- faissr_quiet_warning(as.integer(threshold))
   if (length(threshold) != 1L || is.na(threshold) || !is.finite(threshold)) {
     threshold <- 20000L
   }
@@ -9196,7 +9196,7 @@ faiss_gpu_ivf_load_disk_cache <- function() {
   }
   .faiss_gpu_ivf_tune_disk_cache$loaded <- TRUE
   .faiss_gpu_ivf_tune_disk_cache$file <- file
-  entries <- tryCatch(suppressWarnings(readRDS(file)), error = function(e) list())
+  entries <- tryCatch(faissr_quiet_warning(readRDS(file)), error = function(e) list())
   if (!is.list(entries)) entries <- list()
   .faiss_gpu_ivf_tune_disk_cache$entries <- entries
   invisible(entries)
@@ -9279,16 +9279,16 @@ faiss_gpu_ivf_tune_params <- function(data, k, base_params, tuning = "auto") {
     ))
   }
   sample_size <- faissr_option("faiss_gpu_ivf_tune_sample", 10000L)
-  sample_size <- suppressWarnings(as.integer(sample_size))
+  sample_size <- faissr_quiet_warning(as.integer(sample_size))
   if (length(sample_size) != 1L || is.na(sample_size) || !is.finite(sample_size) || sample_size < 1000L) {
     sample_size <- 10000L
   }
   sample_size <- as.integer(min(nrow(data), sample_size))
   seed <- faissr_option("faiss_gpu_ivf_tune_seed", 7L)
-  seed <- suppressWarnings(as.integer(seed))
+  seed <- faissr_quiet_warning(as.integer(seed))
   if (length(seed) != 1L || is.na(seed) || !is.finite(seed)) seed <- 7L
   target <- faissr_option("faiss_gpu_ivf_tune_recall", 0.985)
-  target <- suppressWarnings(as.numeric(target))
+  target <- faissr_quiet_warning(as.numeric(target))
   if (length(target) != 1L || is.na(target) || !is.finite(target)) target <- 0.985
   target <- max(0, min(1, target))
   key <- faiss_gpu_ivf_tune_signature(data, k, sample_size, target, seed)
@@ -9420,7 +9420,7 @@ faiss_gpu_ivf_tune_params <- function(data, k, base_params, tuning = "auto") {
 
 faiss_option_int <- function(name, default, min_value = 1L, max_value = .Machine$integer.max) {
   value <- faissr_option(paste0("faiss_", name), NULL)
-  value <- if (is.null(value)) default else suppressWarnings(as.integer(value))
+  value <- if (is.null(value)) default else faissr_quiet_warning(as.integer(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value)) value <- default
   as.integer(max(min_value, min(max_value, value)))
 }
@@ -9438,7 +9438,7 @@ faiss_cpu_ivfpq_min_training_rows <- function() 624L
 faiss_cpu_ivfpq_8bit_training_rows <- function() 9984L
 
 validate_faiss_cpu_ivfpq_training_size <- function(n) {
-  n <- suppressWarnings(as.integer(n))
+  n <- faissr_quiet_warning(as.integer(n))
   min_n <- faiss_cpu_ivfpq_min_training_rows()
   if (length(n) != 1L || is.na(n) || n < min_n) {
     stop(
@@ -9462,7 +9462,7 @@ faiss_pq_manual_nbits <- function() {
 faiss_pq_params <- function(p, n = NULL) {
   nn_tune_faiss_pq_cpp(
     as.integer(p),
-    suppressWarnings(as.integer(n %||% NA_integer_)),
+    faissr_quiet_warning(as.integer(n %||% NA_integer_)),
     nn_option_int_or_na("faiss_pq_m"),
     nn_option_int_or_na("faiss_pq_nbits"),
     faiss_pq_manual_params(),
@@ -9473,8 +9473,8 @@ faiss_pq_params <- function(p, n = NULL) {
 faiss_ivfpq_pq_params <- function(p, n = NULL, ivf_params = NULL) {
   pq <- faiss_pq_params(p, n = n)
   if (faiss_pq_manual_params() || !is.list(ivf_params)) return(pq)
-  pq_m <- suppressWarnings(as.integer(ivf_params$pq_m %||% NA_integer_))
-  pq_nbits <- suppressWarnings(as.integer(ivf_params$pq_nbits %||% NA_integer_))
+  pq_m <- faissr_quiet_warning(as.integer(ivf_params$pq_m %||% NA_integer_))
+  pq_nbits <- faissr_quiet_warning(as.integer(ivf_params$pq_nbits %||% NA_integer_))
   if (length(pq_m) != 1L || is.na(pq_m) || pq_m < 1L) return(pq)
   if (length(pq_nbits) != 1L || is.na(pq_nbits) || pq_nbits < 1L) return(pq)
   pq$m <- pq_m
@@ -9498,8 +9498,8 @@ faiss_ivfpq_pq_params <- function(p, n = NULL, ivf_params = NULL) {
 faiss_hnsw_auto_policy <- function(n = NULL, p = NULL, k, metric = "euclidean", target_recall = 0.99) {
   target_recall <- normalize_hnsw_target_recall(target_recall)
   out <- nn_tune_faiss_hnsw_cpp(
-    suppressWarnings(as.integer(n %||% NA_integer_)),
-    suppressWarnings(as.integer(p %||% NA_integer_)),
+    faissr_quiet_warning(as.integer(n %||% NA_integer_)),
+    faissr_quiet_warning(as.integer(p %||% NA_integer_)),
     as.integer(k),
     normalize_nn_metric(metric),
     as.numeric(target_recall),
@@ -9525,8 +9525,8 @@ faiss_hnsw_manual_params <- function() {
 faiss_hnsw_params <- function(k, n = NULL, p = NULL, metric = "euclidean", target_recall = 0.99) {
   target_recall <- normalize_hnsw_target_recall(target_recall)
   nn_tune_faiss_hnsw_cpp(
-    suppressWarnings(as.integer(n %||% NA_integer_)),
-    suppressWarnings(as.integer(p %||% NA_integer_)),
+    faissr_quiet_warning(as.integer(n %||% NA_integer_)),
+    faissr_quiet_warning(as.integer(p %||% NA_integer_)),
     as.integer(k),
     normalize_nn_metric(metric),
     as.numeric(target_recall),
@@ -9563,14 +9563,14 @@ faiss_nndescent_params <- function(k) {
 
 cuvs_option_int <- function(name, default, min_value = 1L, max_value = .Machine$integer.max) {
   value <- faissr_option(paste0("cuvs_", name), NULL)
-  value <- if (is.null(value)) default else suppressWarnings(as.integer(value))
+  value <- if (is.null(value)) default else faissr_quiet_warning(as.integer(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value)) value <- default
   as.integer(max(min_value, min(max_value, value)))
 }
 
 cuvs_requested_option_int <- function(name, default) {
   value <- faissr_option(paste0("cuvs_", name), NULL)
-  value <- if (is.null(value)) default else suppressWarnings(as.integer(value))
+  value <- if (is.null(value)) default else faissr_quiet_warning(as.integer(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value)) value <- default
   as.integer(value)
 }
@@ -9580,7 +9580,7 @@ cuvs_cagra_params <- function(n, k, p = NA_integer_, metric = "euclidean", targe
   metric <- normalize_nn_metric(metric)
   nn_tune_cuvs_cagra_cpp(
     as.integer(n),
-    suppressWarnings(as.integer(p)),
+    faissr_quiet_warning(as.integer(p)),
     as.integer(k),
     metric,
     as.numeric(target_recall),
@@ -9602,7 +9602,7 @@ cuvs_hnsw_params <- function(n,
   metric <- normalize_nn_metric(metric)
   nn_tune_cuvs_hnsw_cpp(
     as.integer(n),
-    suppressWarnings(as.integer(p)),
+    faissr_quiet_warning(as.integer(p)),
     as.integer(k),
     as.integer(normalize_nn_threads(n_threads)),
     cagra_build_algo_preference(),
@@ -9777,7 +9777,7 @@ cuvs_cagra_should_tune <- function(data, k, self_query, tuning = "auto") {
   enabled <- faissr_option("cuvs_cagra_tune", TRUE)
   if (!isTRUE(enabled)) return(FALSE)
   threshold <- faissr_option("cuvs_cagra_tune_threshold", 20000L)
-  threshold <- suppressWarnings(as.integer(threshold))
+  threshold <- faissr_quiet_warning(as.integer(threshold))
   if (length(threshold) != 1L || is.na(threshold) || !is.finite(threshold)) {
     threshold <- 20000L
   }
@@ -9829,7 +9829,7 @@ cuvs_cagra_load_disk_cache <- function() {
   }
   .cuvs_cagra_tune_disk_cache$loaded <- TRUE
   .cuvs_cagra_tune_disk_cache$file <- file
-  entries <- tryCatch(suppressWarnings(readRDS(file)), error = function(e) list())
+  entries <- tryCatch(faissr_quiet_warning(readRDS(file)), error = function(e) list())
   if (!is.list(entries)) entries <- list()
   .cuvs_cagra_tune_disk_cache$entries <- entries
   invisible(entries)
@@ -9894,16 +9894,16 @@ cuvs_cagra_tune_params <- function(data, k, base_params, tuning = "auto", build_
     ))
   }
   sample_size <- faissr_option("cuvs_cagra_tune_sample", 2048L)
-  sample_size <- suppressWarnings(as.integer(sample_size))
+  sample_size <- faissr_quiet_warning(as.integer(sample_size))
   if (length(sample_size) != 1L || is.na(sample_size) || !is.finite(sample_size) || sample_size < 256L) {
     sample_size <- 2048L
   }
   sample_size <- as.integer(min(nrow(data), sample_size))
   seed <- faissr_option("cuvs_cagra_tune_seed", 4L)
-  seed <- suppressWarnings(as.integer(seed))
+  seed <- faissr_quiet_warning(as.integer(seed))
   if (length(seed) != 1L || is.na(seed) || !is.finite(seed)) seed <- 4L
   target <- faissr_option("cuvs_cagra_tune_recall", 0.985)
-  target <- suppressWarnings(as.numeric(target))
+  target <- faissr_quiet_warning(as.numeric(target))
   if (length(target) != 1L || is.na(target) || !is.finite(target)) target <- 0.985
   target <- max(0, min(1, target))
   key <- cuvs_cagra_tune_signature(data, k, sample_size, target, seed)
@@ -10043,7 +10043,7 @@ cuvs_cagra_tune_params <- function(data, k, base_params, tuning = "auto", build_
 cuvs_nndescent_params <- function(n, p, k, metric = "euclidean", target_recall = 0.99) {
   nn_tune_cuvs_nndescent_cpp(
     as.integer(n),
-    suppressWarnings(as.integer(p)),
+    faissr_quiet_warning(as.integer(p)),
     as.integer(k),
     normalize_nn_metric(metric),
     as.numeric(normalize_hnsw_target_recall(target_recall)),
@@ -10060,7 +10060,7 @@ cuvs_nndescent_params <- function(n, p, k, metric = "euclidean", target_recall =
 
 cuvs_nndescent_threshold <- function() {
   value <- faissr_option("cuvs_nndescent_threshold", 50000L)
-  value <- suppressWarnings(as.integer(value))
+  value <- faissr_quiet_warning(as.integer(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value)) value <- 50000L
   as.integer(max(2L, value))
 }
@@ -10264,12 +10264,13 @@ grid_self_knn <- function(data,
 #'   robust-pruned candidate graph inspired by DiskANN/Vamana, followed by CPU
 #'   or CUDA candidate refinement. It is not a feature-complete Vamana
 #'   reproduction.
-#'   \item `"nsg_style"` (`"nsg"` compatibility alias): a package-owned
-#'   NSG/MRNG-style candidate graph followed by CPU or CUDA candidate
-#'   refinement. It is not a feature-complete NSG reproduction.
-#'   \item `"nndescent_style"` (`"nndescent"` compatibility alias): the
-#'   package-owned CPU NN-descent-style graph route or direct external-provider
-#'   cuVS NN-descent on CUDA.
+#'   \item `"nsg_style"` (`"nsg"` compatibility alias): a distinct
+#'   package-owned candidate-graph algorithm derived from selected NSG/MRNG
+#'   pruning ideas, followed by CPU or CUDA candidate refinement. It is not a
+#'   feature-complete NSG reproduction.
+#'   \item `"nndescent_style"` (`"nndescent"` compatibility alias): a
+#'   distinct package-owned CPU graph-refinement algorithm derived from
+#'   NN-descent ideas, or direct external-provider cuVS NN-descent on CUDA.
 #'   \item `"cagra"`: CUDA-only FAISS GPU CAGRA or direct cuVS CAGRA. Use
 #'   `cagra_implementation` to request a provider explicitly.
 #' }
@@ -10342,10 +10343,11 @@ grid_self_knn <- function(data,
 #'   followed by FastScan L2 search.
 #'   The preferred names for package-owned graph refinement are
 #'   `"nsg_style"`, `"vamana_style"`, and `"nndescent_style"`; the shorter
-#'   names remain compatibility aliases. Native results explicitly report that
-#'   they are style implementations rather than feature-complete canonical
-#'   reproductions. CUDA cuVS NN-descent is identified separately as an
-#'   external-provider implementation.
+#'   names remain compatibility aliases. The `_style` suffix is a scope
+#'   marker, not an algorithm name: native results explicitly report a distinct
+#'   package-owned derived graph-refinement algorithm rather than a
+#'   feature-complete canonical reproduction. CUDA cuVS NN-descent is
+#'   identified separately as an external-provider implementation.
 #' @param metric Distance metric. The intentionally small public set is
 #'   `"euclidean"`, `"cosine"`, and `"correlation"`.
 #'   Legacy aliases such as `"l2"`, `"cor"`, `"pearson"`, and `"ip"` are
@@ -10366,7 +10368,9 @@ grid_self_knn <- function(data,
 #'   zero-normalized row versus a nonzero row has distance `1`. CPU FAISS Flat
 #'   uses the exact CPU scorer for those rows to preserve deterministic
 #'   small-`k` tie handling; explicit CUDA routes error clearly instead of
-#'   repairing those rows on CPU. CUDA FAISS/cuVS results carry
+#'   repairing those rows on CPU. These finite values are software conventions
+#'   for otherwise undefined cosine or correlation cases, not mathematical
+#'   cosine similarities or Pearson correlations. CUDA FAISS/cuVS results carry
 #'   `attr(result, "gpu_residency")` metadata with provider, index residency,
 #'   host/device transfer strategy, query device reuse, and CPU fallback flags.
 #'   CPU `method = "auto"` can use FAISS Flat for larger exact non-Euclidean
@@ -10375,8 +10379,10 @@ grid_self_knn <- function(data,
 #'   CPU NN-descent for other large self-KNN cases. CPU `method = "hnsw"` uses
 #'   FAISS HNSW for all three metrics. CUDA HNSW metadata records the available
 #'   cuVS HNSW wrapper design.
-#'   Unsupported backend combinations fail clearly instead of returning neighbours
-#'   computed under a different metric.
+#'   Unsupported method/backend/metric combinations fail clearly instead of
+#'   changing the requested metric, method, or device. Use
+#'   `nn_capabilities(runtime = TRUE)` to preflight both design support and the
+#'   libraries available in the current installation.
 #' @param tuning Tuning policy. `"auto"` uses deterministic compiled defaults
 #'   selected from backend, method, metric, data shape, `k`, and
 #'   `target_recall`; it does not run a timing pilot. `"cache"` reuses or stores

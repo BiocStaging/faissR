@@ -110,7 +110,7 @@ backend_flag <- function(fn) {
 }
 
 cpu_summary <- function() {
-  cores <- suppressWarnings(parallel::detectCores(logical = TRUE))
+  cores <- faissr_quiet_warning(parallel::detectCores(logical = TRUE))
   if (length(cores) != 1L || is.na(cores) || !is.finite(cores)) {
     "CPU"
   } else {
