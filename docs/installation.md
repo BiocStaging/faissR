@@ -434,14 +434,14 @@ itself is valid.
 ```sh
 R CMD build .
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-R CMD check faissR_0.99.20.tar.gz
+R CMD check --as-cran faissR_0.99.27.tar.gz
 ```
 
 Bioconductor submission checks are run in addition to `R CMD check`:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.20.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.27.tar.gz", `new-package` = TRUE)
 ```
 
 A CPU-only check should still finish with `Status: OK` once FAISS is installed;

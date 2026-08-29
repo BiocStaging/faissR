@@ -85,14 +85,16 @@ on modern macOS/Apple Silicon systems. With Homebrew FAISS:
 Windows
 -------
 
-Automated Bioconductor/r-universe Windows builds are skipped because the
-package is marked OS_type: unix. FAISS is mandatory and the Windows builders do
-not provide a compatible FAISS development library.
+faissR is eligible for native Windows builds and is not restricted by an
+`OS_type` field. FAISS remains mandatory for a functional build. When an
+automated builder does not provide compatible FAISS development files,
+`configure.win` builds diagnostic stubs so package portability checks can run;
+those stubs report that native nearest-neighbour functionality is unavailable.
 
-Use Rtools and a FAISS build compiled with a compatible toolchain, or use WSL2
-for Linux-style builds. Native RAPIDS cuVS/libcugraph C++ builds are generally
-Linux-oriented; for NVIDIA GPU support on Windows, WSL2 is the recommended
-route.
+Use Rtools and a FAISS CPU build compiled with a compatible toolchain for a
+functional native Windows installation, or use WSL2 for Linux-style builds.
+Native RAPIDS cuVS C++ builds are generally Linux-oriented; for NVIDIA GPU
+support on Windows, WSL2 is the recommended route.
 
 Bioconductor notes
 ------------------

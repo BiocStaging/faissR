@@ -41,9 +41,15 @@ internal_nn_exclude_self <- function(data,
 
 test_that("GPU-resident NN implementation enforces its public class contract", {
   nn_body <- paste(deparse(body(nn_gpu)), collapse = "\n")
-  expect_match(nn_body, "gpu_contract_fields", fixed = TRUE)
-  expect_match(nn_body, "faissR_gpu_knn", fixed = TRUE)
-  expect_match(nn_body, "externalptr", fixed = TRUE)
+  contract_body <- paste(
+    deparse(body(faissR:::validate_nn_gpu_result)),
+    collapse = "\n"
+  )
+  expect_match(nn_body, "finish_nn_gpu_result", fixed = TRUE)
+  expect_match(contract_body, "faissR_gpu_knn", fixed = TRUE)
+  expect_match(contract_body, "externalptr", fixed = TRUE)
+  expect_match(contract_body, "indices_ptr", fixed = TRUE)
+  expect_match(contract_body, "distances_ptr", fixed = TRUE)
 })
 
 

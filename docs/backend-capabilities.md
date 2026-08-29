@@ -85,8 +85,9 @@ with method-specific parameters.
 | `"vamana_style"` (`"vamana"` alias) | Package-owned DiskANN/Vamana-derived robust-pruned candidate graph with CPU candidate refinement. | Package-owned Vamana-derived graph with CUDA row-candidate refinement. | A distinct algorithm, not a feature-complete Vamana reproduction. Large high-dimensional CPU inputs use deterministic HNSW seed neighbours before robust pruning, while smaller CPU inputs keep exact seed neighbours. Robust pruning runs in compiled C++ over a compact candidate matrix, protects the first `k` seed neighbours, and then refines candidates on CPU or CUDA. CPU/CUDA tuning uses compiled shape/k/target-recall tables; seeded CUDA metric rows remain marked validation-pending [3,5,24]. |
 
 Unsupported combinations fail before computation. For example,
-`nn(x, backend = "cpu", method = "cagra")` errors because CAGRA is CUDA-only,
-errors because the grid route is geometric Euclidean/cosine/correlation search.
+`nn(x, backend = "cpu", method = "cagra")` errors because CAGRA is CUDA-only.
+An explicit grid request also errors unless it is a two- or three-dimensional
+self-search under Euclidean, cosine, or correlation distance.
 
 ## Compiled Backend Families
 

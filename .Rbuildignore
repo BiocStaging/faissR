@@ -20,6 +20,10 @@
 ^cache/
 ^dev$
 ^dev/
+^output$
+^output/
+^tmp$
+^tmp/
 ^docs$
 ^docs/
 ^manuscript$

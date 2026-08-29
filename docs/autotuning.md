@@ -206,29 +206,30 @@ Method-specific interpretation of the tuning files:
   same as FAISS CPU HNSW.
 - `ivf` uses the sweeps to tune `nlist` and `nprobe`. Lower `nprobe` is faster
   but may miss clusters; larger `nprobe` improves recall but can approach Flat
-  `method = "ivf"` use compiled shape tables from
+  search cost. CPU `method = "ivf"` uses compiled shape tables from
   `faissR_IVF_TUNING_CPU12_euclidean_20260630_161409`,
   `faissR_IVF_TUNING_CPU12_cosine_20260701_090337`,
-  `faissR_IVF_TUNING_CPU12_correlation_20260701_090337`, and
+  and `faissR_IVF_TUNING_CPU12_correlation_20260701_090337`. Metric-specific
   source tables are summarized in
   `benchmark_scripts/cosine_ivf_shape_tuning_defaults_from_uploaded_results.csv`,
-  `benchmark_scripts/correlation_ivf_shape_tuning_defaults_from_uploaded_results.csv`,
   and
+  `benchmark_scripts/correlation_ivf_shape_tuning_defaults_from_uploaded_results.csv`.
   Rows that reached the target across every dataset in the shape group record
   `tuning_benchmark_target_met = TRUE`; rows labelled
   `best_available_partial_shape_datasets` or `best_recall_below_target` record
   `FALSE` and should be read as the best measured IVF setting, not as a
   guaranteed recall tier.
 - `ivfpq` uses the sweeps to tune `nlist`, `nprobe`, `pq_m`, and `pq_nbits`.
-  `method = "ivfpq"` use compiled tables generated from
+  CPU `method = "ivfpq"` uses compiled tables generated from
   `faissR_IVFPQ_TUNING_CPU12_euclidean_20260630_161409`,
   `faissR_IVFPQ_TUNING_CPU12_cosine_20260701_090337`,
-  `faissR_IVFPQ_TUNING_CPU12_correlation_20260701_090337`, and
-  metric-specific source tables are summarized in
+  and `faissR_IVFPQ_TUNING_CPU12_correlation_20260701_090337`. Metric-specific
+  source tables are summarized in
   `benchmark_scripts/cosine_ivfpq_shape_tuning_defaults_from_uploaded_results.csv`,
-  `benchmark_scripts/correlation_ivfpq_shape_tuning_defaults_from_uploaded_results.csv`,
   and
-  FAISS GPU IVF-PQ shape/k/target rows. Euclidean and correlation come from
+  `benchmark_scripts/correlation_ivfpq_shape_tuning_defaults_from_uploaded_results.csv`.
+  CUDA uses separate FAISS GPU IVF-PQ shape/k/target rows. Euclidean and
+  correlation come from
   `faissR_IVFPQ_TUNING_CUDA_euclidean_20260701_194051` and
   `faissR_IVFPQ_TUNING_CUDA_correlation_20260703_095008`, summarized in
   `benchmark_scripts/cuda_ivfpq_euclidean_shape_tuning_defaults_from_uploaded_results.csv`
@@ -247,17 +248,16 @@ Method-specific interpretation of the tuning files:
   COIL20, USPS, FashionMNIST, and FlowRepository are marked as target hits only
   when the measured recall reached the requested tier; FashionMNIST k=15 at
   0.99 recall, FlowRepository 0.99 rows, and the unmeasured large-low-dimensional
-  k=100 fallback record `tuning_benchmark_target_met = FALSE`. CPU raw
+  k=100 fallback record `tuning_benchmark_target_met = FALSE`. CPU cosine uses
   L2 normalization followed by FastScan L2 search; CPU correlation FastScan
   subtracts each row mean, L2-normalizes rows, and then uses the same FastScan
   L2 route. The compiled seed policies are summarized in
   `benchmark_scripts/cosine_ivfpq_fastscan_shape_tuning_defaults_from_uploaded_results.csv`
   and
-  `benchmark_scripts/correlation_ivfpq_fastscan_shape_tuning_defaults_from_uploaded_results.csv`,
-  and
-  backend execution due to previous metric guards, so these rows deliberately
-  record `tuning_benchmark_target_met = FALSE` until the corrected sweeps are
-  rerun.
+  `benchmark_scripts/correlation_ivfpq_fastscan_shape_tuning_defaults_from_uploaded_results.csv`.
+  Validation-pending seeded rows record
+  `tuning_benchmark_target_met = FALSE` until corrected metric-specific sweeps
+  replace them.
   CUDA runs evaluate cuVS IVF-PQ choices such as `nlist`, `nprobe`,
   byte-aligned 4-bit `pq_dim`, and query batch size. CUDA Euclidean searches
   the original float32 rows. CUDA cosine row-normalizes float32 input before
@@ -281,18 +281,19 @@ Method-specific interpretation of the tuning files:
   is rerun. CUDA correlation is implemented as row-centered row-normalized
   float32 Euclidean CAGRA search and currently uses
   `benchmark_scripts/cuda_cagra_correlation_shape_tuning_defaults_from_seeded_euclidean_results.csv`,
-  seeded from the same Euclidean sweep until the dedicated correlation sweep is
-  extra-dimension transform before CAGRA search and currently uses
-  seeded from the Euclidean sweep until
+  seeded from the same Euclidean sweep. Seeded rows remain marked
+  `tuning_benchmark_target_met = FALSE` until dedicated metric-specific sweeps
+  replace them.
 - `nndescent` uses the sweeps to tune candidate pool size, iteration count,
-  maximum candidate breadth, and random-projection seed count. CPU Euclidean,
+  maximum candidate breadth, and random-projection seed count. CPU metric
+  tables come from
   `faissR_NNDESCENT_TUNING_CPU12_euclidean_20260630_161409`,
   `faissR_NNDESCENT_TUNING_CPU12_cosine_20260701_090337`,
-  `faissR_NNDESCENT_TUNING_CPU12_correlation_20260701_090337`, and
-  shape source tables are
+  and `faissR_NNDESCENT_TUNING_CPU12_correlation_20260701_090337`. The
+  transformed-metric source tables are
   `benchmark_scripts/cosine_nndescent_shape_tuning_defaults_from_uploaded_results.csv`,
-  `benchmark_scripts/correlation_nndescent_shape_tuning_defaults_from_uploaded_results.csv`,
   and
+  `benchmark_scripts/correlation_nndescent_shape_tuning_defaults_from_uploaded_results.csv`.
   These tables cover small-n, medium low-dimensional, large low-dimensional,
   and large high-dimensional shapes for `k` buckets 15, 30, 50, and 100 and
   target recall tiers 0.90, 0.95, and 0.99. Cosine and correlation are
@@ -318,12 +319,14 @@ Method-specific interpretation of the tuning files:
   cuVS kernels and can expose GPU-launch or shared-memory limits not present in
   the CPU mathematics.
 - `nsg` and `vamana` use the sweeps to tune seed-neighbour count, graph degree,
-  `method = "nsg"` use compiled tables generated from
+  search breadth, and pruning parameters. CPU `method = "nsg"` uses compiled
+  tables generated from
   `faissR_NSG_TUNING_CPU12_euclidean_20260630_161409`,
   `faissR_NSG_TUNING_CPU12_cosine_20260701_090337`,
-  `faissR_NSG_TUNING_CPU12_correlation_20260701_090337`, and
-  source tables are `benchmark_scripts/cosine_nsg_shape_tuning_defaults_from_uploaded_results.csv`,
-  `benchmark_scripts/correlation_nsg_shape_tuning_defaults_from_uploaded_results.csv`,
+  and `faissR_NSG_TUNING_CPU12_correlation_20260701_090337`. Source tables are
+  `benchmark_scripts/cosine_nsg_shape_tuning_defaults_from_uploaded_results.csv`
+  and
+  `benchmark_scripts/correlation_nsg_shape_tuning_defaults_from_uploaded_results.csv`.
   CUDA Euclidean and cosine `method = "nsg"` use the measured GPU shape tables
   from `faissR_NSG_TUNING_CUDA_euclidean_20260702_013830` and
   `faissR_NSG_TUNING_CUDA_cosine_20260702_211910`; their source tables are
@@ -333,8 +336,7 @@ Method-specific interpretation of the tuning files:
   CUDA correlation uses the same centered-normalized NSG route and currently
   seeds `r`/`graph_k` from the measured CUDA cosine table in
   `benchmark_scripts/cuda_nsg_correlation_shape_tuning_defaults_from_seeded_cosine_results.csv`.
-  currently seeds `r`/`graph_k` from the same measured CUDA cosine table in
-  Both validation-pending CUDA NSG metric tables report
+  Validation-pending CUDA NSG metric rows report
   `tuning_benchmark_target_met = FALSE` until their dedicated sweeps replace
   them.
   The tables select NSG `r` and seed/candidate graph width `graph_k` by
@@ -342,11 +344,13 @@ Method-specific interpretation of the tuning files:
   high-dimensional shape groups, `k`, and target recall. Cosine is implemented
   as row-normalized Euclidean NSG refinement and correlation as row-centered,
   row-normalized Euclidean refinement. Each has its own tuning table.
-  tables generated from `faissR_VAMANA_TUNING_CPU12_euclidean_20260630_161409`,
+  CPU Vamana uses tables generated from
+  `faissR_VAMANA_TUNING_CPU12_euclidean_20260630_161409`,
   `faissR_VAMANA_TUNING_CPU12_cosine_20260701_090337`,
-  `faissR_VAMANA_TUNING_CPU12_correlation_20260701_090337`, and
-  source tables are `benchmark_scripts/cosine_vamana_shape_tuning_defaults_from_uploaded_results.csv`,
-  `benchmark_scripts/correlation_vamana_shape_tuning_defaults_from_uploaded_results.csv`,
+  and `faissR_VAMANA_TUNING_CPU12_correlation_20260701_090337`. Source tables
+  are `benchmark_scripts/cosine_vamana_shape_tuning_defaults_from_uploaded_results.csv`
+  and
+  `benchmark_scripts/correlation_vamana_shape_tuning_defaults_from_uploaded_results.csv`.
   CUDA Euclidean and cosine `method = "vamana"` use measured GPU shape tables
   from `faissR_VAMANA_TUNING_CUDA_euclidean_20260702_042943` and
   `faissR_VAMANA_TUNING_CUDA_cosine_20260702_232209`; their source tables are
@@ -356,9 +360,7 @@ Method-specific interpretation of the tuning files:
   CUDA correlation uses the same centered-normalized Vamana route and currently
   seeds `r`/`search_l`/`alpha` from the measured CUDA cosine table in
   `benchmark_scripts/cuda_vamana_correlation_shape_tuning_defaults_from_seeded_cosine_results.csv`.
-  and currently seeds `r`/`search_l`/`alpha` from the same measured CUDA cosine
-  table in
-  Both validation-pending CUDA Vamana metric tables report
+  Validation-pending CUDA Vamana metric rows report
   `tuning_benchmark_target_met = FALSE` until their dedicated sweeps replace
   them.
   The tables select Vamana `r`, search breadth `search_l`, and robust-pruning
@@ -441,10 +443,9 @@ for the parameter rule, backend policy, and final selection.
   Direct cuVS CAGRA should be benchmarked with measured recall on
   high-dimensional raw data before being used as an accuracy-first default
   [3,13-15].
-  same transformed float32 graph-search conventions as other graph methods:
-  cosine normalizes rows, correlation row-centers before normalization, and raw
-  compiled shape/k/target policies are validation-pending and seeded from the
-  measured Euclidean table.
+  Cosine normalizes rows and correlation row-centers before normalization.
+  Seeded transformed-metric policies remain validation-pending until dedicated
+  sweeps replace them.
 
 ## Method-Specific Settings
 

@@ -1,3 +1,13 @@
+# faissR 0.99.27
+
+* Replaces the vignette's `mlbench` example with the Bioconductor `ALL`
+  leukemia expression dataset and `Biobase` assay access.
+* Decomposes the public nearest-neighbour wrappers, capability construction,
+  and CPU/CUDA backend resolution into namespace-private helpers without
+  changing the public API or result metadata contracts.
+* Audits the installation and method guides, removes stale inner-product text,
+  and corrects the Windows build contract and package-check examples.
+
 # faissR 0.99.25
 
 * Restores native Windows eligibility by removing the unnecessary Unix-only

@@ -86,21 +86,23 @@ functional FAISS builds.
 
 # Example data
 
-The examples use the `Sonar` data from the `mlbench` package. It contains 208
-observations, 60 numeric sonar-energy measurements, and a two-class response.
-This provides a compact, moderately high-dimensional classification dataset
-that is suitable for vignette builds. Rows are observations and columns are
-features, matching the input convention used by `faissR`. Predictors are
-standardized so Euclidean distance is not dominated by variables with larger
-scales.
+The examples use the `ALL` acute lymphoblastic leukemia expression dataset
+from Bioconductor. The assay contains patients in columns and probes in rows.
+The code transposes the assay, retains the 128 probes with the largest finite
+variance, and standardizes them. The resulting sample-by-feature matrix follows
+the input convention used by `faissR`, while the leukemia lineage is used as a
+classification response.
 
 ```{r data}
 library("faissR")
 
-data("Sonar", package = "mlbench")
-x <- scale(as.matrix(Sonar[, seq_len(60L)]))
+data("ALL", package = "ALL")
+all_expression <- Biobase::exprs(ALL)
+probe_variance <- apply(all_expression, 1L, stats::var)
+selected_probes <- order(probe_variance, decreasing = TRUE)[seq_len(128L)]
+x <- scale(t(all_expression[selected_probes, , drop = FALSE]))
 storage.mode(x) <- "double"
-groups <- Sonar$Class
+groups <- droplevels(Biobase::pData(ALL)$BT)
 dim(x)
 table(groups)
 ```

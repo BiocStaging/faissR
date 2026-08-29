@@ -328,9 +328,9 @@ should be measured for new datasets when it is used for scientific conclusions.
 - The main parameters are the number of coarse lists (`nlist`) and searched
   lists (`nprobe`).
 - On CPU, `tuning = "auto"` chooses `nlist` and `nprobe` from compiled
-  shape/k/target-recall tables for Euclidean, cosine, correlation, and raw
-  `tuning_benchmark_target_met`, so best-available partial or below-target rows
-  are visible in result metadata rather than being presented as guaranteed
+  shape/k/target-recall tables for Euclidean, cosine, and correlation. The
+  selected row records `tuning_benchmark_target_met`, so best-available partial
+  or below-target rows remain visible rather than being presented as guaranteed
   recall.
 - On CUDA, `tuning = "auto"` chooses `nlist` and `nprobe` from compiled
   shape/k/target-recall policies for Euclidean, cosine, and correlation IVF.
@@ -339,7 +339,7 @@ should be measured for new datasets when it is used for scientific conclusions.
   `faissR_IVF_TUNING_CUDA_cosine_20260702_192200` after row normalization;
   correlation rows come from
   `faissR_IVF_TUNING_CUDA_correlation_20260703_133655` after row centering and
-  policy separates compact high-dimensional data, medium
+  normalization. The policy separates compact high-dimensional data, medium
   image-like data, large low-dimensional flow-like data, and large
   high-dimensional ImageNet-like data. Use `target_recall = 0.9`, `0.95`, or
   `0.99` to pick the speed/accuracy tier; partial shape rows report
@@ -347,14 +347,16 @@ should be measured for new datasets when it is used for scientific conclusions.
 - Manual CUDA IVF overrides are available through `options(faissR.cuda_ivf_nlist
   = ..., faissR.cuda_ivf_nprobe = ...)`, with provider-specific aliases
   `cuvs_ivf_*` and `faiss_gpu_ivf_*`.
-  search and returns `1 - similarity`.
+- `metric = "cosine"` uses row normalization followed by L2 search and returns
+  `1 - similarity`.
 - `metric = "correlation"` uses row centering plus L2 normalization followed by
+  L2 search and returns `1 - similarity`.
 
 IVF partitions the vector space into coarse cells and searches a subset of
 cells. It is approximate unless `nprobe` approaches the number of lists. It is
 useful for large datasets where exhaustive search is too expensive.
-The direct diagnostic backend `cuda_cuvs_ivf_flat` uses RAPIDS cuVS IVF-Flat:
-cuVS L2 index.
+The direct diagnostic backend `cuda_cuvs_ivf_flat` uses a RAPIDS cuVS IVF-Flat
+L2 index.
 
 ## `"ivfpq"`
 
@@ -364,24 +366,25 @@ cuVS L2 index.
 - On CUDA, it maps to FAISS GPU IVF-PQ.
 - It compresses vectors using product quantization and searches compressed
   codes.
-- `metric = "cosine"` and `"correlation"` use the same normalized
+- `metric = "cosine"` and `"correlation"` use normalized L2 search after the
+  corresponding row transformation.
 - On CPU, `tuning = "auto"` chooses `nlist`, `nprobe`, `pq_m`, and `pq_nbits`
   from compiled shape/k/target-recall tables for Euclidean, cosine,
-  or `best_available_partial_shape_datasets_*`; those rows are best measured
+  and correlation. Rows labelled `best_available_partial_shape_datasets_*`
+  are best measured
   compression settings, not guarantees that the target recall was reached.
-  `nlist`, `nprobe`, `pq_m`, and `pq_nbits` from FAISS GPU IVFPQ shape/k/target
+- On CUDA, `tuning = "auto"` selects `nlist`, `nprobe`, `pq_m`, and `pq_nbits`
+  from FAISS GPU IVFPQ shape/k/target
   tables. The correlation table is summarized in
   `benchmark_scripts/cuda_ivfpq_correlation_shape_tuning_defaults_from_uploaded_results.csv`
   from `faissR_IVFPQ_TUNING_CUDA_correlation_20260703_095008`; many rows are
   best-available or below-target and report `tuning_benchmark_target_met = FALSE`.
-  seeded from the measured CUDA Euclidean IVFPQ table until
-  report `tuning_benchmark_target_met = FALSE`.
 
 IVFPQ is a memory-pressure method. It can be fast and memory-efficient, but
 recall can drop substantially. Treat it as explicit opt-in when memory matters,
 not as the default accuracy-first method. The direct diagnostic backend
-`cuda_cuvs_ivfpq` applies the same transformed cosine/correlation and
-L2/PQ index.
+`cuda_cuvs_ivfpq` applies the same transformed cosine/correlation convention
+to a cuVS L2/PQ index.
 
 CPU IVFPQ requires at least 624 training rows. This deterministic guard avoids
 FAISS training runs where even the smallest supported 4-bit product quantizer
@@ -435,6 +438,7 @@ for reranking [6,34].
   and `metric = "correlation"`. Cosine normalizes rows, searches the normalized
   vectors with FastScan L2, and converts squared normalized Euclidean distances
   to `1 - cosine`; correlation subtracts each row mean before the same
+  normalization, search, and distance conversion.
 - The CUDA public route supports `metric = "euclidean"`, `metric = "cosine"`,
   and `metric = "correlation"`. Cosine normalizes rows; correlation subtracts
   each row mean and then normalizes rows. These transformed metrics search with
@@ -544,20 +548,21 @@ algorithm derived from selected NSG/MRNG construction and pruning ideas [21].
 - Candidate pruning runs in compiled C++ over a compact column-major candidate
   matrix, then the same matrix is passed directly to CPU or CUDA candidate
   refinement.
-- CPU and CUDA native NSG routes support Euclidean, cosine, correlation, and
-  convention.
+- CPU and CUDA native NSG routes support Euclidean, cosine, and correlation.
+  Cosine uses normalized Euclidean refinement; correlation centers and then
+  normalizes rows before refinement.
 - `tuning = "auto"` chooses backend-specific candidate-graph defaults from
   `nrow(data)`, `ncol(data)`, `k`, and `metric`. CPU native NSG reads
   `options(faissR.cpu_nsg_r = ...)` and `options(faissR.cpu_nsg_graph_k = ...)`
   and allows up to 512 candidate columns; CUDA native NSG reads the matching
   `faissR.cuda_nsg_*` options and caps candidate columns at 255 for the current
   CUDA row-candidate kernel.
-  uses compiled HPC-derived tables keyed by dataset shape, `k`, and
+  Both backends use compiled HPC-derived tables keyed by dataset shape, `k`, and
   `target_recall`. The tables select `r` and `graph_k`; rows that were only
   best-available rather than verified target hits record
   `tuning_benchmark_target_met = FALSE`. Cosine uses normalized Euclidean
   refinement and correlation uses row-centered, normalized Euclidean
-  metrics select parameters from metric-specific sweeps.
+  refinement; each metric selects parameters from its own table.
 - With `metric = "euclidean"` or `"cosine"`, CUDA `tuning = "auto"` uses
   measured CUDA shape/k/target tables for the same `r` and `graph_k`
   parameters. CUDA cosine row-normalizes the float32 input, runs native CUDA
@@ -578,16 +583,14 @@ CPU graph-refinement algorithm or direct cuVS NN-descent on CUDA [4].
 - On CPU, faissR uses its native CPU NNDescent implementation by default.
 - On CUDA, faissR maps to direct RAPIDS cuVS NN-descent for Euclidean/L2
   plus normalized cosine/correlation when available [3].
-  self-KNN by ranking larger dot products through faissR's shifted
-  smaller-is-better distance convention.
 - Native CPU NNDescent seeds neighbours with random-projection windows plus
   deterministic row fill, stores the working graph in flat row-major buffers,
   and stores reverse neighbours in fixed-width C++ arrays during candidate
   expansion.
-- With `tuning = "auto"`, CPU Euclidean, cosine, correlation, and raw
+- With `tuning = "auto"`, CPU Euclidean, cosine, and correlation use
   HPC-derived tables keyed by dataset shape, `k`, and `target_recall`. The
   tables select `pool_size`, `n_iters`, `max_candidates`, and
-  `n_random_projections` from the CPU12 Euclidean, cosine, correlation, and
+  `n_random_projections` from the corresponding CPU12 metric sweep. Rows that
   were only best-available rather than verified target hits record
   `tuning_benchmark_target_met = FALSE`.
 - CPU and CUDA NNDescent support cosine/correlation by row normalization
@@ -601,7 +604,6 @@ CPU graph-refinement algorithm or direct cuVS NN-descent on CUDA [4].
   sweep; those rows record `tuning_benchmark_target_met = FALSE` until the
   metric-specific HPC sweeps are rerun. The correlation seed table is
   `benchmark_scripts/cuda_nndescent_correlation_shape_tuning_defaults_from_seeded_euclidean_results.csv`.
-  provide a separate native CUDA NN-descent route.
 - FAISS NNDescent is disabled by default because linked FAISS builds could
   abort the R process during graph construction. The explicit FAISS backend is
   available only behind `options(faissR.enable_faiss_nndescent = TRUE)` for
