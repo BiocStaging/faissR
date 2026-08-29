@@ -1522,6 +1522,9 @@ resume_result_lookup <- local({
         if (!dir.exists(worker_dir)) return(character())
         list.files(worker_dir, pattern = "[.]csv$", full.names = TRUE)
       }), use.names = FALSE)
+      mtime <- suppressWarnings(as.numeric(file.info(files)$mtime))
+      mtime[!is.finite(mtime)] <- 0
+      files <- files[order(-mtime, files)]
       keys <- sub("^[0-9]+_", "", basename(files))
       cache <<- files[!duplicated(keys)]
       names(cache) <<- keys[!duplicated(keys)]

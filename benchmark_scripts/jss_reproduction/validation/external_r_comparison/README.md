@@ -28,7 +28,7 @@ achieve mean recall@`k` of at least 0.99 in every validation replicate. Observed
 recall for both routes remains in the paired output; speed is never interpreted
 as an algorithm comparison when this equivalence criterion is not met.
 
-After synchronizing this directory to `/scratch/firenze/NN/benchmark_scripts/jss_reproduction/reviewer_response/external_r_comparison`, submit from an HPC compute or interactive node:
+After synchronizing this directory to `/scratch/firenze/NN/benchmark_scripts/jss_reproduction/validation/external_r_comparison`, submit from an HPC compute or interactive node:
 
 ```bash
 cd /scratch/firenze/NN
@@ -39,7 +39,7 @@ export FAISSR_PACKAGE_COMMIT=0903532baf02b340a90921db18edc4deae5ea462
 export SINGULARITYENV_FAISSR_IMAGE_COMMIT="$FAISSR_PACKAGE_COMMIT"
 export APPTAINERENV_FAISSR_IMAGE_COMMIT="$FAISSR_PACKAGE_COMMIT"
 
-bash benchmark_scripts/jss_reproduction/reviewer_response/external_r_comparison/submit_external_r_comparison.sh
+bash benchmark_scripts/jss_reproduction/validation/external_r_comparison/submit_external_r_comparison.sh
 ```
 
 The submission helper launches 12 independent method-metric jobs and one `afterany` audit. `afterany` is intentional: the audit must report missing and failed jobs instead of disappearing behind an unsatisfied dependency.

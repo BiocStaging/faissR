@@ -16,7 +16,7 @@ set -euo pipefail
 BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
 SUITE_ROOT="${SUITE_ROOT:-${BASE_DIR}/benchmark_scripts/jss_reproduction}"
 SINGULARITY_IMAGE="${SINGULARITY_IMAGE:-${BASE_DIR}/singularity/fastembedr_cuda_faissR_0.99.21.sif}"
-export EXPECTED_FAISSR_VERSION='0.99.22'
+export EXPECTED_FAISSR_VERSION="${EXPECTED_FAISSR_VERSION:-0.99.21}"
 : "${FAISSR_PACKAGE_COMMIT:?Export the 40-character faissR commit embedded in the frozen image}"
 if [[ ! "${FAISSR_PACKAGE_COMMIT}" =~ ^[[:xdigit:]]{40}$ ]]; then
   echo "FAISSR_PACKAGE_COMMIT must be a 40-character hexadecimal Git commit" >&2
@@ -38,16 +38,19 @@ fi
 mkdir -p "${BASE_DIR}/benchmark_logs"
 
 BACKEND='cuda'
-ROOT="${BASE_DIR}/faissR_JSS_REPRODUCTION/final_campaign/held_out/${BACKEND}"
-OUT="${BASE_DIR}/faissR_JSS_REPRODUCTION/final_campaign/analysis/held_out_${BACKEND}_${SLURM_JOB_ID:-manual}_$(date +%Y%m%d_%H%M%S)"
+CAMPAIGN_RESULTS_ROOT="${CAMPAIGN_RESULTS_ROOT:-${BASE_DIR}/faissR_JMLR_MLOSS/final_campaign}"
+ROOT="${CAMPAIGN_RESULTS_ROOT}/held_out/${BACKEND}"
+OUT="${CAMPAIGN_RESULTS_ROOT}/analysis/held_out_${BACKEND}_${SLURM_JOB_ID:-manual}_$(date +%Y%m%d_%H%M%S)"
 AGG="${OUT}/real"
 mkdir -p "${AGG}"
 run_r() { singularity exec --nv --bind "${BASE_DIR}:${BASE_DIR}" "${SINGULARITY_IMAGE}" Rscript "$@"; }
 run_r "${SUITE_ROOT}/analysis/aggregate_publication_results.R" \
   --results_root="${ROOT}" --out_dir="${AGG}" --backend="${BACKEND}" \
+  --include_worker_results=TRUE \
   --datasets='COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41' \
   --target_recalls=0.9,0.95,0.99 --expected_seeds=2 --expected_repeats=3
 run_r "${SUITE_ROOT}/analysis/analyze_leave_one_dataset_out.R" \
-  --analysis_dir="${AGG}" --out_dir="${OUT}/leave_one_dataset_out"
+  --analysis_dir="${AGG}" --out_dir="${OUT}/leave_one_dataset_out" \
+  --backend="${BACKEND}" --metrics='euclidean,cosine,correlation'
 run_r "${SUITE_ROOT}/analysis/build_publication_figures.R" \
   --analysis_dir="${AGG}" --out_dir="${OUT}/figures" --backend="${BACKEND}"

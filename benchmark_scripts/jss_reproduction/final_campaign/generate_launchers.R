@@ -549,8 +549,9 @@ write_heldout_analysis <- function(backend) {
       ),
       common_environment,
       sprintf('BACKEND=%s', shell_quote(backend)),
-      'ROOT="${BASE_DIR}/faissR_JSS_REPRODUCTION/final_campaign/held_out/${BACKEND}"',
-      'OUT="${BASE_DIR}/faissR_JSS_REPRODUCTION/final_campaign/analysis/held_out_${BACKEND}_${SLURM_JOB_ID:-manual}_$(date +%Y%m%d_%H%M%S)"',
+      'CAMPAIGN_RESULTS_ROOT="${CAMPAIGN_RESULTS_ROOT:-${BASE_DIR}/faissR_JMLR_MLOSS/final_campaign}"',
+      'ROOT="${CAMPAIGN_RESULTS_ROOT}/held_out/${BACKEND}"',
+      'OUT="${CAMPAIGN_RESULTS_ROOT}/analysis/held_out_${BACKEND}_${SLURM_JOB_ID:-manual}_$(date +%Y%m%d_%H%M%S)"',
       'AGG="${OUT}/real"',
       'mkdir -p "${AGG}"',
       sprintf(
@@ -559,10 +560,12 @@ write_heldout_analysis <- function(backend) {
       ),
       'run_r "${SUITE_ROOT}/analysis/aggregate_publication_results.R" \\',
       '  --results_root="${ROOT}" --out_dir="${AGG}" --backend="${BACKEND}" \\',
+      '  --include_worker_results=TRUE \\',
       sprintf('  --datasets=%s \\', shell_quote(real_datasets)),
       '  --target_recalls=0.9,0.95,0.99 --expected_seeds=2 --expected_repeats=3',
       'run_r "${SUITE_ROOT}/analysis/analyze_leave_one_dataset_out.R" \\',
-      '  --analysis_dir="${AGG}" --out_dir="${OUT}/leave_one_dataset_out"',
+      '  --analysis_dir="${AGG}" --out_dir="${OUT}/leave_one_dataset_out" \\',
+      '  --backend="${BACKEND}" --metrics=euclidean,cosine,correlation',
       'run_r "${SUITE_ROOT}/analysis/build_publication_figures.R" \\',
       '  --analysis_dir="${AGG}" --out_dir="${OUT}/figures" --backend="${BACKEND}"'
     )
@@ -599,22 +602,22 @@ write_delegate <- function(backend, filename, job_name, log_stem, target, root_k
 write_delegate(
   "cpu", "run_metric_conformance_cpu12.sh", "frJ_metric_final_cpu",
   "frJ_metric_final_cpu12",
-  "reviewer_response/run_metric_conformance_cpu12.sh", "metric_conformance"
+  "validation/run_metric_conformance_cpu12.sh", "metric_conformance"
 )
 write_delegate(
   "cuda", "run_metric_conformance_cuda.sh", "frJ_metric_final_gpu",
   "frJ_metric_final_cuda",
-  "reviewer_response/run_metric_conformance_cuda.sh", "metric_conformance"
+  "validation/run_metric_conformance_cuda.sh", "metric_conformance"
 )
 write_delegate(
   "cpu", "run_freeze_audit_cpu12.sh", "frJ_freeze_final_cpu",
   "frJ_freeze_final_cpu12",
-  "reviewer_response/run_freeze_audit_cpu12.sh", "freeze"
+  "validation/run_freeze_audit_cpu12.sh", "freeze"
 )
 write_delegate(
   "cuda", "run_freeze_audit_cuda.sh", "frJ_freeze_final_gpu",
   "frJ_freeze_final_cuda",
-  "reviewer_response/run_freeze_audit_cuda.sh", "freeze"
+  "validation/run_freeze_audit_cuda.sh", "freeze"
 )
 
 write_package_qa <- function(backend) {

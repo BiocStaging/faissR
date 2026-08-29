@@ -10,4 +10,4 @@
 #SBATCH --error=/scratch/firenze/NN/benchmark_logs/frJ_x_fr_nd_r_%j.err
 set -euo pipefail
 export METHOD_ID=faissR_cpu_nndescent METHOD_LABEL=faissR_nndescent_correlation METHOD_METRIC=correlation
-exec bash benchmark_scripts/jss_reproduction/reviewer_response/external_r_comparison/run_external_r_comparison_common.sh
+exec bash benchmark_scripts/jss_reproduction/validation/external_r_comparison/run_external_r_comparison_common.sh

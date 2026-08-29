@@ -20,7 +20,7 @@ Users must accept any source terms themselves.
 The provenance CSV is the normative record:
 
 ```text
-benchmark_scripts/jss_reproduction/reviewer_response/dataset_provenance_jss_template.csv
+benchmark_scripts/jss_reproduction/validation/dataset_provenance_jss_template.csv
 ```
 
 Before a frozen run, copy it to `Data/dataset_provenance_jss.csv`, record the

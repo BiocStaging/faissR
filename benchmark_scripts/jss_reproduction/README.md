@@ -32,8 +32,8 @@ Only the job name and log filename vary by method.
   R-package method.
 - `cuda/`: one held-out publication benchmark file per CUDA method.
 - `common/`: shared R drivers required by the individual Slurm files.
-- `reviewer_response/`: metric conformance, selector sensitivity, publication
-  figures, provenance, and immutable freeze jobs required by the JSS review.
+- `validation/`: metric conformance, selector sensitivity, controlled
+  comparisons, publication figures, provenance, and immutable freeze jobs.
 - `final_campaign/`: the complete independent-job campaign and its precise
   run order; use this directory for the new publication rerun.
 
@@ -120,7 +120,7 @@ construction, search, and result creation and is not a kernel-only algorithm
 benchmark.
 
 After the held-out runs and ablations are complete, follow
-`reviewer_response/README.md` to run the three-metric conformance suite,
+`validation/README.md` to run the three-metric conformance suite,
 automatic-selector/oracle comparison, leave-one-dataset-out sensitivity,
 publication figures, and strict archive freeze audit.
 

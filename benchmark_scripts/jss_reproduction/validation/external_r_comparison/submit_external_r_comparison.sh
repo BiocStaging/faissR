@@ -3,7 +3,7 @@
 set -euo pipefail
 
 BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
-HERE="${BASE_DIR}/benchmark_scripts/jss_reproduction/reviewer_response/external_r_comparison"
+HERE="${BASE_DIR}/benchmark_scripts/jss_reproduction/validation/external_r_comparison"
 : "${FAISSR_PACKAGE_COMMIT:?Export the 40-character commit embedded in the frozen image}"
 : "${SINGULARITY_IMAGE:?Export the frozen Singularity image path}"
 

@@ -2,8 +2,8 @@
 
 parse_args <- function(x) {
   out <- list(
-    results_root = "/scratch/firenze/NN/faissR_JSS_REPRODUCTION/reviewer_response/external_r_comparison/cpu",
-    out_dir = "/scratch/firenze/NN/faissR_JSS_REPRODUCTION/reviewer_response/external_r_comparison/analysis"
+    results_root = "/scratch/firenze/NN/faissR_JSS_REPRODUCTION/validation/external_r_comparison/cpu",
+    out_dir = "/scratch/firenze/NN/faissR_JSS_REPRODUCTION/validation/external_r_comparison/analysis"
   )
   for (arg in x) {
     if (startsWith(arg, "--results_root=")) out$results_root <- sub("^--results_root=", "", arg)

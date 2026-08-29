@@ -46,6 +46,27 @@ latest_method_runs <- function(x) {
   x[sort(selected), , drop = FALSE]
 }
 
+consolidate_worker_rows <- function(x) {
+  if (!"dataset_md5" %in% names(x)) x$dataset_md5 <- NA_character_
+  keys <- c(
+    "dataset", "dataset_md5", "dataset_suite", "backend", "method_id",
+    "metric", "k", "target_recall", "validation_seed", "repeat_id"
+  )
+  for (name in setdiff(keys, names(x))) x[[name]] <- NA
+  key_data <- lapply(x[keys], function(value) {
+    value <- as.character(value)
+    value[is.na(value)] <- "<NA>"
+    value
+  })
+  key <- interaction(key_data, drop = TRUE, lex.order = TRUE)
+  selected <- vapply(split(seq_len(nrow(x)), key), function(ii) {
+    mtime <- suppressWarnings(as.numeric(x$source_mtime[ii]))
+    mtime[!is.finite(mtime)] <- 0
+    ii[order(-mtime, x$source_file[ii], na.last = TRUE)][[1L]]
+  }, integer(1L), USE.NAMES = FALSE)
+  x[sort(selected), , drop = FALSE]
+}
+
 expand_external_targets <- function(x, targets) {
   external <- x$implementation != "faissR" | is.na(x$target_recall)
   fixed <- x[!external, , drop = FALSE]
@@ -722,15 +743,32 @@ main <- function() {
   metrics <- split_values(args$metrics, "euclidean,cosine,correlation")
   metrics <- metrics[nzchar(metrics)]
 
-  files <- list.files(root, pattern = "^jmlr_tuned_benchmark_results[.]csv$", recursive = TRUE, full.names = TRUE)
+  include_worker_results <- identical(
+    tolower(args$include_worker_results %||% "false"), "true"
+  )
+  files <- list.files(
+    root, pattern = "^jmlr_tuned_benchmark_results[.]csv$",
+    recursive = TRUE, full.names = TRUE
+  )
   files <- files[!grepl("/calibration/|/analysis/", files)]
+  if (include_worker_results) {
+    workers <- list.files(
+      root, pattern = "[.]csv$", recursive = TRUE, full.names = TRUE
+    )
+    workers <- workers[grepl("/worker_results/", workers)]
+    files <- unique(c(files, workers))
+  }
   if (!length(files)) stop("No held-out publication result files were found under `results_root`.", call. = FALSE)
   combined <- read_union(files)
   combined <- combined[combined$metric %in% metrics, , drop = FALSE]
   if (backend != "all") combined <- combined[combined$backend == backend, , drop = FALSE]
   if (length(datasets)) combined <- combined[combined$dataset %in% datasets, , drop = FALSE]
   if (!nrow(combined)) stop("No result rows match the requested backend.", call. = FALSE)
-  combined <- latest_method_runs(combined)
+  combined <- if (include_worker_results) {
+    consolidate_worker_rows(combined)
+  } else {
+    latest_method_runs(combined)
+  }
   combined <- expand_external_targets(combined, targets)
   combined <- combined[order(combined$dataset, combined$backend, combined$metric, combined$k,
                              combined$target_recall, combined$method_id,

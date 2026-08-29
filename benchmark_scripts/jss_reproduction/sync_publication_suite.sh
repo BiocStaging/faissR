@@ -28,8 +28,8 @@ rsync -a "${SCRIPT_DIR}/" "${TARGET_SUITE}/"
 
 source_count="$(find "${SOURCE_CAMPAIGN}" -type f -name '*.sh' | wc -l | tr -d ' ')"
 target_count="$(find "${TARGET_CAMPAIGN}" -type f -name '*.sh' | wc -l | tr -d ' ')"
-if [[ "${source_count}" != "277" || "${target_count}" != "277" ]]; then
-  echo "Expected 277 launchers; source=${source_count}, target=${target_count}." >&2
+if [[ "${source_count}" != "215" || "${target_count}" != "215" ]]; then
+  echo "Expected 215 launchers; source=${source_count}, target=${target_count}." >&2
   echo "The target may contain obsolete extra files; inspect it before submission." >&2
   exit 2
 fi

@@ -1,8 +1,8 @@
-# JSS Reviewer-Response HPC Runs
+# JSS Publication Validation Runs
 
-These jobs close the experimental gaps identified in the independent JSS
-review. They extend the existing held-out suite; they do not replace the
-one-method CPU and CUDA jobs in `../cpu/` and `../cuda/`.
+These jobs provide the validation evidence for the JSS article. They extend
+the held-out suite; they do not replace the one-method CPU and CUDA jobs in
+`../cpu/` and `../cuda/`.
 
 All launchers preserve the established HPC headers. CPU jobs use account
 `immunology`, partition `ada`, one node, 12 tasks, and 48 hours. CUDA jobs use
@@ -36,8 +36,8 @@ combinations, and timeouts remain in the evidence archive.
 ### 2. Metric contracts
 
 ```bash
-sbatch benchmark_scripts/jss_reproduction/reviewer_response/run_metric_conformance_cpu12.sh
-sbatch benchmark_scripts/jss_reproduction/reviewer_response/run_metric_conformance_cuda.sh
+sbatch benchmark_scripts/jss_reproduction/validation/run_metric_conformance_cpu12.sh
+sbatch benchmark_scripts/jss_reproduction/validation/run_metric_conformance_cuda.sh
 ```
 
 The jobs test all public NN method families against direct mathematical
@@ -70,8 +70,8 @@ are treated as the completion barrier; explicit result copies are timed in
 Run these only after all held-out method jobs are complete:
 
 ```bash
-sbatch benchmark_scripts/jss_reproduction/reviewer_response/run_selector_validation_cpu12.sh
-sbatch benchmark_scripts/jss_reproduction/reviewer_response/run_selector_validation_cuda.sh
+sbatch benchmark_scripts/jss_reproduction/validation/run_selector_validation_cpu12.sh
+sbatch benchmark_scripts/jss_reproduction/validation/run_selector_validation_cuda.sh
 ```
 
 Each job rebuilds the robust evidence table, compares the already-frozen
@@ -116,8 +116,8 @@ container and run both audits:
 
 ```bash
 export FAISSR_PACKAGE_COMMIT=<40-character-faissR-git-commit>
-sbatch --export=ALL benchmark_scripts/jss_reproduction/reviewer_response/run_freeze_audit_cpu12.sh
-sbatch --export=ALL benchmark_scripts/jss_reproduction/reviewer_response/run_freeze_audit_cuda.sh
+sbatch --export=ALL benchmark_scripts/jss_reproduction/validation/run_freeze_audit_cpu12.sh
+sbatch --export=ALL benchmark_scripts/jss_reproduction/validation/run_freeze_audit_cuda.sh
 ```
 
 The audit is intentionally strict. It fails when a dataset is missing, a
@@ -125,9 +125,9 @@ result fingerprint does not match the current file, provenance is incomplete,
 or the package commit/container SHA-256 is absent. The output also records
 `sessionInfo()`, faissR backend information, CPU/GPU inventory, and checksums.
 
-## Reviewer requirement map
+## Evidence map
 
-| Reviewer requirement | Evidence-producing code |
+| Scientific question | Evidence-producing code |
 |---|---|
 | Held-out CPU/CUDA methods, metrics, k, recall | `../cpu/`, `../cuda/`, and `../common/benchmark_jmlr_tuned_methods.R` |
 | Paired faissR-auto versus external comparators and empirical oracle | `run_selector_validation_*.sh` and `../analysis/aggregate_publication_results.R` |
@@ -139,11 +139,8 @@ or the package commit/container SHA-256 is absent. The output also records
 
 ## Output root
 
-New reviewer-response outputs are written below:
+New validation outputs are written below:
 
 ```text
-/scratch/firenze/NN/faissR_JSS_REPRODUCTION/reviewer_response/
+/scratch/firenze/NN/faissR_JSS_REPRODUCTION/validation/
 ```
-
-The historical root name is retained so existing results and scripts remain
-compatible. The active manuscript target is JSS.

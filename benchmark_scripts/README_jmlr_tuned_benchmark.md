@@ -64,7 +64,7 @@ Each run creates a timestamped output folder containing:
 - `jmlr_faissr_vs_external_speed.csv`: fastest faissR row versus fastest external-package row where both exist.
 - `jmlr_method_backend_matrix.csv`: tested method matrix.
 - `faissR_backend_info.csv` and `faissR_nn_capabilities_runtime.csv`: runtime capability records.
-- `JMLR_BENCHMARK_README.md`: generated run-level methods and reviewer-response notes.
+- `JMLR_BENCHMARK_README.md`: generated run-level methods and validation notes.
 
 ## Analyses Included For Reviewer Concerns
 

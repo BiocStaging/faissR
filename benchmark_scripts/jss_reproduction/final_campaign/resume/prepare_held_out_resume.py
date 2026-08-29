@@ -35,6 +35,14 @@ def read_first(path):
         return next(csv.DictReader(handle))
 
 
+def successful_result(path):
+    try:
+        row = read_first(path)
+    except (OSError, StopIteration, csv.Error):
+        return False
+    return row.get("status", "").strip().lower() == "success"
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--suite-root", required=True)
@@ -42,7 +50,24 @@ def main():
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--scope", choices=("publication", "all"), default="publication")
     parser.add_argument("--group-datasets", action="store_true")
+    parser.add_argument(
+        "--backends", default="cpu,cuda",
+        help="Comma-separated backend filter (default: cpu,cuda).",
+    )
+    parser.add_argument(
+        "--methods", default="",
+        help="Optional comma-separated method_id filter.",
+    )
     args = parser.parse_args()
+
+    selected_backends = {
+        item.strip() for item in args.backends.split(",") if item.strip()
+    }
+    if not selected_backends or not selected_backends <= {"cpu", "cuda"}:
+        parser.error("--backends must contain cpu, cuda, or both")
+    selected_methods = {
+        item.strip() for item in args.methods.split(",") if item.strip()
+    }
 
     suite_root = Path(args.suite_root).resolve()
     results_root = Path(args.results_root).resolve()
@@ -50,7 +75,8 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     sources = defaultdict(list)
-    observed = defaultdict(set)
+    attempted = defaultdict(set)
+    successful = defaultdict(set)
     for config_path in results_root.glob("**/jmlr_benchmark_config.csv"):
         config = read_first(config_path)
         worker_dir = config_path.parent / "worker_results"
@@ -63,7 +89,9 @@ def main():
                 key = (config.get("backend", ""), method, metric)
                 sources[key].append(str(config_path.parent))
                 for result in worker_dir.glob("*.csv"):
-                    observed[key].add(semantic_key(result.name))
+                    attempted[key].add(semantic_key(result.name))
+                    if successful_result(result):
+                        successful[key].add(semantic_key(result.name))
 
     tasks = {"cpu": [], "cuda": []}
     summary = []
@@ -77,6 +105,10 @@ def main():
         include_external = exported(text, "INCLUDE_EXTERNAL") == "TRUE"
         if backend not in tasks or not method:
             continue
+        if backend not in selected_backends:
+            continue
+        if selected_methods and method not in selected_methods:
+            continue
         if args.scope == "publication" and method not in PUBLICATION_METHODS[backend]:
             continue
         expected_per_dataset = 24 if include_external else 72
@@ -87,15 +119,18 @@ def main():
             metric_rows = []
             for dataset in filter(None, datasets):
                 marker = f"{dataset}__{method}__{metric}__"
-                completed = sum(marker in item for item in observed[key])
-                missing = max(0, expected_per_dataset - completed)
+                attempted_count = sum(marker in item for item in attempted[key])
+                successful_count = sum(marker in item for item in successful[key])
+                missing = max(0, expected_per_dataset - attempted_count)
                 summary.append({
                     "backend": backend,
                     "method": method,
                     "metric": metric,
                     "dataset": dataset,
                     "expected": expected_per_dataset,
-                    "completed": completed,
+                    "attempted": attempted_count,
+                    "successful": successful_count,
+                    "failed": max(0, attempted_count - successful_count),
                     "missing": missing,
                     "launcher": str(launcher),
                 })

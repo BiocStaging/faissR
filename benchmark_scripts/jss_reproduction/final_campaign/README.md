@@ -67,6 +67,21 @@ It never advances automatically to the next phase.
 
 Held-out validation must never be reused to alter tuning policies.
 
+## Focused CPU automatic-selector validation
+
+If the main held-out campaign contains partial CPU `method = "auto"` workers,
+run `resume/submit_cpu_auto_validation.sh`. Its preparation audit distinguishes
+attempted, successful, failed, and absent rows. Timeout and failure records
+remain prespecified validation outcomes and are not retried until successful.
+The launcher imports the latest recorded outcome for each existing replicate
+and submits only genuinely absent CPU-auto dataset/metric shards.
+
+After those jobs finish, submit
+`analysis/run_held_out_analysis_cpu12.sh`. The analysis consolidates
+worker-level retries by validation cell, retains the latest failure when no
+success exists, and generates both held-out and CPU leave-one-dataset-out
+selector reports.
+
 ## Typical submission
 
 Before submission, a local checkout can synchronize and verify the complete
@@ -76,7 +91,7 @@ suite in an HPC mirror without deleting target files:
 benchmark_scripts/jss_reproduction/sync_publication_suite.sh /path/to/HPC-mirror-root
 ```
 
-The utility requires exactly 277 target launchers, verifies the submitter
+The utility requires exactly 215 target launchers, verifies the submitter
 checksum, and parses every copied shell file before reporting success.
 
 ```bash

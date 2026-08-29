@@ -48,7 +48,7 @@ validate_file <- function(path) {
     "^#SBATCH --output=",
     "^#SBATCH --error=",
     "^set -euo pipefail$",
-    "singularity|run_one_|reviewer_response/"
+    "singularity|run_one_|validation/"
   )
   absent <- required[
     !vapply(required, function(pattern) any(grepl(pattern, lines)), logical(1L))

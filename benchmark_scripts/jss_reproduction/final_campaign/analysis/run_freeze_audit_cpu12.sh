@@ -39,4 +39,4 @@ mkdir -p "${BASE_DIR}/benchmark_logs"
 export OUT_DIR="${BASE_DIR}/faissR_JSS_REPRODUCTION/final_campaign/analysis/freeze/cpu_${SLURM_JOB_ID:-manual}_$(date +%Y%m%d_%H%M%S)"
 export RESULTS_ROOT="${BASE_DIR}/faissR_JSS_REPRODUCTION/final_campaign/held_out/cpu"
 export SINGULARITY_IMAGE
-exec bash "${SUITE_ROOT}/reviewer_response/run_freeze_audit_cpu12.sh"
+exec bash "${SUITE_ROOT}/validation/run_freeze_audit_cpu12.sh"

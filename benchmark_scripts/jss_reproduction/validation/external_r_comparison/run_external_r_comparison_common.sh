@@ -58,6 +58,6 @@ export INCLUDE_GPU_RESIDENT=FALSE
 export RUN_REAL=TRUE
 export RUN_SPATIAL=FALSE
 export SINGULARITY_GPU_FLAG=''
-export OUT_DIR="${OUT_DIR:-${BASE_DIR}/faissR_JSS_REPRODUCTION/reviewer_response/external_r_comparison/cpu/${METHOD_LABEL}/${SLURM_JOB_ID:-manual}_$(date -u +%Y%m%d_%H%M%S)}"
+export OUT_DIR="${OUT_DIR:-${BASE_DIR}/faissR_JSS_REPRODUCTION/validation/external_r_comparison/cpu/${METHOD_LABEL}/${SLURM_JOB_ID:-manual}_$(date -u +%Y%m%d_%H%M%S)}"
 
 exec bash "${SUITE_ROOT}/common/run_one_method.sh"

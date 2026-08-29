@@ -20,7 +20,7 @@ MANIFEST="${MANIFEST:-${BASE_DIR}/Data/float32_dataset_manifest_jmlr.csv}"
 PROVENANCE="${PROVENANCE:-${BASE_DIR}/Data/dataset_provenance_jss.csv}"
 RESULTS_ROOT="${RESULTS_ROOT:-${BASE_DIR}/faissR_JSS_REPRODUCTION/cuda}"
 STAMP="${SLURM_JOB_ID:-manual}_$(date +%Y%m%d_%H%M%S)"
-OUT_DIR="${OUT_DIR:-${BASE_DIR}/faissR_JSS_REPRODUCTION/reviewer_response/freeze/cuda_${STAMP}}"
+OUT_DIR="${OUT_DIR:-${BASE_DIR}/faissR_JSS_REPRODUCTION/validation/freeze/cuda_${STAMP}}"
 DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41}"
 
 mkdir -p "${OUT_DIR}" "${BASE_DIR}/benchmark_logs"

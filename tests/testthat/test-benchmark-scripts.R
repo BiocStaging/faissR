@@ -25,6 +25,29 @@ source_benchmark_helpers <- function(path, stop_marker) {
   env
 }
 
+test_that("controlled paired CPU HNSW benchmark preserves experimental pairing", {
+  root <- test_path(
+    "..", "..", "benchmark_scripts", "jss_reproduction",
+    "validation", "paired_cpu_comparison"
+  )
+  worker <- paste(readLines(file.path(root, "benchmark_paired_hnsw.R")), collapse = "\n")
+  launcher <- paste(readLines(file.path(root, "run_paired_hnsw_cpu12.sh")), collapse = "\n")
+  audit <- paste(readLines(file.path(root, "audit_paired_hnsw.R")), collapse = "\n")
+
+  expect_match(launcher, "#SBATCH --nodes=1", fixed = TRUE)
+  expect_match(launcher, "#SBATCH --ntasks=12", fixed = TRUE)
+  expect_match(launcher, "#SBATCH --time=48:00:00", fixed = TRUE)
+  expect_match(launcher, "#SBATCH --array=1-72%12", fixed = TRUE)
+  expect_match(worker, "random_first_route_then_alternating_by_repeat", fixed = TRUE)
+  expect_match(worker, "cold_call_sec", fixed = TRUE)
+  expect_match(worker, "fitted_build_sec", fixed = TRUE)
+  expect_match(worker, "fitted_query_sec", fixed = TRUE)
+  expect_match(worker, "isolated route worker", fixed = TRUE)
+  expect_match(audit, "cold_call_sec_comparator / paired$cold_call_sec_faissR", fixed = TRUE)
+  expect_match(audit, "same_allocation", fixed = TRUE)
+  expect_match(audit, "same_node", fixed = TRUE)
+})
+
 
 test_that("NN metric benchmark isolates high-work CPU native timeout risks", {
   env <- source_benchmark_helpers(
@@ -2739,8 +2762,8 @@ test_that("publication-suite sync utility is portable and non-destructive", {
   expect_match(text, "rsync -a", fixed = TRUE)
   expect_false(grepl("--delete", text, fixed = TRUE))
   expect_false(grepl("/Users/stefano", text, fixed = TRUE))
-  expect_match(text, "source_count.*277", perl = TRUE)
-  expect_match(text, "target_count.*277", perl = TRUE)
+  expect_match(text, "source_count.*215", perl = TRUE)
+  expect_match(text, "target_count.*215", perl = TRUE)
   expect_match(text, "submit_campaign.R", fixed = TRUE)
 })
 
@@ -2886,7 +2909,7 @@ test_that("publication provenance has resolved redistribution decisions", {
   }
 
   path <- file.path(
-    root, "reviewer_response", "dataset_provenance_jss_template.csv"
+    root, "validation", "dataset_provenance_jss_template.csv"
   )
   provenance <- read.csv(path, stringsAsFactors = FALSE, check.names = FALSE)
 

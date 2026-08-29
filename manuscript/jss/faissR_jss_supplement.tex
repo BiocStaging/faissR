@@ -275,37 +275,24 @@ CPU selector validation.
 The complete held-out CUDA set included automatic selection, explicit exact
 Flat, explicit brute force, and CAGRA for all nine datasets and three metrics.
 Each route contributed 1,944 successful rows. The complete CPU faissR HNSW set
-contained 1,944 successful rows. The paired external HNSW comparison covered
-Euclidean and cosine distance on seven datasets; FR-FCM-ZYRM and ImageNet
-features exceeded the comparator's time limit and were excluded from paired
-ratios, with the timeouts retained in the archive.
+contained 1,944 successful rows. The separate-job external HNSW archive covered
+Euclidean and cosine distance on seven datasets. It is retained for execution
+accounting but is not used for primary CPU speed ratios because routes were not
+coexecuted on the same node.
 
-For timing comparison, rows were matched by dataset, metric, $k$, target, seed,
-and repeat whenever both routes completed. For each matched cell, the ratio was
-$T_{\mathrm{second\ route}}/T_{\mathrm{first\ route}}$; values above one favor
-the first route named in the comparison. Ratios were first summarized within
-dataset. The reported median, interquartile range, and range then use the
-dataset-level summaries as observations. ``Paired'' in the result files means
-analytically matched cells, not same-process or same-allocation coexecution.
-
-Each method used a separate one-method Slurm job, and therefore matched routes
-were not guaranteed to run on the same node. Method order was deterministic
-and was not randomized. Each timed call ran in a fresh proglang{R} worker.
-Package loading, dataset loading, and exact-reference retrieval preceded the
-timer; \code{gc()} was called immediately before timing. No untimed search
-warm-up was performed and operating-system caches were not flushed. The timed
-scope included representation conversion, index construction, search, and
-result construction; CUDA completion was synchronized before return. For the
-CPU external comparison,
-\pkg{faissR} HNSW used the 0.99 operating point and was paired with the
-comparator's prespecified configuration (\code{nlinks = 16},
-\code{ef.construction = 200}, and \code{ef.search = max(50, 3 * k)}) at
-matching dataset, metric, $k$, seed, and repeat. These are end-to-end
-public-interface times, including
-representation conversion, index construction, search, and output creation.
-This unrestricted comparison is labelled a prespecified-interface comparison. A
-second summary retains only dataset--metric--$k$ cells in which both routes had
-mean recall at least 0.99 in every validation replicate.
+The controlled CPU HNSW experiment fixes dataset, $k$, and comparator within a
+single Slurm array task. \pkg{faissR} and either \pkg{BiocNeighbors} or
+\pkg{RcppHNSW} run on the same node and allocation. The initial route is
+randomized reproducibly within each validation seed and alternated over five
+repetitions. Each route repetition runs in an isolated worker after an untimed
+128-row warm-up. Both routes receive the same double matrix. The experiment
+reports end-to-end cold-call time, reusable-index build time, and fitted-index
+query time separately. For every phase, the ratio is
+$T_{\mathrm{comparator}}/T_{\mathrm{faissR}}$; values above one favor
+\pkg{faissR}. The audit retains failures and timeouts and rejects any pair that
+does not verify a common hostname, allocation, and opposing route positions.
+Recall-equivalent summaries require both routes to attain mean recall at least
+0.99 in each included validation replicate.
 
 \section{Result audit}
 
@@ -334,43 +321,9 @@ cells. All IVF-selected cells met the target in every replicate. Dataset-level
 paired speed ratios (first route favored when greater than one) were 0.99 for
 automatic versus explicit exact, 0.87 versus brute force, and 2.23 versus
 CAGRA. In IVF-selected cells the median ratio versus exact was 4.59 across four
-datasets, with a range of 0.14--5.83. CPU \pkg{faissR} HNSW versus
-\pkg{BiocNeighbors} HNSW had a median ratio of 18.45 across seven datasets
-(interquartile range 8.35--28.41). Across 336 paired replicates, mean recall was
-0.9973 for \pkg{faissR} and 0.9984 for \pkg{BiocNeighbors}; their minimum
-replicate recalls were 0.9831 and 0.9868. Both routes met 0.99 in every
-replicate in 48 of 56 dataset--metric--$k$ cells. On that recall-equivalent
-subset, the median dataset-level speed ratio was 21.64 (interquartile range
-8.35--23.87; range 3.82--44.99).
-
-\begin{table}[ht]
-\centering
-\small
-\caption{CPU results by dataset. Target columns cover the 36
-metric--$k$--target cells for \pkg{faissR} HNSW. Matched and recall-equivalent
-(RE) cells cover the eight Euclidean/cosine target-0.99 cells. TO is the number
-of timed-out comparator calls. Ratios are
-$T_{\mathrm{BiocNeighbors}}/T_{\mathrm{faissR}}$; values above one favor
-\pkg{faissR}. Ratio entries are dataset medians of matched replicate ratios. A
-dash denotes no matched result.}
-\label{tab:supp-cpu-dataset}
-\setlength{\tabcolsep}{3.5pt}
-\begin{tabular}{@{}lrrrrrr@{}}
-\toprule
-Dataset & Target met & Matched & RE & TO & All ratio & RE ratio \\
-\midrule
-COIL20 & 36/36 & 8 & 8 & 0 & 44.99 & 44.99 \\
-FashionMNIST & 36/36 & 8 & 7 & 0 & 18.45 & 24.72 \\
-FR-FCM-ZYRM & 29/36 & 0 & 0 & 48 & -- & -- \\
-MNIST & 36/36 & 8 & 8 & 0 & 21.64 & 21.64 \\
-MetRef & 36/36 & 8 & 8 & 0 & 12.76 & 12.76 \\
-USPS & 26/36 & 8 & 1 & 0 & 35.18 & 23.02 \\
-flow18 & 36/36 & 8 & 8 & 0 & 3.95 & 3.95 \\
-ImageNet features & 33/36 & 0 & 0 & 48 & -- & -- \\
-mass41 & 36/36 & 8 & 8 & 0 & 3.82 & 3.82 \\
-\bottomrule
-\end{tabular}
-\end{table}
+datasets, with a range of 0.14--5.83. CPU provider speed ratios are withheld
+until the controlled same-node HNSW audit is complete; the separate-job archive
+is not used to estimate a software speedup.
 
 \begin{table}[ht]
 \centering

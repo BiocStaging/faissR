@@ -478,22 +478,27 @@ across-dataset median and interquartile range were calculated. This preserves
 the dataset as the primary unit and avoids pooling incomparable absolute
 times.
 
-Here ``paired'' means analytically matched cells, not coexecution in one
-process or allocation. Each route ran as a separate one-method Slurm job, so
-same-node execution was not guaranteed and method order was not randomized.
-Every timed call used a fresh proglang{R} worker; package and data loading and
-exact-reference retrieval occurred before timing, followed by \fct{gc()}. No
-untimed search warm-up or operating-system cache flush was performed. Thus the
-comparison estimates cold-call public-API performance under the recorded HPC
-allocation rather than a cache-controlled kernel microbenchmark. GPU kernels
-were synchronized before timing ended. The supplement records the software
-environment and complete aggregation rules.
+The replacement primary CPU provider comparison is prespecified as controlled
+experimental pairs. One Slurm array task fixes the dataset, $k$, and comparator,
+and executes
+\pkg{faissR} and the comparator within the same allocation and on the same
+node. The initially executed route is selected reproducibly at random for each
+validation seed and order alternates over five repetitions. Each route
+repetition uses an isolated proglang{R} worker. Dataset and exact-reference
+loading precede timing, followed by an untimed 128-row API warm-up; the
+\pkg{faissR} fitted-index cache is then cleared. Cold one-shot time,
+reusable-index construction time, and fitted-index query time are recorded
+separately. Both routes receive the same double-precision matrix, while the
+separate representation ablation measures the benefit of direct float32 input.
+The primary audit rejects any pair whose allocation, node, or opposing order
+cannot be verified. GPU kernels are synchronized before timing ends. The
+supplement records the software environment and complete aggregation rules.
 
 \subsection{Computing environment}
 
-CPU jobs requested 12 threads on the UCT ``ada'' partition; the partition is
-heterogeneous, and the absence of same-node route coexecution is a limitation
-of the CPU comparison. CUDA jobs used one NVIDIA L40S (46,068 MiB,
+CPU jobs requested 12 threads on the heterogeneous UCT ``ada'' partition;
+within-cell CPU ratios use only routes coexecuted on the same node. CUDA jobs
+used one NVIDIA L40S (46,068 MiB,
 compute capability 8.9) with driver 595.58.03. Both used \proglang{R} 4.5.3 on
 Debian 13, OpenBLAS 0.3.33, and a frozen Singularity image. The evaluated
 package release and full provider metadata are recorded in the supplement.
@@ -615,21 +620,13 @@ recall or speed guarantee for arbitrary data distributions or hardware.
 
 \subsection{Matched-cell execution time}
 
-Table~\ref{tab:paired-time} reports dataset-level paired ratios. On CPU,
-\pkg{faissR} HNSW at target 0.99 recorded lower elapsed time than the prespecified
-\pkg{BiocNeighbors} HNSW public-interface configuration on each of the seven
-datasets completed by both routes; the median speed ratio was 18.45. Across the
-336 paired replicates,
-mean observed recall was 0.9973 for \pkg{faissR} and 0.9984 for
-\pkg{BiocNeighbors}, with minima of 0.9831 and 0.9868, respectively. Both routes
-reached mean recall at least 0.99 in every replicate in 48 of 56
-dataset--metric--$k$ cells. Restricting timing to those recall-equivalent cells
-gave a median dataset-level ratio of 21.64. The unrestricted row is therefore
-labelled a prespecified-configuration, end-to-end public-API comparison, not an
-algorithm comparison. Supplementary Table~4 shows the full dataset-level
-breakdown. The ratio ranged from 3.82 to 44.99; the external route timed out in
-all 48 requested calls for each of FR-FCM-ZYRM and ImageNet features, and those
-datasets contributed no timing ratio.
+Table~\ref{tab:paired-time} reports dataset-level paired CUDA ratios. CPU HNSW
+provider ratios from separately submitted jobs are excluded because route and
+node effects were not experimentally paired. The controlled same-node CPU
+experiment described above is a required evidence gate: its cold-call,
+reusable-index build, and fitted-query results will be reported only after the
+allocation, order, completeness, and recall-equivalence audit passes. No CPU
+provider speedup is claimed from the analytically matched archive.
 
 On CUDA, automatic selection and explicit exhaustive routes had similar timing
 because 280 of 324 cells resolved to Flat. The selector carried modest dispatch
@@ -647,7 +644,7 @@ four-dataset estimate of performance on a wider population.
 
 \begin{table}[t]
 \centering
-\caption{Matched-cell end-to-end speed ratios, defined as
+\caption{Matched-cell CUDA end-to-end speed ratios, defined as
 $T_{\mathrm{second\ route}}/T_{\mathrm{first\ route}}$. Values greater than one
 favor the first route. Ratios are summarized within dataset and then across
 datasets.}
@@ -656,8 +653,6 @@ datasets.}
 \toprule
 Comparison & Datasets & Median & IQR & Range \\
 \midrule
-CPU HNSW, prespecified public-interface configurations & 7 & 18.45 & 8.35--28.41 & 3.82--44.99 \\
-CPU HNSW, both routes recall $\geq 0.99$ in every replicate & 7 & 21.64 & 8.35--23.87 & 3.82--44.99 \\
 CUDA automatic / explicit exact & 9 & 0.99 & 0.98--1.00 & 0.94--1.01 \\
 CUDA automatic / brute force & 9 & 0.87 & 0.83--1.18 & 0.70--1.90 \\
 CUDA automatic / CAGRA & 9 & 2.23 & 1.00--2.58 & 0.81--10.96 \\
@@ -677,13 +672,14 @@ selection. Neither establishes cross-collection generalization. CPU
 \method{auto} was not independently evaluated, so selector claims are limited
 to CUDA; CPU results concern explicit HNSW. The CPU partition is
 heterogeneous, and the CUDA results describe an NVIDIA L40S rather than all
-accelerators. GPU-resident output reduces transfer only when downstream code
+accelerators. CPU provider speed ratios require completion of the controlled
+same-node experiment and are not inferred from the separate-job archive.
+GPU-resident output reduces transfer only when downstream code
 can consume the opaque device buffers. Finally, the completed external
-comparison is limited to \pkg{BiocNeighbors}; its unrestricted timing row
-compares prespecified public-interface configurations, while a separate row applies the
-replicate-level recall-equivalence criterion. Broader FNN, RcppHNSW, and
-rnndescent comparisons require the prespecified focused experiment before
-numerical claims are added.
+comparison evidence remains incomplete. The controlled HNSW experiment covers
+\pkg{BiocNeighbors} and \pkg{RcppHNSW}; broader FNN and \pkg{rnndescent}
+comparisons require their prespecified focused experiments before numerical
+claims are added.
 
 These limits motivate conservative use: inspect \code{auto\_selection} and
 \code{approximation} metadata, validate recall against an exact subsample when
