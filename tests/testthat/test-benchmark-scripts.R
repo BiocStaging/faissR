@@ -30,6 +30,20 @@ test_that("controlled paired CPU HNSW benchmark preserves experimental pairing",
     "..", "..", "benchmark_scripts", "jss_reproduction",
     "validation", "paired_cpu_comparison"
   )
+  required <- file.path(
+    root,
+    c(
+      "benchmark_paired_hnsw.R",
+      "run_paired_hnsw_cpu12.sh",
+      "audit_paired_hnsw.R"
+    )
+  )
+  if (!all(file.exists(required))) {
+    skip(paste(
+      "Publication scripts are not available in this installed-package",
+      "test context."
+    ))
+  }
   worker <- paste(readLines(file.path(root, "benchmark_paired_hnsw.R")), collapse = "\n")
   launcher <- paste(readLines(file.path(root, "run_paired_hnsw_cpu12.sh")), collapse = "\n")
   audit <- paste(readLines(file.path(root, "audit_paired_hnsw.R")), collapse = "\n")

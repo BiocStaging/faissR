@@ -2795,27 +2795,17 @@ test_that("cuvs availability helper returns a logical scalar", {
 })
 
 
-test_that("nvidia-smi summary parses device, driver, and memory", {
-  bin <- file.path(tempdir(), paste0("fake-nvidia-smi-", Sys.getpid()))
-  dir.create(bin, showWarnings = FALSE, recursive = TRUE)
-  smi <- file.path(bin, "nvidia-smi")
-  writeLines(
-    c(
-      "#!/bin/sh",
-      "printf 'NVIDIA L40S, 555.42, 46068\\n'"
-    ),
-    smi
+test_that("nvidia-smi output parsing is platform and device independent", {
+  summary <- faissR:::parse_nvidia_smi_summary(
+    "Example CUDA accelerator, 999.1, 12345"
   )
-  Sys.chmod(smi, "0755")
+  expect_equal(summary$device, "Example CUDA accelerator")
+  expect_match(summary$runtime, "driver 999.1")
+  expect_match(summary$runtime, "12345 MiB")
 
-  old_path <- Sys.getenv("PATH")
-  on.exit(Sys.setenv(PATH = old_path), add = TRUE)
-  Sys.setenv(PATH = paste(bin, old_path, sep = .Platform$path.sep))
-
-  summary <- faissR:::nvidia_smi_summary()
-  expect_equal(summary$device, "NVIDIA L40S")
-  expect_match(summary$runtime, "driver 555.42")
-  expect_match(summary$runtime, "46068 MiB")
+  unavailable <- faissR:::parse_nvidia_smi_summary(character())
+  expect_true(is.na(unavailable$device))
+  expect_true(is.na(unavailable$runtime))
 })
 
 test_that("CUDA grid auto does not silently fall back to CPU", {

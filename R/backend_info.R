@@ -118,6 +118,31 @@ cpu_summary <- function() {
   }
 }
 
+parse_nvidia_smi_summary <- function(out) {
+  valid <- !is.na(out) & nzchar(trimws(out))
+  if (!length(out) || !any(valid)) {
+    return(list(device = NA_character_, runtime = NA_character_))
+  }
+  first <- out[which(valid)[1L]]
+  parts <- trimws(strsplit(first, ",", fixed = TRUE)[[1L]])
+  device <- if (length(parts) >= 1L && nzchar(parts[1L])) {
+    parts[1L]
+  } else {
+    NA_character_
+  }
+  driver <- if (length(parts) >= 2L) parts[2L] else NA_character_
+  memory <- if (length(parts) >= 3L) parts[3L] else NA_character_
+  runtime <- paste(
+    c(
+      if (!is.na(driver) && nzchar(driver)) paste0("driver ", driver) else NULL,
+      if (!is.na(memory) && nzchar(memory)) paste0(memory, " MiB") else NULL
+    ),
+    collapse = ", "
+  )
+  if (!nzchar(runtime)) runtime <- NA_character_
+  list(device = device, runtime = runtime)
+}
+
 nvidia_smi_summary <- function() {
   smi <- Sys.which("nvidia-smi")
   if (!nzchar(smi)) {
@@ -135,22 +160,7 @@ nvidia_smi_summary <- function() {
     ),
     error = function(e) character()
   )
-  if (length(out) < 1L || !nzchar(out[1L])) {
-    return(list(device = NA_character_, runtime = NA_character_))
-  }
-  parts <- trimws(strsplit(out[1L], ",", fixed = TRUE)[[1L]])
-  device <- if (length(parts) >= 1L) parts[1L] else NA_character_
-  driver <- if (length(parts) >= 2L) parts[2L] else NA_character_
-  memory <- if (length(parts) >= 3L) parts[3L] else NA_character_
-  runtime <- paste(
-    c(
-      if (!is.na(driver) && nzchar(driver)) paste0("driver ", driver) else NULL,
-      if (!is.na(memory) && nzchar(memory)) paste0(memory, " MiB") else NULL
-    ),
-    collapse = ", "
-  )
-  if (!nzchar(runtime)) runtime <- NA_character_
-  list(device = device, runtime = runtime)
+  parse_nvidia_smi_summary(out)
 }
 
 cuda_summary <- function() {
