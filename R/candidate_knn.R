@@ -34,99 +34,195 @@
 #' refined <- candidate_knn(x, rough$indices, k = 5, exclude_self = TRUE)
 #' refined
 #' @export
-candidate_knn <- function(data,
-                          candidates,
-                          points = data,
-                          k,
-                          backend = NULL,
-                          metric = c("euclidean", "cosine", "correlation"),
-                          n_threads = NULL,
-                          exclude_self = FALSE) {
-  if (missing(metric)) metric <- "euclidean"
-  backend <- normalize_public_backend_arg(backend)
-  metric <- normalize_nn_metric(metric)
-  exclude_self <- normalize_scalar_logical_arg(exclude_self, "exclude_self", default = FALSE)
-  x <- as.matrix(data)
-  storage.mode(x) <- "double"
-  q <- as.matrix(points)
-  storage.mode(q) <- "double"
-  if (nrow(x) < 1L || ncol(x) < 1L || nrow(q) < 1L || ncol(q) != ncol(x)) {
-    stop("`data` and `points` must have compatible positive dimensions.", call. = FALSE)
-  }
-  if (!all(is.finite(x)) || !all(is.finite(q))) {
-    stop("`data` and `points` must contain only finite values.", call. = FALSE)
-  }
-  cand <- as.matrix(candidates)
-  storage.mode(cand) <- "integer"
-  if (nrow(cand) != nrow(q) || ncol(cand) < 1L) {
-    stop("`candidates` must have one row per query and at least one column.", call. = FALSE)
-  }
-  k <- normalize_nn_positive_integer(k, "k", "`k` must be an integer in [1, ncol(candidates)].")
-  if (k > ncol(cand)) {
-    stop("`k` must be an integer in [1, ncol(candidates)].", call. = FALSE)
-  }
-  n_threads <- normalize_nn_threads(n_threads)
-  self_query <- nrow(x) == nrow(q) && ncol(x) == ncol(q) && identical(x, q)
-  if (exclude_self && !isTRUE(self_query)) {
-    stop("`exclude_self = TRUE` requires `points` to be `data`.", call. = FALSE)
-  }
-  if (exclude_self) {
-    self_hits <- cand == row(cand)
-    cand[self_hits] <- NA_integer_
-  }
-
-  if (identical(backend, "auto")) {
-    backend <- "cpu"
-  }
-
-  if (identical(backend, "cuda")) {
-    if (!exclude_self) {
-      stop("CUDA candidate KNN currently requires `exclude_self = TRUE`.", call. = FALSE)
+candidate_knn <- function(
+    data,
+    candidates,
+    points = data,
+    k,
+    backend = NULL,
+    metric = c("euclidean", "cosine", "correlation"),
+    n_threads = NULL,
+    exclude_self = FALSE
+) {
+    if (missing(metric)) {
+        metric <- "euclidean"
     }
-    if (!isTRUE(self_query)) {
-      stop("CUDA candidate KNN currently requires self-query candidates.", call. = FALSE)
+    prepared <- prepare_candidate_knn_inputs(
+        data,
+        points,
+        candidates,
+        k,
+        exclude_self
+    )
+    backend <- normalize_public_backend_arg(backend)
+    if (identical(backend, "auto")) {
+        backend <- "cpu"
+    }
+    metric <- normalize_nn_metric(metric)
+    n_threads <- normalize_nn_threads(n_threads)
+
+    if (identical(backend, "cuda")) {
+        return(candidate_knn_cuda(prepared, metric))
+    }
+    candidate_knn_cpu(prepared, metric, n_threads)
+}
+
+prepare_candidate_knn_inputs <- function(
+    data,
+    points,
+    candidates,
+    k,
+    exclude_self
+) {
+    exclude_self <- normalize_scalar_logical_arg(
+        exclude_self,
+        "exclude_self",
+        default = FALSE
+    )
+    x <- as.matrix(data)
+    q <- as.matrix(points)
+    storage.mode(x) <- storage.mode(q) <- "double"
+    valid_dims <- nrow(x) > 0L &&
+        ncol(x) > 0L &&
+        nrow(q) > 0L &&
+        ncol(q) == ncol(x)
+    if (!valid_dims) {
+        stop(
+            "`data` and `points` must have compatible positive dimensions.",
+            call. = FALSE
+        )
+    }
+    if (!all(is.finite(x)) || !all(is.finite(q))) {
+        stop(
+            "`data` and `points` must contain only finite values.",
+            call. = FALSE
+        )
+    }
+    cand <- as.matrix(candidates)
+    storage.mode(cand) <- "integer"
+    if (nrow(cand) != nrow(q) || ncol(cand) < 1L) {
+        stop(
+            "`candidates` must have one row per query and at least one column.",
+            call. = FALSE
+        )
+    }
+    k_message <- "`k` must be an integer in [1, ncol(candidates)]."
+    k <- normalize_nn_positive_integer(k, "k", k_message)
+    if (k > ncol(cand)) {
+        stop(k_message, call. = FALSE)
+    }
+    self_query <- identical(dim(x), dim(q)) && identical(x, q)
+    if (exclude_self && !self_query) {
+        stop(
+            "`exclude_self = TRUE` requires `points` to be `data`.",
+            call. = FALSE
+        )
+    }
+    if (exclude_self) {
+        cand[cand == row(cand)] <- NA_integer_
+    }
+    list(
+        x = x,
+        q = q,
+        cand = cand,
+        k = k,
+        exclude_self = exclude_self,
+        self_query = self_query
+    )
+}
+
+candidate_knn_cuda <- function(input, metric) {
+    if (!input$exclude_self) {
+        stop(
+            "CUDA candidate KNN currently requires `exclude_self = TRUE`.",
+            call. = FALSE
+        )
+    }
+    if (!input$self_query) {
+        stop(
+            "CUDA candidate KNN currently requires self-query candidates.",
+            call. = FALSE
+        )
     }
     if (!isTRUE(cuda_available())) {
-      stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
+        stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
     }
-    metric_inputs <- NULL
-    search_x <- x
-    if (metric %in% c("cosine", "correlation")) {
-      metric_inputs <- normalized_euclidean_metric_inputs(x, q, self_query, metric)
-      search_x <- metric_inputs$data
+    normalized <- metric %in% c("cosine", "correlation")
+    metric_inputs <- if (normalized) {
+        normalized_euclidean_metric_inputs(
+            input$x,
+            input$q,
+            input$self_query,
+            metric
+        )
     }
-    out <- row_candidate_knn_cuda_cpp(search_x, cand, as.integer(k), "euclidean")
-    result <- finish_nn_result(out, "cuda_candidate", k, TRUE, exact = FALSE, metric = metric)
-    if (!is.null(metric_inputs)) {
-      result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
-    }
-    attr(result, "candidate_knn") <- list(
-      candidate_columns = as.integer(ncol(cand)),
-      exclude_self = exclude_self,
-      exact_within_candidates = TRUE,
-      cuda_metric = "euclidean",
-      transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform
+    search_x <- if (normalized) metric_inputs$data else input$x
+    out <- row_candidate_knn_cuda_cpp(
+        search_x,
+        input$cand,
+        as.integer(input$k),
+        "euclidean"
     )
-    return(result)
-  }
+    result <- finish_nn_result(
+        out,
+        "cuda_candidate",
+        input$k,
+        TRUE,
+        exact = FALSE,
+        metric = metric
+    )
+    if (normalized) {
+        result <- finalize_normalized_euclidean_metric_result(
+            result,
+            metric_inputs
+        )
+    }
+    attr(result, "candidate_knn") <- candidate_knn_metadata(
+        input,
+        transform = if (normalized) metric_inputs$transform
+    )
+    result
+}
 
-  out <- candidate_knn_cpp(
-    x,
-    q,
-    cand,
-    as.integer(k),
-    metric,
-    FALSE,
-    exclude_self,
-    TRUE,
-    as.integer(n_threads)
-  )
-  result <- finish_nn_result(out, "cpu_candidate", k, self_query, exact = FALSE, metric = metric)
-  attr(result, "candidate_knn") <- list(
-    candidate_columns = as.integer(ncol(cand)),
-    exclude_self = exclude_self,
-    exact_within_candidates = TRUE,
-    n_threads = as.integer(out$n_threads)
-  )
-  result
+candidate_knn_cpu <- function(input, metric, n_threads) {
+    out <- candidate_knn_cpp(
+        input$x,
+        input$q,
+        input$cand,
+        as.integer(input$k),
+        metric,
+        FALSE,
+        input$exclude_self,
+        TRUE,
+        as.integer(n_threads)
+    )
+    result <- finish_nn_result(
+        out,
+        "cpu_candidate",
+        input$k,
+        input$self_query,
+        exact = FALSE,
+        metric = metric
+    )
+    attr(result, "candidate_knn") <- candidate_knn_metadata(
+        input,
+        n_threads = as.integer(out$n_threads)
+    )
+    result
+}
+
+candidate_knn_metadata <- function(input, n_threads = NULL, transform = NULL) {
+    metadata <- list(
+        candidate_columns = as.integer(ncol(input$cand)),
+        exclude_self = input$exclude_self,
+        exact_within_candidates = TRUE
+    )
+    if (!is.null(n_threads)) {
+        metadata$n_threads <- n_threads
+    }
+    if (!is.null(transform)) {
+        metadata$cuda_metric <- "euclidean"
+        metadata$transform <- transform
+    }
+    metadata
 }

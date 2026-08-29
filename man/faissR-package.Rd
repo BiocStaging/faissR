@@ -16,7 +16,8 @@ are returned with `predict(type = "prob")`.
 \details{
 FAISS is a required system dependency for every functional native build.
 Diagnostic-only builds on explicitly unsupported WebAssembly or Bioconductor
-staging platforms cannot execute nearest-neighbour methods. RAPIDS cuVS/CUDA is
+staging platforms cannot execute nearest-neighbour methods. RAPIDS cuVS/CUDA
+is
 optional for CPU-only builds, so CPU-only machines can compile and use FAISS
 CPU indexes without NVIDIA libraries. For NVIDIA GPU builds, users should
 request the GPU features explicitly so missing CUDA/cuVS libraries
@@ -39,17 +40,19 @@ non-owning index or distance pointers. Host materialization is explicit via
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://github.com/tkcaccia/faissR}
-  \item Report bugs at \url{https://github.com/tkcaccia/faissR/issues}
+    \item \url{https://github.com/tkcaccia/faissR}
+    \item Report bugs at \url{https://github.com/tkcaccia/faissR/issues}
 }
 
 }
 \author{
-\strong{Maintainer}: Stefano Cacciatore \email{tkcaccia@gmail.com} (\href{https://orcid.org/0000-0001-7052-7156}{ORCID})
+\strong{Maintainer}: Stefano Cacciatore \email{tkcaccia@gmail.com}
+    (\href{https://orcid.org/0000-0001-7052-7156}{ORCID})
 
 Authors:
 \itemize{
-  \item Stefano Cacciatore \email{tkcaccia@gmail.com} (\href{https://orcid.org/0000-0001-7052-7156}{ORCID})
+    \item Stefano Cacciatore \email{tkcaccia@gmail.com}
+    (\href{https://orcid.org/0000-0001-7052-7156}{ORCID})
 }
 
 }

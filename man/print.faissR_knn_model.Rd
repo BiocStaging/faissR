@@ -9,7 +9,7 @@
 \arguments{
 \item{x}{A model returned by \code{\link{knn}()}.}
 
-\item{...}{Reserved for compatibility with \code{\link{print}()}.}
+\item{...}{Reserved for compatibility with \code{print()}.}
 }
 \value{
 `x`, invisibly.

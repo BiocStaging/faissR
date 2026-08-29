@@ -176,10 +176,11 @@ headers and libraries discovered by `configure`.
   compiled/runtime backend support.
 - `nn_capabilities()` to report supported nearest-neighbour
   method/backend/metric combinations for benchmark preflight checks.
-- Set the session default shared by faissR, KODAMA, fastPLS, and fastEmbedR
-  with `options(backend = "cuda")`, or use `Sys.setenv(BACKEND = "cuda")`.
-  An explicit function argument always takes precedence. faissR supports CPU
-  and CUDA; a shared `"metal"` setting is rejected clearly.
+- Set the faissR session default with
+  `options(faissR.backend = "cuda")`, or use
+  `Sys.setenv(FAISSR_BACKEND = "cuda")`. An explicit function argument always
+  takes precedence. faissR supports CPU and CUDA; a `"metal"` setting is
+  rejected clearly.
 - Benchmark #1 comparison launchers for Euclidean speed tests are split into
   CPU and CUDA runs:
   `benchmark_scripts/run_benchmark1_compare_cpu_euclidean.sh` compares faissR
@@ -329,8 +330,8 @@ builds require an Rtools-compatible FAISS library supplied through
 Windows builders that do not provide FAISS compile a diagnostic build that
 loads and reports the missing system capability. Set
 `FAISSR_REQUIRE_FAISS=1` when installation must fail unless a functional FAISS
-backend is linked. Automated Bioconductor macOS binary builds remain marked
-unsupported until their system-library bundle provides FAISS. User macOS
+backend is linked. Automated macOS builders without FAISS produce a
+diagnostic-only build that reports the missing system capability. User macOS
 source installs remain supported with Homebrew or an active conda/mamba
 environment.
 
@@ -349,9 +350,9 @@ remotes::install_github("tkcaccia/faissR")
 
 The Homebrew step runs only after the user explicitly sets
 `FAISSR_AUTO_INSTALL_FAISS=1`; generic CI variables do not trigger package
-manager changes. Bioconductor/r-universe macOS binary workers deliberately
-remove Homebrew and do not currently provide FAISS, so those builds are marked
-unsupported rather than using a hidden dependency manager.
+manager changes. Bioconductor/r-universe macOS binary workers may not provide
+FAISS, so those workers use the documented diagnostic build rather than a
+hidden dependency manager.
 
 If Homebrew is not available on a user macOS machine, an already-active
 conda/mamba environment is also supported:
@@ -415,8 +416,9 @@ excluded from the package tarball.
 
 For macOS r-universe/BiocStaging binary builds, FAISS is not currently available
 in the worker system-library bundle and Homebrew is deliberately removed before
-package installation. Those automated macOS binary builds are therefore marked
-unsupported for real FAISS execution until FAISS is provided by the builder.
+package installation. Those automated macOS binary builds therefore provide
+diagnostics rather than real FAISS execution until FAISS is provided by the
+builder.
 Because the r-universe workflow may still launch the macOS binary job, the
 configure script builds diagnostic stubs only for that worker when FAISS is
 absent. `backend_info()` then reports FAISS as unavailable with reason

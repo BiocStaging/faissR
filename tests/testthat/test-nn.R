@@ -3004,17 +3004,21 @@ test_that("FAISS GPU IVF tuner calls the current metric-aware C++ signature", {
   expect_true(grepl(
     paste(
       "compare_k,",
-      "          as.integer\\(cand\\$nlist\\),",
-      "          as.integer\\(cand\\$nprobe\\),",
-      "          \"euclidean\",",
-      "          \"euclidean\",",
-      "          FALSE",
+      "[[:space:]]+as.integer\\(cand\\$nlist\\),",
+      "[[:space:]]+as.integer\\(cand\\$nprobe\\),",
+      "[[:space:]]+\"euclidean\",",
+      "[[:space:]]+\"euclidean\",",
+      "[[:space:]]+FALSE",
       sep = "\n"
     ),
     source
   ))
   expect_false(grepl(
-    "compare_k,\\n          as.integer\\(cand\\$nlist\\),\\n          as.integer\\(cand\\$nprobe\\),\\n          FALSE",
+    paste0(
+      "compare_k,\\n[[:space:]]+as.integer\\(cand\\$nlist\\),",
+      "\\n[[:space:]]+as.integer\\(cand\\$nprobe\\),",
+      "\\n[[:space:]]+FALSE"
+    ),
     source
   ))
 })

@@ -5,14 +5,14 @@
 \title{GPU-resident tuned nearest-neighbour search}
 \usage{
 nn_gpu(
-  data,
-  points = data,
-  k = NULL,
-  exclude_self = FALSE,
-  method = c("auto", "exact", "flat", "bruteforce"),
-  metric = c("euclidean", "cosine", "correlation"),
-  tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
-  target_recall = 0.99
+    data,
+    points = data,
+    k = NULL,
+    exclude_self = FALSE,
+    method = c("auto", "exact", "flat", "bruteforce"),
+    metric = c("euclidean", "cosine", "correlation"),
+    tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+    target_recall = 0.99
 )
 }
 \arguments{
@@ -32,7 +32,8 @@ returns GPU-resident exact-family buffers.}
 
 \item{metric}{`"euclidean"`, `"cosine"`, or `"correlation"`.}
 
-\item{tuning}{Tuning label to record. The current GPU-resident route is exact,
+\item{tuning}{Tuning label to record. The current GPU-resident route is
+exact,
 so `target_recall` is metadata for the executed route; auto-selected
 approximate settings are recorded separately as `auto_preferred_tuning`.}
 
@@ -41,13 +42,13 @@ approximate settings are recorded separately as `auto_preferred_tuning`.}
 }
 \value{
 A `faissR_gpu_knn` list. It contains an owning `handle`, non-owning
-  `indices_ptr` and `distances_ptr`, `n_query`, `k`, `index_base = 1L`,
-  `indices_type = "int32"`, `distance_type = "float32"`, `layout`, `metric`,
-  and `backend_used`. The object also declares the same distance-contract
-  fields as `nn()`. With `tuning = "auto"`, it also includes
-  `execution_tuning`; with `method = "auto"`, it includes
-  `auto_preferred_tuning` when the compiled selector has a preferred CUDA
-  method/tuning row.
+    `indices_ptr` and `distances_ptr`, `n_query`, `k`, `index_base = 1L`,
+    `indices_type = "int32"`, `distance_type = "float32"`, `layout`, `metric`,
+    and `backend_used`. The object also declares the same distance-contract
+    fields as `nn()`. With `tuning = "auto"`, it also includes
+    `execution_tuning`; with `method = "auto"`, it includes
+    `auto_preferred_tuning` when the compiled selector has a preferred CUDA
+    method/tuning row.
 }
 \description{
 `nn_gpu()` runs a CUDA nearest-neighbour search and returns a
@@ -72,7 +73,8 @@ exact route; they are transformed to normalized squared L2 on the C++ side
 and stored as `1 - similarity`. Approximate cuVS/FAISS GPU methods currently
 fail clearly here because those provider result buffers still need
 provider-specific persistent GPU ownership.
-For `method = "auto"`, `nn_gpu()` records the same C++ auto-selection metadata
+For `method = "auto"`, `nn_gpu()` records the same C++ auto-selection
+metadata
 used by `nn()`. If that policy would prefer an approximate CUDA method whose
 result buffers are not yet exposed as persistent GPU-resident objects,
 `nn_gpu()` keeps the exact-family GPU-resident route and records
@@ -84,8 +86,8 @@ compiled policy when available.
 }
 \examples{
 if (cuda_available()) {
-  x <- matrix(rnorm(200), ncol = 4)
-  gpu_knn <- nn_gpu(x, k = 5, exclude_self = TRUE)
-  print(gpu_knn)
+    x <- matrix(rnorm(200), ncol = 4)
+    gpu_knn <- nn_gpu(x, k = 5, exclude_self = TRUE)
+    print(gpu_knn)
 }
 }

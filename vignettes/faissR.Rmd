@@ -3,15 +3,15 @@ title: "faissR: nearest-neighbor search, prediction, and k-means"
 author: "Stefano Cacciatore"
 package: faissR
 output:
-  BiocStyle::html_document:
-    toc: true
-    toc_float: true
+    BiocStyle::html_document:
+        toc: true
+        toc_float: true
 header-includes:
-  - \usepackage{array}
+    - \usepackage{array}
 vignette: >
-  %\VignetteIndexEntry{faissR: nearest-neighbor search, prediction, and k-means}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
+    %\VignetteIndexEntry{faissR: nearest-neighbor search and prediction}
+    %\VignetteEngine{knitr::rmarkdown}
+    %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, include=FALSE}
@@ -41,7 +41,7 @@ clearly when CUDA support is not available.
 faissR uses CPU unless a backend is selected for the R session:
 
 ```r
-options(backend = "cuda")
+options(faissR.backend = "cuda")
 # Equivalent: faissR_backend("cuda")
 
 g <- nn(x, k = 30)                  # CUDA
@@ -49,7 +49,7 @@ g.cpu <- nn(x, k = 30, backend = "cpu")
 g.auto <- nn(x, k = 30, backend = "auto")
 ```
 
-For batch jobs, `BACKEND=cpu|cuda` is used when the R option is unset.
+For batch jobs, `FAISSR_BACKEND=cpu|cuda` is used when the R option is unset.
 Precedence is explicit argument, R option, environment variable, then CPU.
 Explicit `backend = "auto"` retains faissR's shape-aware routing. The current
 faissR implementation does not contain a Metal backend, so selecting `metal`
@@ -86,33 +86,21 @@ functional FAISS builds.
 
 # Example data
 
-The examples use a small synthetic matrix with three groups. Rows are
-observations and columns are features, matching the input convention used by
-`faissR`.
+The examples use the `Sonar` data from the `mlbench` package. It contains 208
+observations, 60 numeric sonar-energy measurements, and a two-class response.
+This provides a compact, moderately high-dimensional classification dataset
+that is suitable for vignette builds. Rows are observations and columns are
+features, matching the input convention used by `faissR`. Predictors are
+standardized so Euclidean distance is not dominated by variables with larger
+scales.
 
 ```{r data}
 library("faissR")
 
-set.seed(100)
-n_per_group <- 30L
-p <- 8L
-
-centers <- rbind(
-    rep(-2, p),
-    rep(0, p),
-    rep(2, p)
-)
-
-x <- do.call(rbind, lapply(seq_len(nrow(centers)), function(i) {
-    sweep(
-        matrix(rnorm(n_per_group * p, sd = 0.7), ncol = p),
-        2,
-        centers[i, ],
-        "+"
-    )
-}))
-
-groups <- factor(rep(LETTERS[1:3], each = n_per_group))
+data("Sonar", package = "mlbench")
+x <- scale(as.matrix(Sonar[, seq_len(60L)]))
+storage.mode(x) <- "double"
+groups <- Sonar$Class
 dim(x)
 table(groups)
 ```
@@ -219,7 +207,10 @@ native grid route. CPU and CUDA have separate implementations. The explicit
 CPU call below demonstrates the API on a small two-dimensional matrix.
 
 ```{r grid}
-x2 <- matrix(runif(2000), ncol = 2)
+x2 <- cbind(
+    x = (seq_len(1000L) - 1L) / 999,
+    y = ((seq_len(1000L) * 37L) %% 1000L) / 999
+)
 grid_nearest <- nn(
     x2,
     k = 10,
@@ -252,15 +243,13 @@ cuda_nearest <- nn(
 
 The same failure rule applies before launch. For example, CAGRA is CUDA-only:
 
-```{r unsupported-combination}
-try(
-    nn(
-        x,
-        k = 5,
-        backend = "cpu",
-        method = "cagra",
-        exclude_self = TRUE
-    )
+```{r unsupported-combination, eval=FALSE}
+nn(
+    x,
+    k = 5,
+    backend = "cpu",
+    method = "cagra",
+    exclude_self = TRUE
 )
 ```
 
@@ -410,7 +399,7 @@ The CPU route is available everywhere; CUDA is optional.
 ```{r kmeans}
 km <- fast_kmeans(
     x,
-    centers = 3,
+    centers = 2,
     backend = "cpu",
     n_init = 2,
     max_iter = 20
@@ -497,7 +486,10 @@ third-party notice and full license are available through:
 
 ```{r third-party-notices}
 stopifnot(nzchar(system.file("THIRD-PARTY-NOTICES", package = "faissR")))
-stopifnot(nzchar(system.file("licenses", "DLPACK-LICENSE.txt", package = "faissR")))
+license_file <- system.file(
+    "licenses", "DLPACK-LICENSE.txt", package = "faissR"
+)
+stopifnot(nzchar(license_file))
 cat("Third-party notices installed: TRUE")
 ```
 

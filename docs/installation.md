@@ -145,11 +145,10 @@ remotes::install_github("tkcaccia/faissR")
 This runs `brew install faiss libomp` during `configure` if FAISS or the macOS
 OpenMP runtime is missing and Homebrew is available. It is never inferred from
 generic CI variables: the explicit `FAISSR_AUTO_INSTALL_FAISS=1` request is
-required. Bioconductor/r-universe macOS binary workers deliberately remove
-Homebrew and do not currently provide FAISS, so those automated binary builds
-are marked unsupported for real FAISS execution rather than using a hidden
-dependency manager. Because the r-universe workflow may still launch the macOS
-binary job, that exact worker builds diagnostic stubs when FAISS is absent.
+required. Bioconductor/r-universe macOS binary workers may not provide FAISS,
+so those automated binary builds use diagnostic stubs rather than a hidden
+dependency manager. The stubs report that native FAISS functionality is
+unavailable.
 
 If Homebrew is unavailable on a user macOS machine, a pre-existing conda or
 mamba environment can provide CPU FAISS:
@@ -272,13 +271,11 @@ FAISS as unavailable instead of failing with invalid `/include` and `/lib`
 paths. A functional Windows FAISS route requires an Rtools-compatible library;
 set `FAISSR_REQUIRE_FAISS=1` to make its absence a configuration error.
 
-Automated Bioconductor macOS binary builds are marked unsupported through
-`Config/Bioconductor/UnsupportedPlatforms: mac` and `.BBSoptions` because the
-r-universe macOS worker removes Homebrew and the CRAN-style macOS system-library
-bundle does not currently include FAISS. If that r-universe macOS job is still
-launched, `configure` emits diagnostic stubs so the binary can load and report
-FAISS as unavailable; it does not provide working FAISS methods. macOS users
-can still install from source with Homebrew or conda/mamba as described above.
+Automated Bioconductor and r-universe macOS workers may lack FAISS because
+their system-library bundle does not include it. On those workers, `configure`
+emits diagnostic stubs so the binary can load and report FAISS as unavailable;
+it does not provide working FAISS methods. macOS users can install a functional
+source build with Homebrew or conda/mamba as described above.
 Windows users can use a native Rtools-compatible CPU build, or WSL2 for the
 Linux-style CPU and CUDA installation paths.
 
@@ -352,7 +349,7 @@ Linux and macOS source builds still require real FAISS.
 | Variable | Purpose |
 |---|---|
 | `FAISS_HOME` | Prefix containing FAISS headers and libraries. Mandatory when FAISS is not visible through compiler defaults or `pkg-config`. |
-| `FAISSR_AUTO_INSTALL_FAISS` | Explicit macOS/Homebrew convenience switch. Set to `1` to let `configure` run `brew install faiss libomp` if FAISS or the macOS OpenMP runtime is missing. Generic CI variables never enable this path. Bioconductor/r-universe macOS binary workers remove Homebrew and are marked unsupported for real FAISS execution until their system-library bundle provides FAISS. |
+| `FAISSR_AUTO_INSTALL_FAISS` | Explicit macOS/Homebrew convenience switch. Set to `1` to let `configure` run `brew install faiss libomp` if FAISS or the macOS OpenMP runtime is missing. Generic CI variables never enable this path. Bioconductor/r-universe macOS binary workers may provide diagnostic-only builds until their system-library bundle provides FAISS. |
 | `FAISSR_RUNIVERSE_MACOS_STUBS` | r-universe/BiocStaging macOS-only diagnostic switch. Defaults to `1`, allowing diagnostic stubs only on those macOS binary workers when FAISS is absent. Set to `0` to make that worker fail instead. User macOS installs are unaffected and still require FAISS. |
 | `LIBOMP_HOME` or `FAISSR_LIBOMP_HOME` | macOS OpenMP prefix containing `include/omp.h` and `lib/libomp.*`. Usually `$(brew --prefix libomp)`. |
 | `CONDA_PREFIX` | Active conda/mamba prefix. Used only as a passive fallback when `faiss-cpu` and `libomp` are already installed there. |

@@ -38,7 +38,8 @@ computes neighbours under that metric. FAISS Flat, IVF-Flat, IVFPQ, and HNSW
 support cosine and correlation by using normalized dot-product searches.
 CAGRA and NNDescent support cosine and correlation by using normalized
 Euclidean graph search. Public CUDA HNSW
-uses RAPIDS cuVS HNSW from a CAGRA seed graph with a cuVS CPU hierarchy and records that wrapper design
+uses RAPIDS cuVS HNSW from a CAGRA seed graph with a cuVS CPU hierarchy and
+    records that wrapper design
 in metadata rather than presenting it as a pure all-GPU HNSW implementation.
 Public CPU NSG uses faissR's distinct native NSG/MRNG-derived route for all
 metrics because linked FAISS graph builders can abort

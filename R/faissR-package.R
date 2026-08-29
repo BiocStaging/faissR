@@ -9,7 +9,8 @@
 #'
 #' FAISS is a required system dependency for every functional native build.
 #' Diagnostic-only builds on explicitly unsupported WebAssembly or Bioconductor
-#' staging platforms cannot execute nearest-neighbour methods. RAPIDS cuVS/CUDA is
+#' staging platforms cannot execute nearest-neighbour methods. RAPIDS cuVS/CUDA
+#' is
 #' optional for CPU-only builds, so CPU-only machines can compile and use FAISS
 #' CPU indexes without NVIDIA libraries. For NVIDIA GPU builds, users should
 #' request the GPU features explicitly so missing CUDA/cuVS libraries
