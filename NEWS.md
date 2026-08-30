@@ -1,3 +1,9 @@
+# faissR 0.99.28
+
+* Prevents spurious Windows ARM64 installation warnings by suppressing only
+  LLVM flang's unused driver-argument diagnostic. GCC/gfortran builds and
+  substantive Fortran compiler warnings remain unchanged.
+
 # faissR 0.99.27
 
 * Replaces the vignette's `mlbench` example with the Bioconductor `ALL`
