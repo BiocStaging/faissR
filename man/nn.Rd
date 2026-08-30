@@ -5,21 +5,21 @@
 \title{Nearest neighbors from row-wise matrices}
 \usage{
 nn(
-  data,
-  points = data,
-  k = NULL,
-  exclude_self = FALSE,
-  backend = NULL,
-  method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq",
+    data,
+    points = data,
+    k = NULL,
+    exclude_self = FALSE,
+    backend = NULL,
+    method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq",
     "vamana_style", "nsg_style", "nndescent_style", "ivfpq_fastscan", "cagra"),
-  metric = c("euclidean", "cosine", "correlation"),
-  tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
-  target_recall = 0.99,
-  cagra_implementation = NULL,
-  cagra_build_algo = NULL,
-  output = c("double", "float"),
-  distances = NULL,
-  n_threads = NULL
+    metric = c("euclidean", "cosine", "correlation"),
+    tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+    target_recall = 0.99,
+    cagra_implementation = NULL,
+    cagra_build_algo = NULL,
+    output = c("double", "float"),
+    distances = NULL,
+    n_threads = NULL
 )
 }
 \arguments{
@@ -54,33 +54,33 @@ otherwise resolves to CPU. Explicit `"cuda"` fails clearly when CUDA
 support or the selected CUDA combination is unavailable.}
 
 \item{method}{Algorithm selector. `"auto"` chooses a shape-aware default for
- the selected backend. Other values include `"exact"`, `"flat"`,
- `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`,
- `"ivfpq"`, `"vamana_style"`, `"nsg_style"`,
- `"nndescent_style"`, `"ivfpq_fastscan"`, and `"cagra"`. The historical
- shorter spellings `"vamana"`, `"nsg"`, and `"nndescent"` remain accepted
- compatibility aliases. Use these public lowercase method labels; resolved
- implementation labels such as
+    the selected backend. Other values include `"exact"`, `"flat"`,
+    `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`,
+    `"ivfpq"`, `"vamana_style"`, `"nsg_style"`,
+    `"nndescent_style"`, `"ivfpq_fastscan"`, and `"cagra"`. The historical
+    shorter spellings `"vamana"`, `"nsg"`, and `"nndescent"` remain accepted
+    compatibility aliases. Use these public lowercase method labels; resolved
+    implementation labels such as
 `"faiss_hnsw"` or `"cuda_cuvs_cagra"` are not public `method` values.
 Unsupported
- backend/method combinations fail clearly; for example,
- `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only,
- and CUDA `method = "ivfpq_fastscan"` accepts Euclidean/L2, cosine, and
+    backend/method combinations fail clearly; for example,
+    `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only,
+    and CUDA `method = "ivfpq_fastscan"` accepts Euclidean/L2, cosine, and
 correlation. CPU FastScan accepts the same metrics; cosine is implemented
 by row
- L2 normalization, correlation by row centering plus L2 normalization
- followed by FastScan L2 search.
- The preferred names for package-owned graph refinement are
- `"nsg_style"`, `"vamana_style"`, and `"nndescent_style"`; the shorter
- names remain compatibility aliases. The `_style` suffix is a scope
- marker, not an algorithm name: native results explicitly report a distinct
- package-owned derived graph-refinement algorithm rather than a
- feature-complete canonical reproduction. CUDA cuVS NN-descent is
- identified separately as an external-provider implementation. Package-owned
- routes carry `implementation_status = "experimental"` and
- `experimental = TRUE` in their returned metadata. They are available for
- explicit evaluation but are excluded from the package's principal
- comparative performance claims.}
+    L2 normalization, correlation by row centering plus L2 normalization
+    followed by FastScan L2 search.
+    The preferred names for package-owned graph refinement are
+    `"nsg_style"`, `"vamana_style"`, and `"nndescent_style"`; the shorter
+    names remain compatibility aliases. The `_style` suffix is a scope
+    marker, not an algorithm name: native results explicitly report a distinct
+    package-owned derived graph-refinement algorithm rather than a
+    feature-complete canonical reproduction. CUDA cuVS NN-descent is
+    identified separately as an external-provider implementation. Package-owned
+    routes carry `implementation_status = "experimental"` and
+    `experimental = TRUE` in their returned metadata. They are available for
+    explicit evaluation but are excluded from the package's principal
+    comparative performance claims.}
 
 \item{metric}{Distance metric. The intentionally small public set is
 `"euclidean"`, `"cosine"`, and `"correlation"`.
@@ -162,25 +162,25 @@ public method; successful results record the selected value in
 `attr(result, "approximation")$cagra_build_algo`.}
 
 \item{output}{Distance storage type for the returned object. `"double"`
- returns the default R numeric distance matrix. `"float"` returns
- `distances` as a `float::fl()`/`float32` object and records
- `distance_type = "float32"` plus
- `attr(result, "distance_type") = "float32"`; this requires the optional
- `float` package. When either `data` or `points` is a `float::fl()` matrix,
+    returns the default R numeric distance matrix. `"float"` returns
+    `distances` as a `float::fl()`/`float32` object and records
+    `distance_type = "float32"` plus
+    `attr(result, "distance_type") = "float32"`; this requires the optional
+    `float` package. When either `data` or `points` is a `float::fl()` matrix,
 FAISS Flat/IVF/IVFPQ/HNSW/FastScan/NSG/NNDescent, FAISS GPU
 Flat/IVF/IVFPQ/CAGRA,
- and RAPIDS cuVS brute-force/CAGRA/IVF/IVFPQ/NN-descent routes consume
- float32 input directly through C++ adapters. Methods without a direct
- float32 adapter now error instead of silently converting the benchmark
- input back to R double. Ordinary R double inputs with `output = "float"`
- also enter float-pointer routes for CPU FAISS Flat/IVF/IVFPQ/FastScan,
- cached CPU FAISS fitted indexes, FAISS GPU Flat/IVF/IVFPQ, and direct
+    and RAPIDS cuVS brute-force/CAGRA/IVF/IVFPQ/NN-descent routes consume
+    float32 input directly through C++ adapters. Methods without a direct
+    float32 adapter now error instead of silently converting the benchmark
+    input back to R double. Ordinary R double inputs with `output = "float"`
+    also enter float-pointer routes for CPU FAISS Flat/IVF/IVFPQ/FastScan,
+    cached CPU FAISS fitted indexes, FAISS GPU Flat/IVF/IVFPQ, and direct
 Euclidean RAPIDS cuVS brute-force/CAGRA/IVF/IVFPQ and IVFPQ FastScan
 routes.
- On direct FAISS/cuVS float routes, float distance output is constructed
- directly from backend float results instead of first materializing an R
- double distance matrix, except for routes that need R-side metric
- transformation or zero-row cosine/correlation correction.}
+    On direct FAISS/cuVS float routes, float distance output is constructed
+    directly from backend float results instead of first materializing an R
+    double distance matrix, except for routes that need R-side metric
+    transformation or zero-row cosine/correlation correction.}
 
 \item{distances}{Optional alias for `output`, kept for callers that prefer
 `distances = "double"` or `distances = "float"` to describe the returned
@@ -191,73 +191,73 @@ ignore this argument.}
 }
 \value{
 A list with integer matrix `indices`, `distances`, and stable
-  metadata fields `index_base`, `distance_type`, `metric`, and
-  `backend_used`. Every result declares `distance_is_metric`,
-  `distance_semantics`, `distance_comparable_across_queries`, and
-  `distance_order`.
-  Float32 routes also record `input_layout` and
-  `input_owns_data` so downstream packages can distinguish direct float32
-  payload use from one-time row-major conversion. Normalized Euclidean graph
-  routes for cosine/correlation record `metric_transform` and
-  `attr(result, "distance_transform")`. Indices are 1-based signed R
-  integers; CUDA result identifiers are signed int32. The public identifier
-  space is therefore limited to `.Machine$integer.max` reference rows,
-  although provider and memory limits are usually much lower. The
-  requested backend/method, tuning policy, resolved
-  backend, metric, exact/approximate flag, and self-query flag are stored in
-  attributes including `attr(result, "requested_backend")`,
-  `attr(result, "requested_method")`, `attr(result, "tuning")`, and
-  `attr(result, "resolved_backend")`. Auto requests also include
-  `attr(result, "auto_selection")`, a static workload/shape/k/metric decision
-  record. It includes reference rows and variables, query-row count,
-  self-query status, the `n * n_points * p` work estimate, and the predicted
-  internal backend, public method class, device
-  class, explicit backend/method flags, backend/method decision reasons, and
-  hardware provenance. CPU auto
-  records `auto_policy_status =
-  "calibration_informed_not_independently_validated"` and
-  `auto_policy_evidence_scope = "cpu_static_policy_experimental"`. CUDA
-  auto is a separately evaluated but still experimental L40S-calibrated
-  policy for cold full-self-search and records `auto_policy_status =
-  "experimental_l40s_calibrated_cold_full_self_search"`; neither label
-  implies general workload or hardware validation.
-  Expected future query batches are not an input; use a
-  fitted or cached index when construction will be amortized. A
-  capability-compatible machine that differs from
-  the calibration hardware keeps the compiled policy but is labelled
-  `hardware_extrapolated_unvalidated`; hardware identity alone never causes
-  a silent method or device fallback. CUDA auto emits one warning per
-  unmatched runtime GPU model unless
-  `options(faissR.warn_hardware_extrapolation = FALSE)` is set. Pilot/cache
-  tuning adjusts parameters within a method and does not install a new
-  cross-method policy. The selector does not run pilot
-  tuning. CPU FAISS Flat/HNSW/IVF/IVFPQ/FastScan routes use a
-  bounded session-local fitted-index cache for repeated raw `nn()` calls
-  with matching data and parameters. CUDA `method = "ivfpq_fastscan"` also
- reuses a fitted cuVS IVF-PQ index, dataset device buffer, and cuVS
- resources
-  through a separate bounded cache. Self-query uses the fitted dataset device
- buffer directly, and repeated separate-query calls can reuse one cached
- query
-  device buffer with
-  `options(faissR.cache_cuda_ivfpq_query_buffers = TRUE)`. Metadata reports
-  `persistent_index_cache`, `index_cache_hit`, `dataset_residency`,
-  `query_residency`, and `query_host_to_device_copies`. Disable CPU and CUDA
-  fitted-index caches with
-  `options(faissR.cache_fitted_nn_indexes = FALSE)`, bound CPU memory with
-  `options(faissR.cache_fitted_nn_indexes_max_entries = <n>)`, or bound CUDA
-  FastScan GPU memory with
-  `options(faissR.cache_fitted_cuda_ivfpq_indexes_max_entries = <n>)`.
-  CPU Euclidean, cosine, and correlation
-  `method = "ivfpq_fastscan"` resolve `tuning = "auto"` in C++ from
-  shape/k/target-recall defaults for `nlist`, `nprobe`, `pq_m`,
-  `refine_factor`, and FastScan block size. Cosine uses row L2 normalization
- and correlation uses row centering plus L2 normalization before FastScan
- L2.
- CUDA FastScan cosine and correlation auto policies are seeded from the CUDA
- Euclidean
-  FastScan table until metric-specific HPC sweeps replace them, and those
-  rows report `tuning_benchmark_target_met = FALSE`.
+    metadata fields `index_base`, `distance_type`, `metric`, and
+    `backend_used`. Every result declares `distance_is_metric`,
+    `distance_semantics`, `distance_comparable_across_queries`, and
+    `distance_order`.
+    Float32 routes also record `input_layout` and
+    `input_owns_data` so downstream packages can distinguish direct float32
+    payload use from one-time row-major conversion. Normalized Euclidean graph
+    routes for cosine/correlation record `metric_transform` and
+    `attr(result, "distance_transform")`. Indices are 1-based signed R
+    integers; CUDA result identifiers are signed int32. The public identifier
+    space is therefore limited to `.Machine$integer.max` reference rows,
+    although provider and memory limits are usually much lower. The
+    requested backend/method, tuning policy, resolved
+    backend, metric, exact/approximate flag, and self-query flag are stored in
+    attributes including `attr(result, "requested_backend")`,
+    `attr(result, "requested_method")`, `attr(result, "tuning")`, and
+    `attr(result, "resolved_backend")`. Auto requests also include
+    `attr(result, "auto_selection")`, a static workload/shape/k/metric decision
+    record. It includes reference rows and variables, query-row count,
+    self-query status, the `n * n_points * p` work estimate, and the predicted
+    internal backend, public method class, device
+    class, explicit backend/method flags, backend/method decision reasons, and
+    hardware provenance. CPU auto
+    records `auto_policy_status =
+    "calibration_informed_not_independently_validated"` and
+    `auto_policy_evidence_scope = "cpu_static_policy_experimental"`. CUDA
+    auto is a separately evaluated but still experimental L40S-calibrated
+    policy for cold full-self-search and records `auto_policy_status =
+    "experimental_l40s_calibrated_cold_full_self_search"`; neither label
+    implies general workload or hardware validation.
+    Expected future query batches are not an input; use a
+    fitted or cached index when construction will be amortized. A
+    capability-compatible machine that differs from
+    the calibration hardware keeps the compiled policy but is labelled
+    `hardware_extrapolated_unvalidated`; hardware identity alone never causes
+    a silent method or device fallback. CUDA auto emits one warning per
+    unmatched runtime GPU model unless
+    `options(faissR.warn_hardware_extrapolation = FALSE)` is set. Pilot/cache
+    tuning adjusts parameters within a method and does not install a new
+    cross-method policy. The selector does not run pilot
+    tuning. CPU FAISS Flat/HNSW/IVF/IVFPQ/FastScan routes use a
+    bounded session-local fitted-index cache for repeated raw `nn()` calls
+    with matching data and parameters. CUDA `method = "ivfpq_fastscan"` also
+    reuses a fitted cuVS IVF-PQ index, dataset device buffer, and cuVS
+    resources
+    through a separate bounded cache. Self-query uses the fitted dataset device
+    buffer directly, and repeated separate-query calls can reuse one cached
+    query
+    device buffer with
+    `options(faissR.cache_cuda_ivfpq_query_buffers = TRUE)`. Metadata reports
+    `persistent_index_cache`, `index_cache_hit`, `dataset_residency`,
+    `query_residency`, and `query_host_to_device_copies`. Disable CPU and CUDA
+    fitted-index caches with
+    `options(faissR.cache_fitted_nn_indexes = FALSE)`, bound CPU memory with
+    `options(faissR.cache_fitted_nn_indexes_max_entries = <n>)`, or bound CUDA
+    FastScan GPU memory with
+    `options(faissR.cache_fitted_cuda_ivfpq_indexes_max_entries = <n>)`.
+    CPU Euclidean, cosine, and correlation
+    `method = "ivfpq_fastscan"` resolve `tuning = "auto"` in C++ from
+    shape/k/target-recall defaults for `nlist`, `nprobe`, `pq_m`,
+    `refine_factor`, and FastScan block size. Cosine uses row L2 normalization
+    and correlation uses row centering plus L2 normalization before FastScan
+    L2.
+    CUDA FastScan cosine and correlation auto policies are seeded from the CUDA
+    Euclidean
+    FastScan table until metric-specific HPC sweeps replace them, and those
+    rows report `tuning_benchmark_target_met = FALSE`.
 }
 \description{
 `nn()` provides a package-native nearest-neighbor entry point compatible with
@@ -272,37 +272,37 @@ Invalid combinations stop clearly before computation; for example,
 \details{
 The public methods are:
 \itemize{
-  \item `"auto"`: deterministic selection from the requested backend,
-  metric, data shape, `k`, and target recall. It does not run a timing pilot.
-  The CPU policy is calibration-informed and experimental: it has not
-  received the independent installed-policy validation reported for CUDA.
-  \item `"exact"`: exact search using FAISS Flat or direct cuVS brute force.
-  \item `"flat"`: an explicit FAISS exhaustive Flat index.
-  \item `"bruteforce"`: exhaustive search, using FAISS on CPU and preferring
-  direct cuVS on CUDA when available.
-  \item `"grid"`: exact 2D/3D self-KNN for Euclidean, cosine, or correlation.
-  \item `"hnsw"`: FAISS HNSW on CPU; CUDA uses the cuVS HNSW wrapper that
-  converts a CAGRA seed graph and is not a pure all-GPU HNSW search.
-  \item `"ivf"`: FAISS IVF-Flat approximate search with coarse-list probing.
-  \item `"ivfpq"`: compressed FAISS IVF-PQ approximate search.
-  \item `"ivfpq_fastscan"`: FAISS FastScan on CPU and the package's
-  separately identified cuVS 4-bit IVF-PQ route on CUDA.
-  \item `"vamana_style"` (`"vamana"` compatibility alias): an experimental
-  package-owned
-  robust-pruned candidate graph inspired by DiskANN/Vamana, followed by CPU
-  or CUDA candidate refinement. It is not a feature-complete Vamana
-  reproduction.
-  \item `"nsg_style"` (`"nsg"` compatibility alias): a distinct
-  experimental package-owned candidate-graph algorithm derived from selected
-  NSG/MRNG
-  pruning ideas, followed by CPU or CUDA candidate refinement. It is not a
-  feature-complete NSG reproduction.
-  \item `"nndescent_style"` (`"nndescent"` compatibility alias): a
-  distinct experimental package-owned CPU graph-refinement algorithm derived
-  from
-  NN-descent ideas, or direct external-provider cuVS NN-descent on CUDA.
-  \item `"cagra"`: CUDA-only FAISS GPU CAGRA or direct cuVS CAGRA. Use
-  `cagra_implementation` to request a provider explicitly.
+    \item `"auto"`: deterministic selection from the requested backend,
+    metric, data shape, `k`, and target recall. It does not run a timing pilot.
+    The CPU policy is calibration-informed and experimental: it has not
+    received the independent installed-policy validation reported for CUDA.
+    \item `"exact"`: exact search using FAISS Flat or direct cuVS brute force.
+    \item `"flat"`: an explicit FAISS exhaustive Flat index.
+    \item `"bruteforce"`: exhaustive search, using FAISS on CPU and preferring
+    direct cuVS on CUDA when available.
+    \item `"grid"`: exact 2D/3D self-KNN for Euclidean, cosine, or correlation.
+    \item `"hnsw"`: FAISS HNSW on CPU; CUDA uses the cuVS HNSW wrapper that
+    converts a CAGRA seed graph and is not a pure all-GPU HNSW search.
+    \item `"ivf"`: FAISS IVF-Flat approximate search with coarse-list probing.
+    \item `"ivfpq"`: compressed FAISS IVF-PQ approximate search.
+    \item `"ivfpq_fastscan"`: FAISS FastScan on CPU and the package's
+    separately identified cuVS 4-bit IVF-PQ route on CUDA.
+    \item `"vamana_style"` (`"vamana"` compatibility alias): an experimental
+    package-owned
+    robust-pruned candidate graph inspired by DiskANN/Vamana, followed by CPU
+    or CUDA candidate refinement. It is not a feature-complete Vamana
+    reproduction.
+    \item `"nsg_style"` (`"nsg"` compatibility alias): a distinct
+    experimental package-owned candidate-graph algorithm derived from selected
+    NSG/MRNG
+    pruning ideas, followed by CPU or CUDA candidate refinement. It is not a
+    feature-complete NSG reproduction.
+    \item `"nndescent_style"` (`"nndescent"` compatibility alias): a
+    distinct experimental package-owned CPU graph-refinement algorithm derived
+    from
+    NN-descent ideas, or direct external-provider cuVS NN-descent on CUDA.
+    \item `"cagra"`: CUDA-only FAISS GPU CAGRA or direct cuVS CAGRA. Use
+    `cagra_implementation` to request a provider explicitly.
 }
 
 Exact-family names are distinct public policies even when a backend resolves

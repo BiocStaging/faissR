@@ -79,8 +79,8 @@ rather than treating the pointer as a portable serialization.
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://github.com/tkcaccia/faissR}
-  \item Report bugs at \url{https://github.com/tkcaccia/faissR/issues}
+    \item \url{https://github.com/tkcaccia/faissR}
+    \item Report bugs at \url{https://github.com/tkcaccia/faissR/issues}
 }
 
 }
@@ -89,7 +89,7 @@ Useful links:
 
 Authors:
 \itemize{
-  \item Stefano Cacciatore \email{tkcaccia@gmail.com} (\href{https://orcid.org/0000-0001-7052-7156}{ORCID})
+    \item Stefano Cacciatore \email{tkcaccia@gmail.com} (\href{https://orcid.org/0000-0001-7052-7156}{ORCID})
 }
 
 }

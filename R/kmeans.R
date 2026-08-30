@@ -176,29 +176,16 @@ prepare_kmeans_arguments <- function(
         n_init = kmeans_value_source(n_init),
         tol = kmeans_value_source(tol)
     )
-    max_iter <- normalize_kmeans_positive_int(
-        max_iter,
-        auto$max_iter,
-        "max_iter"
-    )
-    n_init <- normalize_kmeans_positive_int(n_init, auto$n_init, "n_init")
-    effective <- list(
-        max_iter = as.integer(max_iter),
-        n_init = as.integer(n_init),
-        tol = as.numeric(normalize_kmeans_tol(tol, auto$tol))
+    effective <- normalize_effective_kmeans_args(
+        max_iter, n_init, tol, auto
     )
     auto <- finalize_kmeans_auto_metadata(
-        auto,
-        effective,
-        x,
-        centers,
-        requested_backend,
-        tuning
+        auto, effective, x, centers, requested_backend, tuning
     )
     list(
         centers = centers,
-        max_iter = max_iter,
-        n_init = n_init,
+        max_iter = effective$max_iter,
+        n_init = effective$n_init,
         tol = effective$tol,
         seed = normalize_kmeans_seed(seed),
         n_threads = normalize_nn_threads(n_threads),
@@ -207,6 +194,20 @@ prepare_kmeans_arguments <- function(
         ),
         tuning = auto,
         backend = auto$selection$resolved_backend
+    )
+}
+
+normalize_effective_kmeans_args <- function(max_iter, n_init, tol, auto) {
+    max_iter <- normalize_kmeans_positive_int(
+        max_iter,
+        auto$max_iter,
+        "max_iter"
+    )
+    n_init <- normalize_kmeans_positive_int(n_init, auto$n_init, "n_init")
+    list(
+        max_iter = as.integer(max_iter),
+        n_init = as.integer(n_init),
+        tol = as.numeric(normalize_kmeans_tol(tol, auto$tol))
     )
 }
 
@@ -716,15 +717,9 @@ finish_trivial_one_cluster_kmeans <- function(
     center <- matrix(colMeans(x), nrow = 1L)
     row_offsets <- sweep(x, 2L, center[1L, ], "-")
     within <- sum(row_offsets * row_offsets)
-    max_iter <- tuning_metadata$effective$max_iter %||%
-        tuning_metadata$effective_max_iter %||%
-        NA_integer_
-    n_init <- tuning_metadata$effective$n_init %||%
-        tuning_metadata$effective_n_init %||%
-        NA_integer_
-    tol <- tuning_metadata$effective$tol %||%
-        tuning_metadata$effective_tol %||%
-        NA_real_
+    parameters <- trivial_one_cluster_parameters(
+        tuning_metadata, requested_backend, resolved_backend
+    )
     out <- list(
         cluster = rep.int(1L, nrow(x)),
         centers = center,
@@ -735,29 +730,46 @@ finish_trivial_one_cluster_kmeans <- function(
         hit_max_iter = FALSE,
         backend = "trivial",
         backend_library = "faissR",
-        parameters = list(
-            centers = 1L,
-            max_iter = as.integer(max_iter),
-            n_init = as.integer(n_init),
-            tol = as.numeric(tol),
-            seed = NA_integer_,
-            n_threads = 1L,
-            init = "exact_mean",
-            requested_backend = requested_backend,
-            resolved_backend = resolved_backend,
-            backend_resolution_note = paste0(
-                "Exact one-cluster solution; no iterative CPU ",
-                "or CUDA backend was launched."
-            ),
-            tuning = tuning_metadata,
-            exact_trivial_solution = TRUE
-        )
+        parameters = parameters
     )
     out$converged <- TRUE
     out$parameters$hit_max_iter <- out$hit_max_iter
     out$parameters$converged <- out$converged
     class(out) <- c("faissR_kmeans", "kmeans")
     out
+}
+
+trivial_one_cluster_parameters <- function(
+    tuning_metadata,
+    requested_backend,
+    resolved_backend
+) {
+    max_iter <- tuning_metadata$effective$max_iter %||%
+        tuning_metadata$effective_max_iter %||%
+        NA_integer_
+    n_init <- tuning_metadata$effective$n_init %||%
+        tuning_metadata$effective_n_init %||%
+        NA_integer_
+    tol <- tuning_metadata$effective$tol %||%
+        tuning_metadata$effective_tol %||%
+        NA_real_
+    list(
+        centers = 1L,
+        max_iter = as.integer(max_iter),
+        n_init = as.integer(n_init),
+        tol = as.numeric(tol),
+        seed = NA_integer_,
+        n_threads = 1L,
+        init = "exact_mean",
+        requested_backend = requested_backend,
+        resolved_backend = resolved_backend,
+        backend_resolution_note = paste0(
+            "Exact one-cluster solution; no iterative CPU ",
+            "or CUDA backend was launched."
+        ),
+        tuning = tuning_metadata,
+        exact_trivial_solution = TRUE
+    )
 }
 
 finish_trivial_singleton_kmeans <- function(
@@ -860,6 +872,11 @@ print.faissR_kmeans <- function(x, ...) {
     if (!is.null(tuning$policy)) {
         cat("  tuning: ", tuning$policy, "\n", sep = "")
     }
+    print_kmeans_effective_params(effective, params)
+    invisible(x)
+}
+
+print_kmeans_effective_params <- function(effective, params) {
     max_iter <- effective$max_iter %||% params$max_iter
     n_init <- effective$n_init %||% params$n_init
     tol <- effective$tol %||% params$tol
@@ -875,7 +892,7 @@ print.faissR_kmeans <- function(x, ...) {
             sep = ""
         )
     }
-    invisible(x)
+    invisible(NULL)
 }
 
 normalize_kmeans_tuning <- function(tuning) {

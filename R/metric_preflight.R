@@ -49,7 +49,7 @@ nn_metric_preflight <- function(
     }
     if (ncol(data) != ncol(points)) {
         stop("`data` and `points` must have the same number of columns.",
-             call. = FALSE)
+                call. = FALSE)
     }
 
     data_scan <- metric_preflight_rows(data, metric)
@@ -67,7 +67,22 @@ nn_metric_preflight <- function(
         has_non_finite,
         has_degenerate
     )
+    metric_preflight_result(
+        metric, backend, self_query, data_scan, points_scan,
+        has_degenerate, has_non_finite, decision
+    )
+}
 
+metric_preflight_result <- function(
+    metric,
+    backend,
+    self_query,
+    data_scan,
+    points_scan,
+    has_degenerate,
+    has_non_finite,
+    decision
+) {
     list(
         metric = metric,
         requested_backend = backend,
@@ -106,13 +121,13 @@ metric_preflight_matrix <- function(x, name) {
         }
         if (!is.matrix(x) || !is.numeric(x)) {
             stop("`", name, "` must be a numeric matrix or data frame.",
-                 call. = FALSE)
+                    call. = FALSE)
         }
         storage.mode(x) <- "double"
     }
     if (nrow(x) < 1L || ncol(x) < 1L) {
         stop("`", name, "` must have at least one row and one column.",
-             call. = FALSE)
+                call. = FALSE)
     }
     x
 }

@@ -1,37 +1,54 @@
 coerce_knn_input <- function(indices, distances = NULL, arg_name = "indices") {
-    input_backend <- NA_character_
-    if (is.null(distances)) {
-        if (
-            !is.list(indices) ||
-                !all(c("indices", "distances") %in% names(indices))
-        ) {
-            stop(
-                "`distances` is required unless `",
-                arg_name,
-                "` is a list returned by `nn()` with `indices` ",
-                "and `distances`.",
-                call. = FALSE
-            )
+    input <- unpack_knn_input(indices, distances, arg_name)
+    matrices <- normalize_knn_matrices(input$indices, input$distances)
+    validate_knn_matrix_pair(matrices$indices, matrices$distances)
+    stripped <- validated_nonself_knn(matrices$indices, matrices$distances)
+    list(
+        indices = stripped$indices,
+        distances = stripped$distances,
+        has_self = isTRUE(stripped$has_self),
+        col_start = as.integer(stripped$col_start),
+        n_neighbors = as.integer(stripped$n_neighbors),
+        materialized = isTRUE(stripped$materialized),
+        input_backend = if (is.null(input$backend)) {
+            NA_character_
+        } else {
+            input$backend
         }
-        input_backend <- attr(indices, "resolved_backend") %||%
-            attr(indices, "backend")
-        distances <- indices$distances
-        indices <- indices$indices
-    }
+    )
+}
 
-    if (!is.matrix(indices)) {
-        indices <- as.matrix(indices)
+unpack_knn_input <- function(indices, distances, arg_name) {
+    if (!is.null(distances)) {
+        return(list(indices = indices, distances = distances, backend = NA_character_))
     }
-    if (!is.matrix(distances)) {
-        distances <- as.matrix(distances)
+    required <- is.list(indices) &&
+        all(c("indices", "distances") %in% names(indices))
+    if (!required) {
+        stop(
+            "`distances` is required unless `", arg_name,
+            "` is an `nn()` result with `indices` and `distances`.",
+            call. = FALSE
+        )
     }
-    if (!is.integer(indices)) {
-        storage.mode(indices) <- "integer"
-    }
+    list(
+        indices = indices$indices,
+        distances = indices$distances,
+        backend = attr(indices, "resolved_backend") %||% attr(indices, "backend")
+    )
+}
+
+normalize_knn_matrices <- function(indices, distances) {
+    indices <- if (is.matrix(indices)) indices else as.matrix(indices)
+    distances <- if (is.matrix(distances)) distances else as.matrix(distances)
+    if (!is.integer(indices)) storage.mode(indices) <- "integer"
     if (!identical(typeof(distances), "double")) {
         storage.mode(distances) <- "double"
     }
+    list(indices = indices, distances = distances)
+}
 
+validate_knn_matrix_pair <- function(indices, distances) {
     if (!identical(dim(indices), dim(distances))) {
         stop(
             "KNN `indices` and `distances` must have the same dimensions.",
@@ -44,33 +61,18 @@ coerce_knn_input <- function(indices, distances = NULL, arg_name = "indices") {
             call. = FALSE
         )
     }
+    invisible(TRUE)
+}
 
+validated_nonself_knn <- function(indices, distances) {
     stripped <- strip_self_neighbors_cpp(indices, distances)
-    indices <- stripped$indices
-    distances <- stripped$distances
-    has_self <- isTRUE(stripped$has_self)
-    col_start <- stripped$col_start
-    n_neighbors <- stripped$n_neighbors
-    if (n_neighbors < 1L) {
+    if (stripped$n_neighbors < 1L) {
         stop(
             "KNN input must contain at least one non-self neighbor.",
             call. = FALSE
         )
     }
-
-    list(
-        indices = indices,
-        distances = distances,
-        has_self = has_self,
-        col_start = as.integer(col_start),
-        n_neighbors = as.integer(n_neighbors),
-        materialized = isTRUE(stripped$materialized),
-        input_backend = if (is.null(input_backend)) {
-            NA_character_
-        } else {
-            input_backend
-        }
-    )
+    stripped
 }
 
 is_knn_input <- function(x) {
@@ -283,11 +285,7 @@ attach_nn_method_implementation_contract <- function(
     result
 }
 
-nn_gpu_residency_metadata <- function(out) {
-    if (!is.list(out)) {
-        return(NULL)
-    }
-    fields <- c(
+.nn_gpu_residency_fields <- c(
         "accelerator",
         "gpu_provider",
         "device_residency",
@@ -329,8 +327,15 @@ nn_gpu_residency_metadata <- function(out) {
         "device_to_host_result_bytes_minimum",
         "cpu_fallback",
         "cpu_side_result_repair"
-    )
-    fields <- fields[fields %in% names(out)]
+)
+
+nn_gpu_residency_metadata <- function(out) {
+    if (!is.list(out)) {
+        return(NULL)
+    }
+    fields <- .nn_gpu_residency_fields[
+        .nn_gpu_residency_fields %in% names(out)
+    ]
     if (!length(fields)) {
         return(NULL)
     }
@@ -546,33 +551,46 @@ normalized_float32_transform_cached <- function(x, metric, role = "data") {
         dim(x)
     }
     fingerprint <- matrix_fingerprint_cpp(x)
-    key <- paste(
-        metric,
-        paste(as.integer(dims), collapse = "x"),
-        fingerprint,
-        sep = ":"
-    )
+    key <- normalized_float32_cache_key(metric, dims, fingerprint)
     cache_enabled <- transformed_float32_cache_enabled()
-    if (
-        isTRUE(cache_enabled) &&
-            exists(
-                key,
-                envir = .faissR_transformed_float32_cache,
-                inherits = FALSE
-            )
-    ) {
-        entry <- get(
-            key,
-            envir = .faissR_transformed_float32_cache,
-            inherits = FALSE
-        )
+    entry <- find_normalized_float32_cache_entry(key, cache_enabled)
+    if (!is.null(entry)) {
         entry$cache_hit <- TRUE
         entry$role <- role
         return(entry)
     }
-
     transformed <- normalized_float32_transform_cpp(x, metric)
-    entry <- list(
+    entry <- new_normalized_float32_cache_entry(
+        transformed, metric, key, fingerprint, cache_enabled, role
+    )
+    store_normalized_float32_cache_entry(key, entry, cache_enabled)
+    entry
+}
+
+normalized_float32_cache_key <- function(metric, dims, fingerprint) {
+    paste(metric, paste(as.integer(dims), collapse = "x"), fingerprint, sep = ":")
+}
+
+find_normalized_float32_cache_entry <- function(key, enabled) {
+    if (!isTRUE(enabled) || !exists(
+        key,
+        envir = .faissR_transformed_float32_cache,
+        inherits = FALSE
+    )) {
+        return(NULL)
+    }
+    get(key, envir = .faissR_transformed_float32_cache, inherits = FALSE)
+}
+
+new_normalized_float32_cache_entry <- function(
+    transformed,
+    metric,
+    key,
+    fingerprint,
+    cache_enabled,
+    role
+) {
+    list(
         data = transformed$data,
         zero = as.logical(transformed$zero),
         transform = transformed_float32_cache_transform_label(metric),
@@ -584,14 +602,16 @@ normalized_float32_transform_cached <- function(x, metric, role = "data") {
         cache_enabled = isTRUE(cache_enabled),
         role = role
     )
+}
 
-    if (isTRUE(cache_enabled) && transformed_float32_cache_limit() > 0L) {
+store_normalized_float32_cache_entry <- function(key, entry, enabled) {
+    if (isTRUE(enabled) && transformed_float32_cache_limit() > 0L) {
         assign(key, entry, envir = .faissR_transformed_float32_cache)
         keys <- .faissR_transformed_float32_cache$.keys
         .faissR_transformed_float32_cache$.keys <- c(setdiff(keys, key), key)
         transformed_float32_cache_prune()
     }
-    entry
+    invisible(NULL)
 }
 
 finalize_nn_output <- function(result, output = "double") {

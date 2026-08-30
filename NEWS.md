@@ -1,3 +1,12 @@
+# faissR 0.99.31
+
+* Resolves BiocCheck coding-practice notes by normalizing four-space
+  indentation, splitting long public and internal routines into focused
+  helpers, and removing redundant signal words from warning text.
+* Refactors nearest-neighbour backend dispatch into explicit route,
+  preflight, execution, tuning, and metadata helpers without changing the
+  public API.
+
 # faissR 0.99.30
 
 * Fixes Windows ARM64 compilation with LLVM flang by removing an unsupported

@@ -88,46 +88,20 @@
 #' head(pred)
 #' @export
 knn <- function(
-    Xtrain,
-    Ytrain,
-    Xtest = NULL,
+    Xtrain, Ytrain, Xtest = NULL,
     backend = NULL,
-    method = c(
-        "auto",
-        "exact",
-        "flat",
-        "bruteforce",
-        "grid",
-        "hnsw",
-        "ivf",
-        "ivfpq",
-        "vamana_style",
-        "nsg_style",
-        "nndescent_style",
-        "ivfpq_fastscan",
-        "cagra"
-    ),
-    metric = c("euclidean", "cosine", "correlation"),
+    method = NULL, metric = NULL,
     tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
     target_recall = 0.99,
-    cagra_implementation = NULL,
-    cagra_build_algo = NULL,
+    cagra_implementation = NULL, cagra_build_algo = NULL,
     task = c("auto", "classification", "regression"),
-    k = 15L,
-    n_threads = NULL,
+    k = 15L, n_threads = NULL,
     vote = c("majority", "weighted"),
-    type = c("response", "prob"),
-    ...
+    type = c("response", "prob"), ...
 ) {
-    if (missing(method)) {
-        method <- "auto"
-    }
-    if (missing(metric)) {
-        metric <- "euclidean"
-    }
-    if (missing(tuning)) {
-        tuning <- "auto"
-    }
+    if (missing(method)) method <- "auto"
+    if (missing(metric)) metric <- "euclidean"
+    if (missing(tuning)) tuning <- "auto"
     args <- normalize_public_knn_args(
         backend,
         method,
@@ -231,32 +205,13 @@ predict_public_knn_model <- function(
 }
 
 knn_model_fit <- function(
-    Xtrain,
-    Ytrain,
+    Xtrain, Ytrain,
     backend = NULL,
-    method = c(
-        "auto",
-        "exact",
-        "flat",
-        "bruteforce",
-        "grid",
-        "hnsw",
-        "ivf",
-        "ivfpq",
-        "vamana",
-        "nsg",
-        "nndescent",
-        "ivfpq_fastscan",
-        "cagra"
-    ),
-    metric = c("euclidean", "cosine", "correlation"),
-    tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+    method = NULL, metric = NULL, tuning = NULL,
     target_recall = 0.99,
-    cagra_implementation = NULL,
-    cagra_build_algo = NULL,
+    cagra_implementation = NULL, cagra_build_algo = NULL,
     task = c("auto", "classification", "regression"),
-    k = 15L,
-    n_threads = NULL
+    k = 15L, n_threads = NULL
 ) {
     if (missing(method)) {
         method <- "auto"
@@ -1040,52 +995,43 @@ knn_fitted_faiss_search_params <- function(object, stored_backend, params, k) {
     )
     search_params <- params
     if (stored_backend %in% c("faiss_ivf", "faiss_ivfpq")) {
-        index_n <- knn_fitted_index_attr_int(
-            object$nn_index,
-            "n",
-            nrow(model_Xtrain(object))
-        )
-        index_nlist <- knn_fitted_index_attr_int(
-            object$nn_index,
-            "nlist",
-            params$nlist %||% NA_integer_
-        )
-        query_params <- tryCatch(
-            faiss_ivf_params(
-                index_n,
-                k,
-                metric = object$metric %||% "euclidean",
-                p = ncol(model_Xtrain(object)),
-                method = if (identical(stored_backend, "faiss_ivfpq")) {
-                    "ivfpq"
-                } else {
-                    "ivf"
-                },
-                target_recall = object$target_recall %||% 0.99
-            ),
-            error = function(e) NULL
-        )
-        query_nprobe <- knn_scalar_int(
-            query_params$nprobe %||% params$nprobe,
-            default = params$nprobe %||% NA_integer_
-        )
-        if (!is.na(index_nlist)) {
-            query_nprobe <- max(1L, min(query_nprobe, index_nlist))
-        }
-        search_width <- query_nprobe
-        search_params$build_nprobe <- knn_scalar_int(
-            params$nprobe %||% NA_integer_
-        )
-        search_params$search_nprobe <- query_nprobe
-        search_params$nprobe <- query_nprobe
-        search_params$nlist <- index_nlist
-        search_params$nprobe_recomputed_for_query <- !identical(
-            as.integer(search_params$build_nprobe),
-            as.integer(query_nprobe)
-        )
-        search_params$tuning_query_k <- as.integer(k)
+        ivf <- knn_fitted_ivf_query_params(object, stored_backend, params, k)
+        search_width <- ivf$search_width
+        search_params <- ivf$params
     }
     list(search_width = search_width, params = search_params)
+}
+
+knn_fitted_ivf_query_params <- function(object, stored_backend, params, k) {
+    train <- model_Xtrain(object)
+    index_n <- knn_fitted_index_attr_int(object$nn_index, "n", nrow(train))
+    index_nlist <- knn_fitted_index_attr_int(
+        object$nn_index, "nlist", params$nlist %||% NA_integer_
+    )
+    query_params <- tryCatch(
+        faiss_ivf_params(
+            index_n, k, metric = object$metric %||% "euclidean",
+            p = ncol(train),
+            method = if (stored_backend == "faiss_ivfpq") "ivfpq" else "ivf",
+            target_recall = object$target_recall %||% 0.99
+        ),
+        error = function(e) NULL
+    )
+    query_nprobe <- knn_scalar_int(
+        query_params$nprobe %||% params$nprobe,
+        default = params$nprobe %||% NA_integer_
+    )
+    if (!is.na(index_nlist)) {
+        query_nprobe <- max(1L, min(query_nprobe, index_nlist))
+    }
+    params$build_nprobe <- knn_scalar_int(params$nprobe %||% NA_integer_)
+    params$search_nprobe <- params$nprobe <- query_nprobe
+    params$nlist <- index_nlist
+    params$nprobe_recomputed_for_query <- !identical(
+        as.integer(params$build_nprobe), as.integer(query_nprobe)
+    )
+    params$tuning_query_k <- as.integer(k)
+    list(search_width = query_nprobe, params = params)
 }
 
 knn_predict_with_fitted_faiss_hnsw_index <- function(
@@ -1112,6 +1058,20 @@ knn_predict_with_fitted_faiss_hnsw_index <- function(
     if (is.null(out)) {
         return(NULL)
     }
+    finish_fitted_hnsw_prediction(
+        out, params, object, k, backend, tuning, target_recall
+    )
+}
+
+finish_fitted_hnsw_prediction <- function(
+    out,
+    params,
+    object,
+    k,
+    backend,
+    tuning,
+    target_recall
+) {
     metric <- object$metric %||% "euclidean"
     result <- finish_nn_result(
         out,
@@ -1268,6 +1228,22 @@ knn_predict_with_fitted_faiss_index <- function(
     if (is.null(out)) {
         return(NULL)
     }
+    finish_fitted_faiss_prediction(
+        out, search$params, object, stored, k,
+        backend, tuning, target_recall
+    )
+}
+
+finish_fitted_faiss_prediction <- function(
+    out,
+    params,
+    object,
+    stored,
+    k,
+    backend,
+    tuning,
+    target_recall
+) {
     metric <- object$metric %||% "euclidean"
     exact <- stored %in% c("faiss_flat_l2", "faiss_flat_ip")
     result <- finish_nn_result(
@@ -1288,7 +1264,7 @@ knn_predict_with_fitted_faiss_index <- function(
     attr(result, "approximation") <- knn_fitted_faiss_approximation(
         stored,
         out,
-        search$params,
+        params,
         metric,
         target_recall
     )
@@ -1298,7 +1274,7 @@ knn_predict_with_fitted_faiss_index <- function(
         metric,
         exact
     )
-    result <- append_nn_tuning_metadata(result, params)
+    result <- append_nn_tuning_metadata(result, object$nn_index_params %||% list())
     finish_float32_direct_result(result, out)
 }
 
@@ -1516,32 +1492,9 @@ prepare_knn_model_matrix <- function(
     arg_name = "Xtrain",
     expected_ncol = NULL
 ) {
-    if (is_float32_matrix_input(x)) {
-        if (!requireNamespace("float", quietly = TRUE)) {
-            stop(
-                "`",
-                arg_name,
-                "` is a float32 object but the optional float package ",
-                "is not installed.",
-                call. = FALSE
-            )
-        }
-        out <- as.matrix(x)
-        dims <- float32_matrix_dims(out, arg_name)
-    } else {
-        out <- as.matrix(x)
-        storage.mode(out) <- "double"
-        dims <- dim(out)
-        if (is.null(dims) || length(dims) != 2L) {
-            stop(
-                "`",
-                arg_name,
-                "` must be a two-dimensional matrix-like object.",
-                call. = FALSE
-            )
-        }
-        dims <- as.integer(dims)
-    }
+    prepared <- coerce_knn_model_matrix(x, arg_name)
+    out <- prepared$data
+    dims <- prepared$dims
     if (anyNA(dims) || dims[1L] < 1L || dims[2L] < 1L) {
         stop(
             "`",
@@ -1563,6 +1516,29 @@ prepare_knn_model_matrix <- function(
         stop("`", arg_name, "` must contain only finite values.", call. = FALSE)
     }
     out
+}
+
+coerce_knn_model_matrix <- function(x, arg_name) {
+    if (is_float32_matrix_input(x)) {
+        if (!requireNamespace("float", quietly = TRUE)) {
+            stop(
+                "`", arg_name, "` is a float32 object but the optional ",
+                "float package is not installed.", call. = FALSE
+            )
+        }
+        out <- as.matrix(x)
+        return(list(data = out, dims = float32_matrix_dims(out, arg_name)))
+    }
+    out <- as.matrix(x)
+    storage.mode(out) <- "double"
+    dims <- dim(out)
+    if (is.null(dims) || length(dims) != 2L) {
+        stop(
+            "`", arg_name, "` must be a two-dimensional matrix-like object.",
+            call. = FALSE
+        )
+    }
+    list(data = out, dims = as.integer(dims))
 }
 
 model_Xtrain <- function(object) {

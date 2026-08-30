@@ -79,33 +79,10 @@ prepare_candidate_knn_inputs <- function(
         "exclude_self",
         default = FALSE
     )
-    x <- as.matrix(data)
-    q <- as.matrix(points)
-    storage.mode(x) <- storage.mode(q) <- "double"
-    valid_dims <- nrow(x) > 0L &&
-        ncol(x) > 0L &&
-        nrow(q) > 0L &&
-        ncol(q) == ncol(x)
-    if (!valid_dims) {
-        stop(
-            "`data` and `points` must have compatible positive dimensions.",
-            call. = FALSE
-        )
-    }
-    if (!all(is.finite(x)) || !all(is.finite(q))) {
-        stop(
-            "`data` and `points` must contain only finite values.",
-            call. = FALSE
-        )
-    }
-    cand <- as.matrix(candidates)
-    storage.mode(cand) <- "integer"
-    if (nrow(cand) != nrow(q) || ncol(cand) < 1L) {
-        stop(
-            "`candidates` must have one row per query and at least one column.",
-            call. = FALSE
-        )
-    }
+    matrices <- prepare_candidate_matrices(data, points, candidates)
+    x <- matrices$x
+    q <- matrices$q
+    cand <- matrices$candidates
     k_message <- "`k` must be an integer in [1, ncol(candidates)]."
     k <- normalize_nn_positive_integer(k, "k", k_message)
     if (k > ncol(cand)) {
@@ -131,22 +108,37 @@ prepare_candidate_knn_inputs <- function(
     )
 }
 
+prepare_candidate_matrices <- function(data, points, candidates) {
+    x <- as.matrix(data)
+    q <- as.matrix(points)
+    storage.mode(x) <- storage.mode(q) <- "double"
+    valid_dims <- nrow(x) > 0L && ncol(x) > 0L &&
+        nrow(q) > 0L && ncol(q) == ncol(x)
+    if (!valid_dims) {
+        stop(
+            "`data` and `points` must have compatible positive dimensions.",
+            call. = FALSE
+        )
+    }
+    if (!all(is.finite(x)) || !all(is.finite(q))) {
+        stop(
+            "`data` and `points` must contain only finite values.",
+            call. = FALSE
+        )
+    }
+    candidates <- as.matrix(candidates)
+    storage.mode(candidates) <- "integer"
+    if (nrow(candidates) != nrow(q) || ncol(candidates) < 1L) {
+        stop(
+            "`candidates` must have one row per query and at least one column.",
+            call. = FALSE
+        )
+    }
+    list(x = x, q = q, candidates = candidates)
+}
+
 candidate_knn_cuda <- function(input, metric) {
-    if (!input$exclude_self) {
-        stop(
-            "CUDA candidate KNN currently requires `exclude_self = TRUE`.",
-            call. = FALSE
-        )
-    }
-    if (!input$self_query) {
-        stop(
-            "CUDA candidate KNN currently requires self-query candidates.",
-            call. = FALSE
-        )
-    }
-    if (!isTRUE(cuda_available())) {
-        stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
-    }
+    validate_candidate_knn_cuda(input)
     normalized <- metric %in% c("cosine", "correlation")
     metric_inputs <- if (normalized) {
         normalized_euclidean_metric_inputs(
@@ -164,12 +156,7 @@ candidate_knn_cuda <- function(input, metric) {
         "euclidean"
     )
     result <- finish_nn_result(
-        out,
-        "cuda_candidate",
-        input$k,
-        TRUE,
-        exact = FALSE,
-        metric = metric
+        out, "cuda_candidate", input$k, TRUE, exact = FALSE, metric = metric
     )
     if (normalized) {
         result <- finalize_normalized_euclidean_metric_result(
@@ -182,6 +169,25 @@ candidate_knn_cuda <- function(input, metric) {
         transform = if (normalized) metric_inputs$transform
     )
     result
+}
+
+validate_candidate_knn_cuda <- function(input) {
+    if (!input$exclude_self) {
+        stop(
+            "CUDA candidate KNN currently requires `exclude_self = TRUE`.",
+            call. = FALSE
+        )
+    }
+    if (!input$self_query) {
+        stop(
+            "CUDA candidate KNN currently requires self-query candidates.",
+            call. = FALSE
+        )
+    }
+    if (!isTRUE(cuda_available())) {
+        stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
+    }
+    invisible(TRUE)
 }
 
 candidate_knn_cpu <- function(input, metric, n_threads) {

@@ -5,10 +5,10 @@
 \title{Preflight nearest-neighbor metric inputs}
 \usage{
 nn_metric_preflight(
-  data,
-  points = NULL,
-  metric = c("euclidean", "cosine", "correlation"),
-  backend = NULL
+    data,
+    points = NULL,
+    metric = c("euclidean", "cosine", "correlation"),
+    backend = NULL
 )
 }
 \arguments{
@@ -25,10 +25,10 @@ follows the package backend option and environment-variable policy.}
 }
 \value{
 A list containing one-based `data_rows` and `points_rows` for the
-  metric-specific degenerate condition, corresponding non-finite row
-  indices, `would_succeed`, and a stable `action` label. CPU cosine and
-  correlation use the documented zero-normalized convention; CUDA rejects
-  affected rows. An automatic backend is reported as backend-dependent.
+    metric-specific degenerate condition, corresponding non-finite row
+    indices, `would_succeed`, and a stable `action` label. CPU cosine and
+    correlation use the documented zero-normalized convention; CUDA rejects
+    affected rows. An automatic backend is reported as backend-dependent.
 }
 \description{
 Inspect reference and query rows for values that affect the public distance

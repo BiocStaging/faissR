@@ -5,17 +5,17 @@
 \title{Predict from a faissR kNN model}
 \usage{
 \method{predict}{faissR_knn_model}(
-  object,
-  newdata,
-  k = NULL,
-  backend = NULL,
-  tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
-  target_recall = NULL,
-  cagra_implementation = NULL,
-  cagra_build_algo = NULL,
-  vote = c("majority", "weighted"),
-  type = c("response", "prob"),
-  ...
+    object,
+    newdata,
+    k = NULL,
+    backend = NULL,
+    tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+    target_recall = NULL,
+    cagra_implementation = NULL,
+    cagra_build_algo = NULL,
+    vote = c("majority", "weighted"),
+    type = c("response", "prob"),
+    ...
 )
 }
 \arguments{
@@ -61,12 +61,12 @@ class probability matrices from classification models.}
 }
 \value{
 A factor for classification, a numeric vector for regression, or a
-  numeric class-probability matrix when `type = "prob"`. Outputs carry
-  `attr(result, "faissR_nn")` route metadata, approximation parameters, and
-  auto-selection metadata from the underlying \code{\link{nn}()} call. The
-  prediction-time neighbour search is batched: the full `newdata` matrix is
-  sent to the resolved FAISS/cuVS/native NN route in one call, and metadata
-  records `batch_query`, `query_n`, and `query_call_count`.
+    numeric class-probability matrix when `type = "prob"`. Outputs carry
+    `attr(result, "faissR_nn")` route metadata, approximation parameters, and
+    auto-selection metadata from the underlying \code{\link{nn}()} call. The
+    prediction-time neighbour search is batched: the full `newdata` matrix is
+    sent to the resolved FAISS/cuVS/native NN route in one call, and metadata
+    records `batch_query`, `query_n`, and `query_call_count`.
 }
 \description{
 Predict from a faissR kNN model

@@ -5,14 +5,14 @@
 \title{GPU-resident tuned nearest-neighbour search}
 \usage{
 nn_gpu(
-  data,
-  points = data,
-  k = NULL,
-  exclude_self = FALSE,
-  method = c("auto", "exact", "flat", "bruteforce"),
-  metric = c("euclidean", "cosine", "correlation"),
-  tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
-  target_recall = 0.99
+    data,
+    points = data,
+    k = NULL,
+    exclude_self = FALSE,
+    method = c("auto", "exact", "flat", "bruteforce"),
+    metric = c("euclidean", "cosine", "correlation"),
+    tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+    target_recall = 0.99
 )
 }
 \arguments{
@@ -42,16 +42,16 @@ approximate settings are recorded separately as `auto_preferred_tuning`.}
 }
 \value{
 A `faissR_gpu_knn` list. It contains an owning `handle`, non-owning
-  `indices_ptr` and `distances_ptr`, `n_query`, `k`, `index_base = 1L`,
-  `indices_type = "int32"`, `distance_type = "float32"`, `layout`, `metric`,
-  and `backend_used`. The object also declares the same distance-contract
-  fields as `nn()`. With `tuning = "auto"`, it also includes
-  `execution_tuning`; with `method = "auto"`, it includes
-  `auto_preferred_tuning` when the compiled selector has a preferred CUDA
-  method/tuning row. Ownership metadata states that `handle` owns both
-  allocations, the buffer pointers are non-owning, the producing device is
-  synchronized before return, and serialization/interprocess sharing are not
-  supported.
+    `indices_ptr` and `distances_ptr`, `n_query`, `k`, `index_base = 1L`,
+    `indices_type = "int32"`, `distance_type = "float32"`, `layout`, `metric`,
+    and `backend_used`. The object also declares the same distance-contract
+    fields as `nn()`. With `tuning = "auto"`, it also includes
+    `execution_tuning`; with `method = "auto"`, it includes
+    `auto_preferred_tuning` when the compiled selector has a preferred CUDA
+    method/tuning row. Ownership metadata states that `handle` owns both
+    allocations, the buffer pointers are non-owning, the producing device is
+    synchronized before return, and serialization/interprocess sharing are not
+    supported.
 }
 \description{
 `nn_gpu()` runs a CUDA nearest-neighbour search and returns a
@@ -95,8 +95,8 @@ the returned `auto_selection` metadata.
 }
 \examples{
 if (cuda_available()) {
-  x <- matrix(rnorm(200), ncol = 4)
-  gpu_knn <- nn_gpu(x, k = 5, exclude_self = TRUE)
-  print(gpu_knn)
+    x <- matrix(rnorm(200), ncol = 4)
+    gpu_knn <- nn_gpu(x, k = 5, exclude_self = TRUE)
+    print(gpu_knn)
 }
 }

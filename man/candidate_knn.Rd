@@ -5,14 +5,14 @@
 \title{Select nearest neighbours from a candidate matrix}
 \usage{
 candidate_knn(
-  data,
-  candidates,
-  points = data,
-  k,
-  backend = NULL,
-  metric = c("euclidean", "cosine", "correlation"),
-  n_threads = NULL,
-  exclude_self = FALSE
+    data,
+    candidates,
+    points = data,
+    k,
+    backend = NULL,
+    metric = c("euclidean", "cosine", "correlation"),
+    n_threads = NULL,
+    exclude_self = FALSE
 )
 }
 \arguments{
@@ -44,9 +44,9 @@ set. This is valid only for self-query candidate KNN.}
 }
 \value{
 A `faissR_nn` object with `indices` and `distances`. If a row
-  has fewer than `k` valid unique candidates, remaining entries are `NA` and
-  `Inf`. Distance-contract metadata states whether the returned values are a
-  metric and comparable across query rows.
+    has fewer than `k` valid unique candidates, remaining entries are `NA` and
+    `Inf`. Distance-contract metadata states whether the returned values are a
+    metric and comparable across query rows.
 }
 \description{
 `candidate_knn()` computes exact top-k neighbours restricted to a supplied

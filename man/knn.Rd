@@ -9,12 +9,8 @@ knn(
     Ytrain,
     Xtest = NULL,
     backend = NULL,
-    method = c(
-    "auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf",
-    "ivfpq", "vamana_style", "nsg_style", "nndescent_style",
-    "ivfpq_fastscan", "cagra"
-    ),
-    metric = c("euclidean", "cosine", "correlation"),
+    method = NULL,
+    metric = NULL,
     tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
     target_recall = 0.99,
     cagra_implementation = NULL,

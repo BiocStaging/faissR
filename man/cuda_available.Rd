@@ -8,7 +8,7 @@ cuda_available()
 }
 \value{
 `TRUE` when the package was built with CUDA support and the CUDA
-  runtime reports at least one available device.
+    runtime reports at least one available device.
 }
 \description{
 Check whether the native CUDA backend is available

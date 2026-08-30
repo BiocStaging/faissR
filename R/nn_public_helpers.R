@@ -123,9 +123,8 @@ nn_maybe_warn_auto_hardware <- function(selection, requested_method = "auto") {
         "Inspect `attr(result, \"auto_selection\")`, request an explicit ",
         "method, or use `tuning = \"pilot\"` for local parameter tuning ",
         "within the resolved method. Full local cross-method policy learning ",
-        "is not implemented. Set ",
-        "`options(faissR.warn_hardware_extrapolation = FALSE)` to silence ",
-        "this warning.",
+        "is not implemented. Disable hardware extrapolation notices with ",
+        "the corresponding `faissR` session option.",
         call. = FALSE
     )
     invisible(TRUE)
