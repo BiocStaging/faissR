@@ -2340,7 +2340,7 @@ test_that("publication aggregator requires complete held-out recall", {
   expect_equal(summary$target_recall_statistic, "mean_query_recall_at_k")
   expect_equal(
     summary$target_recall_replicate_rule,
-    "all_prespecified_validation_replicates"
+    "all_independent_query_seeds;timing_repeats_collapsed_within_seed"
   )
   expect_equal(summary$min_query_recall_role, "diagnostic_only")
   expect_false(summary$target_attained_all_validation_replicates)
@@ -2943,4 +2943,100 @@ test_that("publication provenance has resolved redistribution decisions", {
   expect_true(all(nzchar(provenance$source_release)))
   expect_true(all(nzchar(provenance$source_accession)))
   expect_true(all(nzchar(provenance$preprocessing)))
+})
+
+test_that("publication recall inference accepts interchangeable boundary ties", {
+  root <- test_path("../../benchmark_scripts/jss_reproduction")
+  helper <- file.path(root, "common", "benchmark_recall_inference.R")
+  if (!file.exists(helper)) {
+    skip("Publication scripts are not available in this installed-package test context.")
+  }
+  env <- new.env(parent = globalenv())
+  sys.source(helper, envir = env)
+  x <- matrix(c(0, -1, 1, 3), ncol = 1L)
+  audit <- env$recall_inference_summary(
+    actual_indices = matrix(3L, nrow = 1L),
+    reference_indices = matrix(2L, nrow = 1L),
+    reference_distances = matrix(1, nrow = 1L),
+    data = x, query_rows = 1L, metric = "euclidean",
+    bootstrap_seed = 11L, bootstrap_resamples = 200L
+  )
+  expect_equal(audit$identifier_mean, 0)
+  expect_equal(audit$tie_aware_mean, 1)
+  expect_equal(audit$tie_aware_lcb, 1)
+  expect_equal(audit$tie_substitution_query_fraction, 1)
+
+  not_tied <- env$recall_inference_summary(
+    actual_indices = matrix(4L, nrow = 1L),
+    reference_indices = matrix(2L, nrow = 1L),
+    reference_distances = matrix(1, nrow = 1L),
+    data = x, query_rows = 1L, metric = "euclidean",
+    bootstrap_seed = 11L, bootstrap_resamples = 200L
+  )
+  expect_equal(not_tied$tie_aware_mean, 0)
+})
+
+test_that("comprehensive R comparison is automated and same-allocation", {
+  root <- test_path(
+    "../../benchmark_scripts/jss_reproduction/validation/comprehensive_r_comparison"
+  )
+  required <- file.path(root, c(
+    "benchmark_comprehensive_r_comparison.R",
+    "run_comprehensive_r_comparison_cpu12.sh",
+    "audit_comprehensive_r_comparison.R",
+    "run_comprehensive_r_comparison_audit_cpu12.sh",
+    "submit_comprehensive_r_comparison.sh"
+  ))
+  if (!all(file.exists(required))) {
+    skip("Comprehensive publication comparison is unavailable in this context.")
+  }
+  worker <- paste(readLines(required[[1L]], warn = FALSE), collapse = "\n")
+  launcher <- paste(readLines(required[[2L]], warn = FALSE), collapse = "\n")
+  audit <- paste(readLines(required[[3L]], warn = FALSE), collapse = "\n")
+  submitter <- paste(readLines(required[[5L]], warn = FALSE), collapse = "\n")
+
+  expect_match(launcher, "#SBATCH --array=1-216%12", fixed = TRUE)
+  expect_match(launcher, "#SBATCH --nodes=1", fixed = TRUE)
+  expect_match(worker, "fresh_R_worker_per_route_and_repetition", fixed = TRUE)
+  expect_match(worker, "random_permutation_rotated_across_repetitions", fixed = TRUE)
+  expect_match(worker, 'input_representation = "R_double_matrix_for_every_route"', fixed = TRUE)
+  expect_match(audit, "Expected 216 task result files", fixed = TRUE)
+  expect_match(audit, "comparator elapsed time divided", fixed = TRUE)
+  expect_match(submitter, 'dependency="afterany:${ARRAY_JOB}"', fixed = TRUE)
+  expect_match(submitter, "FNN", fixed = TRUE)
+  expect_match(submitter, "RANN", fixed = TRUE)
+  expect_match(submitter, "rnndescent", fixed = TRUE)
+  expect_match(submitter, "BiocNeighbors", fixed = TRUE)
+  expect_match(submitter, "Rnanoflann", fixed = TRUE)
+  expect_match(submitter, "RcppAnnoy", fixed = TRUE)
+  expect_match(submitter, "RcppHNSW", fixed = TRUE)
+})
+
+test_that("publication consistency artifacts have reconstructible counts", {
+  root <- test_path("../../manuscript/jss/derived/consistency_artifacts")
+  if (!dir.exists(root)) {
+    skip("Publication consistency artifacts are not available in this installed-package context.")
+  }
+
+  references <- read.csv(
+    file.path(root, "reference_record_dimensions.csv"),
+    stringsAsFactors = FALSE
+  )
+  grids <- read.csv(
+    file.path(root, "calibration_candidate_grid_manifest.csv"),
+    stringsAsFactors = FALSE
+  )
+  versions <- read.csv(
+    file.path(root, "experiment_version_boundaries.csv"),
+    stringsAsFactors = FALSE
+  )
+
+  expect_equal(nrow(references), 87L)
+  expect_equal(sum(references$source_group == "real"), 81L)
+  expect_equal(sum(references$source_group == "synthetic_spatial"), 6L)
+  expect_true(all(references$query_n == pmin(references$n, 1024L)))
+  expect_true(all(references$query_sampling[references$n <= 1024L] == "all_rows"))
+  expect_equal(nrow(grids), 63L)
+  expect_equal(sum(grids$rows), 41229L)
+  expect_setequal(versions$faissR_version, c("0.99.21", "0.99.25"))
 })

@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+#SBATCH --account=immunology
+#SBATCH --partition=ada
+#SBATCH --nodes=1
+#SBATCH --ntasks=12
+#SBATCH --time=48:00:00
+#SBATCH --array=1-324%12
+#SBATCH --job-name="frJ_recall_cpu"
+#SBATCH --chdir=/scratch/firenze/NN
+#SBATCH --output=/scratch/firenze/NN/benchmark_logs/frJ_recall_cpu_%A_%a.out
+#SBATCH --error=/scratch/firenze/NN/benchmark_logs/frJ_recall_cpu_%A_%a.err
+
+set -euo pipefail
+BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
+SUITE_ROOT="${BASE_DIR}/benchmark_scripts/jss_reproduction"
+: "${SINGULARITY_IMAGE:?Export SINGULARITY_IMAGE}"
+: "${EXPECTED_FAISSR_VERSION:?Export EXPECTED_FAISSR_VERSION}"
+: "${FAISSR_PACKAGE_COMMIT:?Export FAISSR_PACKAGE_COMMIT}"
+
+DATASETS=(COIL20 USPS FashionMNIST FlowRepository_FR-FCM-ZYRM_files flow18 MNIST imagenet MetRef mass41)
+METRICS=(euclidean cosine correlation)
+K_VALUES=(15 30 50 100)
+TARGETS=(0.9 0.95 0.99)
+RECALL_INFERENCE_ID="${RECALL_INFERENCE_ID:-${EXPECTED_FAISSR_VERSION}}"
+ZERO=$((${SLURM_ARRAY_TASK_ID:?Run as a Slurm array} - 1))
+TARGET="${TARGETS[$((ZERO % 3))]}"; ZERO=$((ZERO / 3))
+K="${K_VALUES[$((ZERO % 4))]}"; ZERO=$((ZERO / 4))
+METRIC="${METRICS[$((ZERO % 3))]}"; ZERO=$((ZERO / 3))
+DATASET="${DATASETS[$ZERO]}"
+
+export METHOD_ID=faissR_cpu_auto METHOD_LABEL="faissR_auto_${METRIC}"
+export BACKEND=cpu THREADS=12 METHOD_METRICS="${METRIC}" DATASETS="${DATASET}"
+export K_VALUES="${K}" TARGET_RECALLS="${TARGET}"
+export VALIDATION_SEEDS=20260706,20260807 REPEATS=3 TIMEOUT=4000
+export INCLUDE_EXTERNAL=FALSE REQUIRED_EXTERNAL_PACKAGE='' INCLUDE_GPU_RESIDENT=FALSE
+export RUN_REAL=TRUE RUN_SPATIAL=FALSE SINGULARITY_GPU_FLAG=''
+export SINGULARITY_IMAGE EXPECTED_FAISSR_VERSION FAISSR_PACKAGE_COMMIT
+export SINGULARITYENV_FAISSR_PACKAGE_COMMIT="${FAISSR_PACKAGE_COMMIT}"
+export SINGULARITYENV_FAISSR_IMAGE_COMMIT="${FAISSR_PACKAGE_COMMIT}"
+export APPTAINERENV_FAISSR_PACKAGE_COMMIT="${FAISSR_PACKAGE_COMMIT}"
+export APPTAINERENV_FAISSR_IMAGE_COMMIT="${FAISSR_PACKAGE_COMMIT}"
+export OUT_DIR="${BASE_DIR}/faissR_JSS_REPRODUCTION/validation/recall_inference/${RECALL_INFERENCE_ID}/cpu/${METRIC}/${DATASET}/k${K}/target_${TARGET}/${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
+exec bash "${SUITE_ROOT}/common/run_one_method.sh"

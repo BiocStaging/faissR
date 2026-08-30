@@ -1,0 +1,3 @@
+"experiment","faissR_version","commit","numerical_scope","combination_rule"
+"reference, calibration, and independent-query within-dataset campaign","0.99.21","0903532baf02b340a90921db18edc4deae5ea462","route QA; exact references; calibration; CUDA installed-policy validation; LOODO reconstruction","analyzed only with other 0.99.21 campaign rows"
+"controlled same-node CPU provider comparison","0.99.25","b33a70116887474a2ed70d84de0c80bb77e9db66","standalone cold-call HNSW comparison with BiocNeighbors and RcppHNSW","not pooled with 0.99.21 elapsed times; every pair independently recall-audited against the archived exact reference"

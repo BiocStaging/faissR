@@ -222,6 +222,9 @@ nn_style_implementation_contract <- function(
         preferred_public_method = public_method,
         implementation_label = paste("faissR package-owned", label),
         implementation_scope = "package_owned_style_implementation",
+        implementation_status = "experimental",
+        experimental = TRUE,
+        principal_evidence_scope = "excluded_from_principal_performance_claims",
         canonical_reimplementation = FALSE,
         canonical_reference_name = reference
     )
@@ -246,6 +249,9 @@ nndescent_implementation_contract <- function(backend_used) {
             preferred_public_method = "nndescent_style",
             implementation_label = paste(provider, "NN-descent provider route"),
             implementation_scope = "external_provider_implementation",
+            implementation_status = "external_provider",
+            experimental = FALSE,
+            principal_evidence_scope = "provider_route_evidence_required",
             canonical_reimplementation = NA,
             canonical_reference_name = "NN-descent"
         ))

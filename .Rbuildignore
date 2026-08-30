@@ -15,6 +15,8 @@
 ^[A-Za-z0-9_.-]+[.]BiocCheck$
 ^[A-Za-z0-9_.-]+[.]BiocCheck/
 ^faissR_[0-9.]+[.]tar[.]gz$
+^faissR_recall_inference_campaign[.]tar[.]gz$
+^faissR_recall_inference_campaign[.]tar[.]gz[.]sha256$
 ^Rplots[.]pdf$
 ^cache$
 ^cache/

@@ -1,0 +1,3 @@
+useDynLib(faissRGpuConsumer, .registration = TRUE)
+export(gpu_knn_via_c_api)
+export(gpu_result_device_checksum)

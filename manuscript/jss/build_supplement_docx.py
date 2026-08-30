@@ -43,6 +43,10 @@ def word_source(source: str) -> str:
         r"\begin{tabular}{p{0.42\textwidth}p{0.48\textwidth}}",
     )
     source = source.replace(
+        r"\begin{tabularx}{\textwidth}{@{}p{0.13\textwidth}p{0.23\textwidth}X p{0.09\textwidth}@{}}",
+        r"\begin{tabular}{p{0.13\textwidth}p{0.23\textwidth}p{0.45\textwidth}p{0.09\textwidth}}",
+    )
+    source = source.replace(
         r"\begin{tabularx}{\linewidth}{P{0.30\linewidth}Y}",
         r"\begin{tabular}{p{0.30\linewidth}p{0.60\linewidth}}",
     )
@@ -75,6 +79,10 @@ def word_source(source: str) -> str:
     source = source.replace(
         r"\begin{tabularx}{\textwidth}{@{}lY@{}}",
         r"\begin{tabular}{@{}lp{0.72\textwidth}@{}}",
+    )
+    source = source.replace(
+        r"\begin{tabularx}{\textwidth}{@{}lYY@{}}",
+        r"\begin{tabular}{@{}lp{0.36\textwidth}p{0.36\textwidth}@{}}",
     )
     source = source.replace(
         r"\begin{tabularx}{\textwidth}{@{}Yrr@{}}",
@@ -186,6 +194,7 @@ def polish(path: Path) -> None:
         table_widths = {
             ("Component", "Configuration"): [2400, 6960],
             ("Method", "Tuned quantities"): [2500, 6860],
+            ("Method", "Candidate values or construction rule"): [3600, 5760],
             ("Evidence", "Passing or completed", "Total"):
                 [5600, 2160, 1600],
             ("Function", "Role"): [2500, 6860],

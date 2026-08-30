@@ -63,11 +63,46 @@ read_expected_sha256 <- function(path) {
   hash
 }
 
+verify_sha256_ledger <- function(directory, ledger_name = "checksums.sha256") {
+  ledger <- file.path(directory, ledger_name)
+  lines <- trimws(readLines(ledger, warn = FALSE))
+  lines <- lines[nzchar(lines) & !startsWith(lines, "#")]
+  fields <- strsplit(lines, "[[:space:]]+")
+  expected <- vapply(fields, `[[`, character(1L), 1L)
+  filenames <- vapply(fields, function(x) paste(x[-1L], collapse = " "), character(1L))
+  paths <- file.path(directory, filenames)
+  if (any(!grepl("^[0-9a-fA-F]{64}$", expected)) || any(!file.exists(paths))) {
+    stop("Invalid or incomplete SHA-256 ledger: ", ledger)
+  }
+  observed <- unname(sha256_files(paths))
+  result <- data.frame(
+    file = filenames,
+    expected_sha256 = tolower(expected),
+    observed_sha256 = tolower(observed),
+    verification_pass = !is.na(observed) & tolower(observed) == tolower(expected),
+    stringsAsFactors = FALSE
+  )
+  if (any(!result$verification_pass)) {
+    stop("Evidence-file SHA-256 mismatch in: ", directory)
+  }
+  result
+}
+
+cpu_loodo_dir <- file.path(dirname(script_path), "cpu_loodo")
+if (dir.exists(cpu_loodo_dir)) {
+  cpu_loodo_verification <- verify_sha256_ledger(cpu_loodo_dir)
+  write.csv(
+    cpu_loodo_verification,
+    file.path(out_dir, "cpu_loodo_verification.csv"),
+    row.names = FALSE
+  )
+}
+
 archive_dir <- NULL
 if (run_archive) {
   archive <- Sys.getenv(
     "FAISSR_JSS_ARCHIVE",
-    unset = file.path(dirname(script_path), "faissR_jss_frozen_results.tar.gz")
+    unset = file.path(dirname(script_path), "faissR_jss_evidence_snapshot.tar.gz")
   )
   ledger <- Sys.getenv(
     "FAISSR_JSS_ARCHIVE_SHA256",
@@ -79,7 +114,7 @@ if (run_archive) {
   observed_hash <- unname(sha256_files(archive))
   if (is.na(observed_hash) || !identical(tolower(observed_hash), expected_hash)) {
     stop(
-      "Frozen archive SHA-256 mismatch. No archive content was extracted or analyzed.\n",
+      "Evidence-snapshot SHA-256 mismatch. No archive content was extracted or analyzed.\n",
       "Expected: ", expected_hash, "\nObserved: ", observed_hash
     )
   }
@@ -91,10 +126,10 @@ if (run_archive) {
     ),
     file.path(out_dir, "archive_verification.csv"), row.names = FALSE
   )
-  archive_dir <- tempfile("faissR_jss_frozen_")
+  archive_dir <- tempfile("faissR_jss_snapshot_")
   dir.create(archive_dir, recursive = TRUE)
   status <- system2("tar", c("-xzf", shQuote(archive), "-C", shQuote(archive_dir)))
-  if (!identical(status, 0L)) stop("Could not extract the verified frozen archive.")
+  if (!identical(status, 0L)) stop("Could not extract the verified checksummed snapshot.")
   campaigns <- list.dirs(archive_dir, recursive = TRUE, full.names = TRUE)
   campaigns <- campaigns[
     dir.exists(file.path(campaigns, "held_out")) &
@@ -315,7 +350,7 @@ if (nzchar(results_root)) {
       file.path(out_dir, "duplicate_publication_result_keys.csv"),
       row.names = FALSE
     )
-    # Resumed jobs append replacement attempts. The final row is the frozen
+    # Resumed jobs append replacement attempts. The final row is the recorded
     # campaign's authoritative attempt, matching the downstream aggregators.
     keep <- !duplicated(key, fromLast = TRUE)
     combined <- combined[keep, , drop = FALSE]
@@ -329,11 +364,11 @@ if (nzchar(results_root)) {
       check.names = FALSE
     )
     if (!"dataset" %in% names(manifest)) {
-      stop("The frozen dataset manifest must contain a `dataset` column.")
+      stop("The checksummed dataset manifest must contain a `dataset` column.")
     }
     if (!"dataset_md5" %in% names(manifest)) {
       if (!"path" %in% names(manifest)) {
-        stop("The frozen dataset manifest must contain `dataset_md5` or `path`.")
+        stop("The checksummed dataset manifest must contain `dataset_md5` or `path`.")
       }
       manifest$dataset_md5 <- unname(tools::md5sum(manifest$path))
     }
@@ -341,7 +376,7 @@ if (nzchar(results_root)) {
     observed_md5 <- expected_md5[as.character(combined$dataset)]
     if (any(is.na(observed_md5)) ||
         any(as.character(combined$dataset_md5) != observed_md5)) {
-      stop("Benchmark dataset fingerprints do not match the frozen dataset manifest.")
+      stop("Benchmark dataset fingerprints do not match the checksummed dataset manifest.")
     }
   }
   write.csv(
@@ -382,7 +417,7 @@ if (nzchar(results_root)) {
     observed <- setNames(source_checksums$sha256, basename(source_checksums$source_file))
     if (!setequal(names(expected), names(observed)) ||
         any(expected[names(observed)] != observed)) {
-      stop("Publication result files do not match the frozen SHA-256 ledger.")
+      stop("Publication result files do not match the checksummed SHA-256 ledger.")
     }
   }
 
@@ -425,6 +460,53 @@ if (nzchar(results_root)) {
   )
   if (!identical(loodo_status, 0L)) {
     stop("Leave-one-dataset-out analysis failed with status ", loodo_status)
+  }
+
+  grouped_loodo <- file.path(
+    package_root, "benchmark_scripts", "jss_reproduction",
+    "analysis", "analyze_grouped_leave_domain_out.R"
+  )
+  if (!file.exists(grouped_loodo)) {
+    stop("Cannot find grouped leave-domain-out analysis: ", grouped_loodo)
+  }
+  grouped_loodo_status <- system2(
+    "Rscript",
+    vapply(c(
+      grouped_loodo,
+      paste0("--analysis_dir=", analysis_dir),
+      paste0("--out_dir=", file.path(analysis_dir, "grouped_leave_domain_out")),
+      "--backend=cuda",
+      "--metrics=euclidean,cosine,correlation"
+    ), shQuote, character(1L))
+  )
+  if (!identical(grouped_loodo_status, 0L)) {
+    stop("Grouped leave-domain-out analysis failed with status ", grouped_loodo_status)
+  }
+
+  regret_analysis <- file.path(
+    package_root, "benchmark_scripts", "jss_reproduction",
+    "analysis", "analyze_selector_regret.R"
+  )
+  if (!file.exists(regret_analysis)) {
+    stop("Cannot find selector-regret analysis: ", regret_analysis)
+  }
+  regret_status <- system2(
+    "Rscript",
+    vapply(c(
+      regret_analysis,
+      paste0(
+        "--loodo=",
+        file.path(analysis_dir, "leave_one_dataset_out", "jss_leave_one_dataset_out.csv")
+      ),
+      paste0(
+        "--method_summary=",
+        file.path(analysis_dir, "jss_robust_method_summary.csv")
+      ),
+      paste0("--out_dir=", file.path(analysis_dir, "selector_regret"))
+    ), shQuote, character(1L))
+  )
+  if (!identical(regret_status, 0L)) {
+    stop("Selector-regret analysis failed with status ", regret_status)
   }
 
   auto_analysis <- file.path(
@@ -478,6 +560,25 @@ if (nzchar(results_root)) {
     dirname(normalizePath(results_root, mustWork = TRUE))
   } else {
     normalizePath(results_root, mustWork = TRUE)
+  }
+  consistency_builder <- file.path(
+    package_root, "benchmark_scripts", "jss_reproduction", "analysis",
+    "build_consistency_artifacts.R"
+  )
+  if (!file.exists(consistency_builder)) {
+    stop("Cannot find publication consistency-artifact builder: ", consistency_builder)
+  }
+  consistency_status <- system2(
+    "Rscript",
+    vapply(c(
+      consistency_builder,
+      paste0("--campaign_root=", campaign_root),
+      paste0("--out_dir=", file.path(out_dir, "consistency_artifacts"))
+    ), shQuote, character(1L))
+  )
+  if (!identical(consistency_status, 0L)) {
+    stop("Publication consistency-artifact reconstruction failed with status ",
+         consistency_status)
   }
   calibration_root <- Sys.getenv(
     "FAISSR_JSS_CALIBRATION_ROOT",
@@ -569,6 +670,30 @@ if (nzchar(results_root)) {
   )
   if (!identical(table_status, 0L)) {
     stop("Manuscript table reconstruction failed with status ", table_status)
+  }
+
+  figure_builder <- file.path(dirname(script_path), "build_paired_cpu_figure.R")
+  if (!file.exists(figure_builder)) {
+    stop("Cannot find paired CPU figure builder: ", figure_builder)
+  }
+  figure_dir <- file.path(out_dir, "manuscript_figures")
+  old_figure_script <- Sys.getenv("FAISSR_JSS_FIGURE_SCRIPT", unset = NA_character_)
+  Sys.setenv(FAISSR_JSS_FIGURE_SCRIPT = normalizePath(figure_builder))
+  figure_status <- system2(
+    "Rscript",
+    vapply(c(
+      figure_builder,
+      paste0("--output=", file.path(figure_dir, "fig_paired_cpu_log_ratio.pdf")),
+      paste0("--summary=", file.path(figure_dir, "jss_paired_cpu_figure_data.csv"))
+    ), shQuote, character(1L))
+  )
+  if (is.na(old_figure_script)) {
+    Sys.unsetenv("FAISSR_JSS_FIGURE_SCRIPT")
+  } else {
+    Sys.setenv(FAISSR_JSS_FIGURE_SCRIPT = old_figure_script)
+  }
+  if (!identical(figure_status, 0L)) {
+    stop("Paired CPU figure reconstruction failed with status ", figure_status)
   }
 }
 

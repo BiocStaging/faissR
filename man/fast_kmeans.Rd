@@ -5,17 +5,17 @@
 \title{Fast k-means clustering}
 \usage{
 fast_kmeans(
-    data,
-    centers,
-    backend = NULL,
-    max_iter = "auto",
-    n_init = "auto",
-    tol = "auto",
-    seed = 1L,
-    n_threads = NULL,
-    streaming_batch_size = 0L,
-    init = c("kmeans++", "random"),
-    tuning = c("auto", "fixed", "off", "none")
+  data,
+  centers,
+  backend = NULL,
+  max_iter = "auto",
+  n_init = "auto",
+  tol = "auto",
+  seed = 1L,
+  n_threads = NULL,
+  streaming_batch_size = 0L,
+  init = c("kmeans++", "random"),
+  tuning = c("auto", "fixed", "off", "none")
 )
 }
 \arguments{
@@ -71,51 +71,51 @@ resolved by the exact faissR trivial route rather than launching GPU work.
 }
 \value{
 A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
-    `size`, `iter`, `converged`, `hit_max_iter`, `backend`, and
-    `parameters`. `backend` records the
-    implementation that actually ran, while `parameters$requested_backend` and
-    `parameters$resolved_backend` record the public backend request and device
-    policy result. `parameters$tuning` records the deterministic k-means
-    policy,
-    stable `rule` label, shape metadata, and whether `max_iter`, `n_init`, and
-    `tol` were auto-selected or supplied explicitly. The auto parameter,
-    backend-policy, and final auto backend-selection rules are computed by
-    compiled C++ helpers and record `tuning_source = "cpp"`.
-    `parameters$tuning$rule_detail` records the exact
-    `n`/`p`/`centers`/work values used to choose the rule.
-    `parameters$tuning$effective` records
-    the final values used after explicit overrides and `"auto"` defaults have
-    been resolved; `parameters$tuning$effective_max_iter`,
-    `parameters$tuning$effective_n_init`, and
-    `parameters$tuning$effective_tol` expose the same values as flat fields for
-    benchmark summaries. `parameters$tuning$backend_policy` records the
-    deterministic shape rule used by `backend = "auto"` to decide whether CUDA
-    has enough estimated work or float32 transfer size to offset transfer
-    overhead. The policy keeps `nbytes` as the ordinary R double input
-    footprint and records `gpu_transfer_nbytes` for the float32 data passed to
-    FAISS/cuVS. The default thresholds can be overridden without adding pilot
-    work by setting
-    `options(faissR.kmeans_cuda_work_threshold = ...)`,
-    `options(faissR.kmeans_cuda_nbytes_threshold = ...)`,
-    `options(faissR.kmeans_cuda_large_n_threshold = ...)`, or
-    `options(faissR.kmeans_cuda_large_p_threshold = ...)`, or
-    `options(faissR.kmeans_cuda_min_n_per_center = ...)`.
-    `parameters$tuning$selection` stores the static no-pilot backend and
-    effective-parameter decision used for benchmark auditing, including
-    `explicit_backend` and `backend_decision` fields that distinguish an
-    explicit `"cpu"`/`"cuda"` request from an automatic shape-policy choice,
-    plus `runtime_decision` and CUDA k-means capability flags from the C++
-    selector.
-    CUDA runs also record `parameters$cuda_provider_selection` as
-    `"faiss_gpu"`,
-    `"direct_cuvs"`, or `"direct_cuvs_after_faiss_gpu_unavailable_or_failed"`;
-    `parameters$backend_resolution_note` describes the provider route, and
-    `parameters$faiss_gpu_error` is present when direct cuVS was used after a
-    FAISS GPU route was unavailable or failed.
-    `hit_max_iter`
-    records whether the run reached the effective iteration cap, and
-    `converged` is the corresponding conservative convergence flag used by
-    benchmark summaries.
+  `size`, `iter`, `converged`, `hit_max_iter`, `backend`, and
+  `parameters`. `backend` records the
+  implementation that actually ran, while `parameters$requested_backend` and
+  `parameters$resolved_backend` record the public backend request and device
+ policy result. `parameters$tuning` records the deterministic k-means
+ policy,
+  stable `rule` label, shape metadata, and whether `max_iter`, `n_init`, and
+  `tol` were auto-selected or supplied explicitly. The auto parameter,
+  backend-policy, and final auto backend-selection rules are computed by
+  compiled C++ helpers and record `tuning_source = "cpp"`.
+  `parameters$tuning$rule_detail` records the exact
+  `n`/`p`/`centers`/work values used to choose the rule.
+  `parameters$tuning$effective` records
+  the final values used after explicit overrides and `"auto"` defaults have
+  been resolved; `parameters$tuning$effective_max_iter`,
+  `parameters$tuning$effective_n_init`, and
+  `parameters$tuning$effective_tol` expose the same values as flat fields for
+  benchmark summaries. `parameters$tuning$backend_policy` records the
+  deterministic shape rule used by `backend = "auto"` to decide whether CUDA
+  has enough estimated work or float32 transfer size to offset transfer
+  overhead. The policy keeps `nbytes` as the ordinary R double input
+  footprint and records `gpu_transfer_nbytes` for the float32 data passed to
+  FAISS/cuVS. The default thresholds can be overridden without adding pilot
+  work by setting
+  `options(faissR.kmeans_cuda_work_threshold = ...)`,
+  `options(faissR.kmeans_cuda_nbytes_threshold = ...)`,
+  `options(faissR.kmeans_cuda_large_n_threshold = ...)`, or
+  `options(faissR.kmeans_cuda_large_p_threshold = ...)`, or
+  `options(faissR.kmeans_cuda_min_n_per_center = ...)`.
+  `parameters$tuning$selection` stores the static no-pilot backend and
+  effective-parameter decision used for benchmark auditing, including
+  `explicit_backend` and `backend_decision` fields that distinguish an
+  explicit `"cpu"`/`"cuda"` request from an automatic shape-policy choice,
+  plus `runtime_decision` and CUDA k-means capability flags from the C++
+  selector.
+ CUDA runs also record `parameters$cuda_provider_selection` as
+ `"faiss_gpu"`,
+  `"direct_cuvs"`, or `"direct_cuvs_after_faiss_gpu_unavailable_or_failed"`;
+  `parameters$backend_resolution_note` describes the provider route, and
+  `parameters$faiss_gpu_error` is present when direct cuVS was used after a
+  FAISS GPU route was unavailable or failed.
+  `hit_max_iter`
+  records whether the run reached the effective iteration cap, and
+  `converged` is the corresponding conservative convergence flag used by
+  benchmark summaries.
 }
 \description{
 Run k-means using the fastest available backend. CPU acceleration uses

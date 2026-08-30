@@ -5,8 +5,9 @@ set -euo pipefail
 BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
 SUITE_ROOT="${SUITE_ROOT:-${BASE_DIR}/benchmark_scripts/jss_reproduction}"
 CAMPAIGN_RESULTS_ROOT="${CAMPAIGN_RESULTS_ROOT:-${BASE_DIR}/faissR_JMLR_MLOSS/final_campaign}"
-: "${FAISSR_PACKAGE_COMMIT:?Export the frozen 40-character faissR commit}"
-: "${SINGULARITY_IMAGE:?Export the frozen Singularity image path}"
+: "${FAISSR_PACKAGE_COMMIT:?Export the version-pinned 40-character faissR commit}"
+: "${SINGULARITY_IMAGE:?Export the checksummed Singularity image path}"
+: "${EXPECTED_FAISSR_VERSION:?Export EXPECTED_FAISSR_VERSION}"
 
 if [[ ! "${FAISSR_PACKAGE_COMMIT}" =~ ^[[:xdigit:]]{40}$ ]]; then
   echo "FAISSR_PACKAGE_COMMIT must be a 40-character hexadecimal Git commit" >&2
@@ -26,7 +27,6 @@ python3 "${SUITE_ROOT}/final_campaign/resume/prepare_held_out_resume.py" \
   --results-root="${CAMPAIGN_RESULTS_ROOT}/held_out" \
   --out-dir="${TASK_DIR}" \
   --scope=publication \
-  --group-datasets \
   --backends=cpu \
   --methods=faissR_cpu_auto
 
@@ -40,7 +40,7 @@ fi
 export TASK_FILE
 export CAMPAIGN_RESULTS_ROOT
 export HELD_OUT_RESULTS_ROOT="${CAMPAIGN_RESULTS_ROOT}/held_out"
-export EXPECTED_FAISSR_VERSION="${EXPECTED_FAISSR_VERSION:-0.99.21}"
+export EXPECTED_FAISSR_VERSION
 export SINGULARITYENV_FAISSR_IMAGE_COMMIT="${FAISSR_PACKAGE_COMMIT}"
 export APPTAINERENV_FAISSR_IMAGE_COMMIT="${FAISSR_PACKAGE_COMMIT}"
 

@@ -19,8 +19,10 @@ preflight tables.}
 A data frame with one row per public \code{method}, \code{backend}
 (\code{"auto"}, \code{"cpu"}, or \code{"cuda"}), and \code{metric}
 combination. Columns include \code{supported}, \code{exact},
-\code{implementation}, and \code{notes}. If \code{runtime = TRUE}, runtime
-availability columns are appended.
+\code{implementation}, \code{implementation_status}, and \code{notes}.
+Package-owned \code{*_style} routes are marked \code{"experimental"};
+external-provider NN-descent is identified separately. If
+\code{runtime = TRUE}, runtime availability columns are appended.
 }
 \description{
 \code{nn_capabilities()} returns the public method/backend/metric support table

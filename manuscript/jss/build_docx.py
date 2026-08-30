@@ -39,14 +39,15 @@ def extract_braced_command(text: str, command: str) -> str:
 
 def normalize_body(body: str) -> str:
     cross_references = {
-        "tab:api": ("Table", "1"),
-        "tab:methods": ("Table", "2"),
-        "tab:tuninggrid": ("Table", "3"),
-        "tab:calibrationaudit": ("Table", "4"),
+        "tab:methods": ("Table", "1"),
+        "tab:exact-dispatch": ("Table", "2"),
+        "tab:api": ("Table", "3"),
         "tab:datasets": ("Table", "4"),
-        "tab:interim-heldout": ("Table", "5"),
-        "tab:evidenceaudit": ("Table", "6"),
-        "tab:ablations": ("Table", "7"),
+        "tab:software-provenance": ("Table", "5"),
+        "tab:selector-regret": ("Table", "6"),
+        "tab:auto-selection": ("Table", "7"),
+        "tab:route-confusion": ("Table", "8"),
+        "tab:paired-time": ("Table", "9"),
         "sec:evaluation": ("Section", "7"),
     }
     for label, (kind, number) in cross_references.items():

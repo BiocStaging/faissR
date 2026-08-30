@@ -8,10 +8,10 @@ backend_info()
 }
 \value{
 A data frame with one row per compiled/runtime backend family and
-    columns describing availability, public call hints, public backend names,
-    supported public method/metric summaries, non-public implementation route
-    labels, device/runtime hints, and a short note. Use
-    \code{\link{nn_capabilities}()} for the full method/backend/metric matrix.
+  columns describing availability, public call hints, public backend names,
+  supported public method/metric summaries, non-public implementation route
+  labels, device/runtime hints, and a short note. Use
+  \code{\link{nn_capabilities}()} for the full method/backend/metric matrix.
 }
 \description{
 `backend_info()` reports which `faissR` nearest-neighbour backends can

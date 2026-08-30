@@ -13,6 +13,12 @@ repetitions. Every route repetition runs in a fresh R child process. Dataset
 and reference loading are outside the timers; an untimed 128-row API warm-up
 precedes measurement, and the faissR index cache is then cleared.
 
+The completed experiment uses one prespecified public configuration:
+`M/nlinks = 16`, construction effort 200, and search effort
+`max(50, 3 * k)`. Its ratios are configuration-level API comparisons, not
+provider-optimal speed estimates. Independently tuned recall-time curves and
+validation are defined separately in `../paired_cpu_hnsw_pareto/`.
+
 Three quantities are kept separate:
 
 1. end-to-end cold one-shot self-KNN time;

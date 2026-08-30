@@ -85,9 +85,25 @@ positive_num_values <- function(value, default = NULL, name) {
 script_path <- function() {
   args <- commandArgs(FALSE)
   file_arg <- grep("^--file=", args, value = TRUE)
-  if (length(file_arg)) return(normalizePath(sub("^--file=", "", file_arg[[1L]]), mustWork = TRUE))
-  normalizePath(file.path("benchmark_scripts", "benchmark_method_tuning_from_reference.R"), mustWork = FALSE)
+  if (length(file_arg)) {
+    candidate <- sub("^--file=", "", file_arg[[1L]])
+    if (file.exists(candidate)) return(normalizePath(candidate, mustWork = TRUE))
+  }
+  frame_files <- Filter(nzchar, vapply(sys.frames(), function(frame) {
+    as.character(frame$ofile %||% "")[[1L]]
+  }, character(1L)))
+  if (length(frame_files)) {
+    return(normalizePath(tail(frame_files, 1L), mustWork = TRUE))
+  }
+  normalizePath(file.path(
+    "benchmark_scripts", "jss_reproduction", "common",
+    "benchmark_method_tuning_from_reference.R"
+  ), mustWork = FALSE)
 }
+
+recall_helper <- file.path(dirname(script_path()), "benchmark_recall_inference.R")
+if (!file.exists(recall_helper)) recall_helper <- file.path(getwd(), "benchmark_recall_inference.R")
+if (file.exists(recall_helper)) source(recall_helper)
 
 safe_timeout_bin <- local({
   cached <- NULL
@@ -251,9 +267,17 @@ load_reference <- function(dataset_path, k, reference_k, quality_n, seed,
       error = sprintf("reference file contains %d neighbours, but k=%d was requested", ncol(ref$indices), as.integer(k))
     ))
   }
+  if (is.null(ref$distances) || !is.matrix(ref$distances) ||
+      ncol(ref$distances) < as.integer(k)) {
+    return(list(
+      status = "bad_reference", path = path,
+      error = "reference object has no compatible `distances` matrix"
+    ))
+  }
   ref$source_k <- as.integer(ref$k %||% ref$max_k %||% ncol(ref$indices))
   ref$requested_k <- as.integer(k)
   ref$indices <- ref$indices[, seq_len(as.integer(k)), drop = FALSE]
+  ref$distances <- ref$distances[, seq_len(as.integer(k)), drop = FALSE]
   ref$k <- as.integer(k)
   ref$path <- path
   ref
@@ -865,8 +889,16 @@ base_row <- function(config, status = "success", error = NA_character_) {
     recall_at_k = NA_real_, mean_query_recall_at_k = NA_real_,
     median_recall_at_k = NA_real_, median_query_recall_at_k = NA_real_,
     min_recall_at_k = NA_real_, min_query_recall_at_k = NA_real_,
-    target_recall_statistic = "mean_query_recall_at_k",
-    target_recall_replicate_rule = "all_prespecified_validation_replicates",
+    tie_aware_recall_at_k = NA_real_,
+    identifier_recall_lcb = NA_real_, tie_aware_recall_lcb = NA_real_,
+    tie_substitution_query_fraction = NA_real_,
+    mean_boundary_tie_credit = NA_real_,
+    recall_independent_query_n = NA_integer_,
+    recall_confidence_level = 0.95, recall_bootstrap_resamples = 1000L,
+    recall_uncertainty_method = "query_bootstrap_percentile_lcb",
+    target_recall_statistic =
+      "tie_aware_mean_query_recall_at_k_one_sided_bootstrap_lcb",
+    target_recall_replicate_rule = "single_calibration_query_seed",
     min_query_recall_role = "diagnostic_only",
     reference_status = config$reference_status %||% NA_character_,
     reference_path = config$reference_path %||% NA_character_,
@@ -889,6 +921,9 @@ base_row <- function(config, status = "success", error = NA_character_) {
 }
 
 run_method <- function(config) {
+  if (!exists("recall_inference_summary", mode = "function", inherits = TRUE)) {
+    stop("benchmark_recall_inference.R was not loaded.", call. = FALSE)
+  }
   configure_threads(config$candidate$n_threads)
   load_faissR()
   x <- load_dataset_matrix(config$dataset_path)
@@ -912,6 +947,14 @@ run_method <- function(config) {
   elapsed <- proc.time()[["elapsed"]] - started
   row <- base_row(config, "success")
   quality <- recall_summary(res$indices[config$reference_rows, , drop = FALSE], config$reference_indices)
+  inference <- recall_inference_summary(
+    res$indices[config$reference_rows, , drop = FALSE],
+    config$reference_indices,
+    config$reference_distances,
+    data = x, query_rows = config$reference_rows, metric = config$metric,
+    bootstrap_seed = config$reference_seed,
+    confidence = 0.95, bootstrap_resamples = 1000L
+  )
   row$elapsed_sec <- as.numeric(elapsed)
   row$peak_rss_gb <- read_peak_rss_gb()
   row$recall_at_k <- quality$recall_at_k
@@ -920,6 +963,15 @@ run_method <- function(config) {
   row$median_query_recall_at_k <- quality$median_query_recall_at_k
   row$min_recall_at_k <- quality$min_recall_at_k
   row$min_query_recall_at_k <- quality$min_query_recall_at_k
+  row$tie_aware_recall_at_k <- inference$tie_aware_mean
+  row$identifier_recall_lcb <- inference$identifier_lcb
+  row$tie_aware_recall_lcb <- inference$tie_aware_lcb
+  row$tie_substitution_query_fraction <-
+    inference$tie_substitution_query_fraction
+  row$mean_boundary_tie_credit <- inference$mean_boundary_credit
+  row$recall_independent_query_n <- inference$n_independent_queries
+  row$recall_confidence_level <- inference$confidence
+  row$recall_bootstrap_resamples <- inference$bootstrap_resamples
   row$result_backend <- res$backend_used %||% attr(res, "backend") %||% NA_character_
   row$resolved_backend <- attr(res, "resolved_backend") %||% row$result_backend
   row$implementation_backend <- attr(res, "implementation_backend") %||% NA_character_
@@ -1076,7 +1128,13 @@ summarize_results <- function(out_dir, results_path, target_recalls, method) {
       , drop = FALSE
     ]
     for (target in target_recalls) {
-      ok <- part0[part0$recall_at_k >= target, , drop = FALSE]
+      eligibility <- if ("tie_aware_recall_lcb" %in% names(part0) &&
+                         any(is.finite(part0$tie_aware_recall_lcb))) {
+        part0$tie_aware_recall_lcb
+      } else {
+        part0$recall_at_k
+      }
+      ok <- part0[is.finite(eligibility) & eligibility >= target, , drop = FALSE]
       best <- if (nrow(ok)) {
         ok[
           order(ok$elapsed_sec, -ok$recall_at_k, ok$candidate_id),
@@ -1399,6 +1457,9 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
             method = method, metric = metric, k = as.integer(k),
             target_recalls = target_recalls,
             reference_rows = ref$rows, reference_indices = ref$indices,
+            reference_distances = ref$distances[, seq_len(as.integer(k)),
+                                               drop = FALSE],
+            reference_seed = as.integer(seed),
             reference_status = ref$status %||% NA_character_,
             reference_path = ref$path %||% NA_character_,
             reference_query_n = length(ref$rows %||% integer()),

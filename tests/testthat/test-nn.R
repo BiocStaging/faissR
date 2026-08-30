@@ -932,6 +932,35 @@ test_that("auto metadata labels hardware extrapolation without changing selectio
   )
 })
 
+test_that("CUDA auto hardware extrapolation warns once and can be silenced", {
+  selection <- list(
+    predicted_device = "cuda",
+    runtime_hardware_model = "NVIDIA A100-SXM4-80GB",
+    hardware_evidence = "hardware_extrapolated_unvalidated"
+  )
+  key <- "hardware_warning:nvidiaa100sxm480gb"
+  if (exists(key, envir = faissR:::.faissR_auto_hardware_cache)) {
+    rm(list = key, envir = faissR:::.faissR_auto_hardware_cache)
+  }
+  on.exit({
+    if (exists(key, envir = faissR:::.faissR_auto_hardware_cache)) {
+      rm(list = key, envir = faissR:::.faissR_auto_hardware_cache)
+    }
+  }, add = TRUE)
+
+  expect_warning(
+    faissR:::nn_maybe_warn_auto_hardware(selection, "auto"),
+    "L40S-informed"
+  )
+  expect_no_warning(faissR:::nn_maybe_warn_auto_hardware(selection, "auto"))
+  expect_no_warning(faissR:::nn_maybe_warn_auto_hardware(selection, "flat"))
+
+  old <- options(faissR.warn_hardware_extrapolation = FALSE)
+  on.exit(options(old), add = TRUE)
+  selection$runtime_hardware_model <- "NVIDIA H100"
+  expect_no_warning(faissR:::nn_maybe_warn_auto_hardware(selection, "auto"))
+})
+
 test_that("explicit NN routes do not attach auto selection metadata", {
   set.seed(1044)
   x <- matrix(rnorm(80), ncol = 4)
@@ -1078,7 +1107,10 @@ test_that("nn_capabilities can report current runtime availability", {
 
   expect_identical(
     names(caps),
-    c("method", "backend", "metric", "supported", "exact", "implementation", "notes")
+    c(
+      "method", "backend", "metric", "supported", "exact",
+      "implementation", "implementation_status", "notes"
+    )
   )
   expect_equal(nrow(runtime_caps), nrow(caps))
   expect_true(all(c(
@@ -2874,6 +2906,14 @@ test_that("GPU-resident 2D exact search is cancellation resistant", {
   expect_equal(resident$backend_used, "cuda_native_exact_gpu")
   expect_equal(resident$result_residency, "cuda")
   expect_equal(resident$device_to_host_result_copies, 0L)
+  expect_equal(resident$memory_owner, "handle_externalptr")
+  expect_match(resident$buffer_ownership, "non_owning")
+  expect_equal(
+    resident$producer_synchronization,
+    "cuda_device_synchronized_before_return"
+  )
+  expect_false(resident$serialization_supported)
+  expect_false(resident$interprocess_sharing_supported)
   expect_equal(gpu$indices, cpu$indices)
   expect_equal(gpu$distances, cpu$distances, tolerance = 1e-6)
 })
@@ -3037,5 +3077,62 @@ test_that("removed metrics are rejected by the public API", {
   expect_error(
     nn_gpu(x, k = 2L, metric = "inner_product"),
     "euclidean.*cosine.*correlation"
+  )
+})
+
+test_that("CPU auto reports its calibration-informed evidence scope", {
+  x <- matrix(seq_len(48), nrow = 12)
+  out <- nn(
+    x,
+    k = 2L,
+    backend = "cpu",
+    method = "auto",
+    exclude_self = TRUE
+  )
+  selection <- attr(out, "auto_selection")
+  expect_equal(
+    selection$auto_policy_status,
+    "calibration_informed_not_independently_validated"
+  )
+  expect_equal(
+    attr(out, "auto_policy_evidence_scope"),
+    "cpu_static_policy_experimental"
+  )
+  expect_true(any(grepl(
+    "auto policy: calibration_informed",
+    capture.output(print(out)),
+    fixed = TRUE
+  )))
+})
+
+test_that("CUDA auto metadata reports its narrow experimental scope", {
+  testthat::local_mocked_bindings(
+    nn_auto_selection_metadata = function(...) {
+      list(predicted_device = "cuda")
+    },
+    .package = "faissR"
+  )
+  request <- list(
+    data = matrix(0, 1L, 1L), points = matrix(0, 1L, 1L),
+    points_missing = TRUE, k = 1L, backend = "cuda", method = "auto",
+    resolved_backend = "cuda", metric = "euclidean", tuning = "auto",
+    exclude_self = FALSE, target_recall = 0.99
+  )
+  selection <- faissR:::public_nn_auto_selection(request)
+  expect_equal(
+    selection$auto_policy_status,
+    "experimental_l40s_calibrated_cold_full_self_search"
+  )
+  expect_equal(
+    selection$auto_policy_evidence_scope,
+    "cuda_l40s_cold_full_self_search_experimental"
+  )
+})
+
+test_that("requested recall tiers are discrete and not interpolated", {
+  x <- matrix(seq_len(24), nrow = 6)
+  expect_error(
+    nn(x, k = 2L, target_recall = 0.97),
+    "one of 0.9, 0.95, or 0.99"
   )
 })

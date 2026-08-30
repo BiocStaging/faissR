@@ -103,6 +103,9 @@ per_cpu <- read_required(file.path(
 per_cuda <- read_required(file.path(
   analysis_dir, "per_dataset", "jss_cuda_per_dataset_performance.csv"
 ))
+selector_regret <- read_required(file.path(
+  analysis_dir, "selector_regret", "jss_selector_regret_summary.csv"
+))
 ratio_row <- function(label, x) {
   x <- x[is.finite(x)]
   data.frame(
@@ -123,15 +126,25 @@ paired <- rbind(
 environment <- data.frame(
   component = c(
     "Operating system", "R", "Linear algebra", "CPU execution",
-    "GPU execution", "NVIDIA driver", "Input representation",
-    "External CPU comparator"
+    "GPU execution", "NVIDIA driver",
+    "Calibration/reference/held-out representation",
+    "Controlled CPU provider representation",
+    "faissR, calibration/validation snapshot", "faissR, controlled CPU comparison",
+    "FAISS GPU/cuVS build", "RAPIDS cuVS", "CUDA toolkit",
+    "External CPU comparators", "Frozen campaign container"
   ),
   configuration = c(
     "Debian GNU/Linux 13 (trixie) in Singularity",
     "4.5.3, x86_64-conda-linux-gnu", "OpenBLAS 0.3.33; LAPACK 3.12.0",
     "UCT ada partition; 12 requested threads per job",
     "NVIDIA L40S; 46,068 MiB; compute capability 8.9", "595.58.03",
-    "float32 for all publication benchmark rows", "BiocNeighbors 2.4.0"
+    "Direct float32 input for timed calibration, reference, held-out, and CUDA selector rows",
+    "Same R double matrix for both routes; faissR conversion included inside its timer",
+    "0.99.21; commit 0903532baf02b340a90921db18edc4deae5ea462",
+    "0.99.25; commit b33a70116887474a2ed70d84de0c80bb77e9db66",
+    "1.14.3", "libcuvs 26.06", "13.2",
+    "BiocNeighbors 2.4.0; RcppHNSW 0.7.0",
+    "SHA-256 0cd4d0df406bd0075046b16d2e8a4d3ae78ee61d98e6d47c639986e28ea6f203"
   ), stringsAsFactors = FALSE
 )
 
@@ -187,7 +200,7 @@ calibration_audits <- list.dirs(file.path(campaign_root, "analysis"), recursive 
 calibration_audits <- calibration_audits[file.exists(file.path(
   calibration_audits, "jss_calibration_recommendations.csv"
 ))]
-if (!length(calibration_audits)) stop("No frozen calibration audit directory was found.")
+if (!length(calibration_audits)) stop("No version-pinned calibration audit directory was found.")
 audit_counts <- vapply(calibration_audits, function(path) {
   value <- read_required(file.path(path, "jss_calibration_recommendations.csv"))
   sum(value$metric %in% c("euclidean", "cosine", "correlation"))
@@ -214,6 +227,12 @@ qa_count <- function(backend) length(unique(paste(
 
 loodo <- read_required(file.path(
   analysis_dir, "leave_one_dataset_out", "jss_leave_one_dataset_out.csv"
+))
+route_confusion <- read_required(file.path(
+  analysis_dir, "leave_one_dataset_out", "jss_leave_one_dataset_out_route_confusion.csv"
+))
+grouped_loodo <- read_required(file.path(
+  analysis_dir, "grouped_leave_domain_out", "jss_grouped_leave_domain_out_summary.csv"
 ))
 auto_rows <- summary[summary$method_id == "faissR_cuda_auto", ]
 cpu_rows <- summary[summary$method_id == "faissR_cpu_hnsw", ]
@@ -251,10 +270,10 @@ decision <- function(label, dataset_set, k, target) {
       auto_cells$k == k & abs(auto_cells$target_recall - target) < 1e-12,
   ]
   methods <- unique(tolower(z$selected_method))
-  if (length(methods) != 1L) stop("Non-unique frozen route decision for ", label)
+  if (length(methods) != 1L) stop("Non-unique recorded route decision for ", label)
   if (methods == "flat") return("Flat")
   values <- unique(paste0("(", z$nlist, ", ", z$nprobe, ")"))
-  if (length(values) != 1L) stop("Non-unique frozen IVF parameters for ", label)
+  if (length(values) != 1L) stop("Non-unique recorded IVF parameters for ", label)
   values
 }
 shape_sets <- list(
@@ -304,6 +323,13 @@ assert_equal(evidence$total, c(48, 52, 6804, 4725, 324, 324, 324, 324),
              "evidence audit denominator")
 assert_equal(nrow(per_cpu), 9L, "CPU per-dataset rows")
 assert_equal(nrow(per_cuda), 9L, "CUDA per-dataset rows")
+assert_equal(selector_regret$median_regret[selector_regret$policy == "installed"],
+             1.096462, "installed selector median regret", tolerance = 0.000001)
+assert_equal(selector_regret$median_regret[selector_regret$policy == "cross_fitted"],
+             1.0, "cross-fitted selector median regret", tolerance = 0.000001)
+assert_equal(sum(grouped_loodo$n_cells), 324L, "grouped domain holdout cells")
+assert_equal(sum(grouped_loodo$n_operating_points_met), 320L,
+             "grouped domain holdout target attainment")
 
 tables <- list(
   write_table(methods, 1, "method_families", "Nearest-neighbor method families", out_dir),
@@ -320,7 +346,22 @@ tables <- list(
   write_table(per_cpu, 12, "cpu_per_dataset", "CPU results by dataset", out_dir),
   write_table(per_cuda, 13, "cuda_per_dataset", "CUDA results by dataset", out_dir),
   write_table(auto_by_dataset, 14, "cuda_auto_by_dataset", "CUDA automatic routes by dataset", out_dir),
-  write_table(ivf_decisions, 15, "cuda_ivf_decisions", "Frozen CUDA IVF decisions", out_dir)
+  write_table(
+    ivf_decisions, 15, "cuda_ivf_decisions",
+    "Version-pinned CUDA IVF decisions", out_dir
+  ),
+  write_table(
+    selector_regret, 16, "selector_feasible_route_regret",
+    "CUDA selector feasible-route regret", out_dir
+  ),
+  write_table(
+    route_confusion, 17, "selector_route_confusion",
+    "Compiled, cross-fitted, and oracle route confusion", out_dir
+  ),
+  write_table(
+    grouped_loodo, 18, "grouped_leave_domain_out",
+    "Grouped leave-one-domain-out sensitivity", out_dir
+  )
 )
 manifest <- do.call(rbind, tables)
 manifest$sha256 <- vapply(file.path(out_dir, manifest$file), function(path) {
@@ -334,11 +375,11 @@ manifest$sha256 <- vapply(file.path(out_dir, manifest$file), function(path) {
 }, character(1L))
 manifest$recreated <- TRUE
 utils::write.csv(manifest, file.path(out_dir, "manuscript_table_manifest.csv"), row.names = FALSE)
-if (nrow(manifest) != 15L || !all(manifest$rows > 0L) || !all(manifest$recreated)) {
+if (nrow(manifest) != 18L || !all(manifest$rows > 0L) || !all(manifest$recreated)) {
   stop("Not every manuscript table was recreated.")
 }
 writeLines(
-  c("MANUSCRIPT TABLE AUDIT PASSED", paste0("Tables recreated: ", nrow(manifest), "/15")),
+  c("MANUSCRIPT TABLE AUDIT PASSED", paste0("Tables recreated: ", nrow(manifest), "/18")),
   file.path(out_dir, "MANUSCRIPT_TABLE_AUDIT.txt")
 )
-cat("Recreated and audited 15 manuscript tables in ", out_dir, "\n", sep = "")
+cat("Recreated and audited 18 manuscript tables in ", out_dir, "\n", sep = "")

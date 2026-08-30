@@ -32,7 +32,7 @@ trap 'rm -f "${tmp_launcher}"' EXIT
 sed \
   -e "s|^export DATASETS=.*$|export DATASETS='${DATASET}'|" \
   -e 's|^export OUT_DIR=.*$|export OUT_DIR="${SHARD_OUT_DIR}"|' \
-  -e 's|^export EXPECTED_FAISSR_VERSION=.*$|export EXPECTED_FAISSR_VERSION="${EXPECTED_FAISSR_VERSION:-0.99.21}"|' \
+  -e 's|^export EXPECTED_FAISSR_VERSION=.*$|export EXPECTED_FAISSR_VERSION="${EXPECTED_FAISSR_VERSION:?EXPECTED_FAISSR_VERSION is required}"|' \
   "${ORIGINAL_LAUNCHER}" > "${tmp_launcher}"
 
 echo "Dataset shard ${DATASET}; ${MISSING} cells were missing before resume"

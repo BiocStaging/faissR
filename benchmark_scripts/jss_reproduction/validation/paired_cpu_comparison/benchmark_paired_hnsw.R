@@ -62,19 +62,49 @@ subset_knn <- function(result, rows, k) {
   )
 }
 
-run_one_shot <- function(x, route, k, threads, target_recall, algorithm_seed) {
+with_faiss_hnsw_options <- function(m, ef_construction, ef_search, code) {
+  keys <- c(
+    "faissR.faiss_hnsw_m", "faissR.faiss_hnsw_ef_construction",
+    "faissR.faiss_hnsw_ef_search"
+  )
+  old <- options()
+  on.exit(options(old[keys]), add = TRUE)
+  options(structure(
+    list(m, ef_construction, ef_search), names = keys
+  ))
+  force(code)
+}
+
+proc_status_value <- function(name) {
+  path <- "/proc/self/status"
+  if (!file.exists(path)) return(NA_character_)
+  line <- grep(paste0("^", name, ":"), readLines(path, warn = FALSE), value = TRUE)
+  if (!length(line)) return(NA_character_)
+  trimws(sub("^[^:]+:", "", line[[1L]]))
+}
+
+proc_status_kib <- function(name) {
+  value <- proc_status_value(name)
+  if (is.na(value)) return(NA_real_)
+  suppressWarnings(as.numeric(gsub("[^0-9]", "", value)))
+}
+
+run_one_shot <- function(x, route, k, threads, target_recall, algorithm_seed,
+                         hnsw_m, ef_construction, ef_search) {
   if (identical(route, "faissR_hnsw")) {
-    return(faissR::nn(
-      x, k = k, exclude_self = TRUE, backend = "cpu", method = "hnsw",
-      metric = "euclidean", tuning = "auto", target_recall = target_recall,
-      n_threads = threads, output = "double"
+    return(with_faiss_hnsw_options(hnsw_m, ef_construction, ef_search,
+      faissR::nn(
+        x, k = k, exclude_self = TRUE, backend = "cpu", method = "hnsw",
+        metric = "euclidean", tuning = "auto", target_recall = target_recall,
+        n_threads = threads, output = "double"
+      )
     ))
   }
   if (identical(route, "RcppHNSW_hnsw")) {
     return(remove_query_self(
       RcppHNSW::hnsw_knn(
-        x, k = k + 1L, distance = "euclidean", M = 16L,
-        ef_construction = 200L, ef = max(50L, 3L * k), verbose = FALSE,
+        x, k = k + 1L, distance = "euclidean", M = hnsw_m,
+        ef_construction = ef_construction, ef = ef_search, verbose = FALSE,
         progress = "none", n_threads = threads, grain_size = 1L,
         byrow = TRUE, random_seed = algorithm_seed
       ),
@@ -86,8 +116,8 @@ run_one_shot <- function(x, route, k, threads, target_recall, algorithm_seed) {
       BiocNeighbors::findKNN(
         x, k = k + 1L,
         BNPARAM = BiocNeighbors::HnswParam(
-          distance = "Euclidean", nlinks = 16L, ef.construction = 200L,
-          ef.search = max(50L, 3L * k)
+          distance = "Euclidean", nlinks = hnsw_m,
+          ef.construction = ef_construction, ef.search = ef_search
         ),
         num.threads = threads, get.index = TRUE, get.distance = TRUE
       ),
@@ -97,39 +127,51 @@ run_one_shot <- function(x, route, k, threads, target_recall, algorithm_seed) {
   stop("Unsupported route: ", route, call. = FALSE)
 }
 
-build_reusable <- function(x, route, k, threads, target_recall, algorithm_seed) {
+build_reusable <- function(x, route, k, threads, target_recall, algorithm_seed,
+                           hnsw_m, ef_construction, ef_search) {
   if (identical(route, "faissR_hnsw")) {
     labels <- factor(rep(c("a", "b"), length.out = nrow(x)))
-    return(faissR::knn(
-      x, labels, backend = "cpu", method = "hnsw", metric = "euclidean",
-      tuning = "auto", target_recall = target_recall, k = k,
-      n_threads = threads
+    return(with_faiss_hnsw_options(hnsw_m, ef_construction, ef_search,
+      faissR::knn(
+        x, labels, backend = "cpu", method = "hnsw", metric = "euclidean",
+        tuning = "auto", target_recall = target_recall, k = k,
+        n_threads = threads
+      )
     ))
   }
   build_index(
-    x, route, "euclidean", k, threads, index_seed = algorithm_seed
+    x, route, "euclidean", k, threads, index_seed = algorithm_seed,
+    hnsw_m = hnsw_m, ef_construction = ef_construction,
+    ef_search = ef_search
   )
 }
 
-query_reusable <- function(index, x, route, rows, k, threads, target_recall) {
+query_reusable <- function(index, x, route, rows, k, threads, target_recall,
+                           hnsw_m, ef_construction, ef_search) {
   if (identical(route, "faissR_hnsw")) {
-    out <- faissR:::knn_predict_with_fitted_nn_index(
-      object = index, query = x[rows, , drop = FALSE], k = k + 1L,
-      backend = "cpu", tuning = "auto", target_recall = target_recall
+    out <- with_faiss_hnsw_options(hnsw_m, ef_construction, ef_search,
+      faissR:::knn_predict_with_fitted_nn_index(
+        object = index, query = x[rows, , drop = FALSE], k = k + 1L,
+        backend = "cpu", tuning = "auto", target_recall = target_recall
+      )
     )
     if (is.null(out)) stop("faissR fitted HNSW index was not reused.", call. = FALSE)
     return(remove_query_self(out, rows, k))
   }
-  query_index(index, route, x, rows, k, threads, "euclidean")
+  query_index(
+    index, route, x, rows, k, threads, "euclidean",
+    ef_search = ef_search
+  )
 }
 
-run_warmup <- function(x, route, threads, target_recall, algorithm_seed) {
+run_warmup <- function(x, route, threads, target_recall, algorithm_seed,
+                       hnsw_m, ef_construction, ef_search) {
   n <- min(128L, nrow(x))
   if (n < 4L) return(invisible(NULL))
   k <- min(5L, n - 1L)
   try(run_one_shot(
     x[seq_len(n), , drop = FALSE], route, k, threads,
-    target_recall, algorithm_seed
+    target_recall, algorithm_seed, hnsw_m, ef_construction, ef_search
   ), silent = TRUE)
   if (identical(route, "faissR_hnsw")) clear_faissr_cache()
   invisible(NULL)
@@ -158,6 +200,17 @@ base_result <- function(config, n, p) {
     slurm_array_task_id = Sys.getenv("SLURM_ARRAY_TASK_ID", unset = "manual"),
     hostname = Sys.info()[["nodename"]],
     threads = config$threads %||% NA_integer_,
+    hnsw_m = config$hnsw_m %||% NA_integer_,
+    ef_construction = config$ef_construction %||% NA_integer_,
+    ef_search = config$ef_search %||% NA_integer_,
+    slurm_ntasks = Sys.getenv("SLURM_NTASKS", unset = NA_character_),
+    slurm_cpus_per_task = Sys.getenv("SLURM_CPUS_PER_TASK", unset = NA_character_),
+    cpus_allowed_list = proc_status_value("Cpus_allowed_list"),
+    process_threads_before = suppressWarnings(as.integer(proc_status_value("Threads"))),
+    process_threads_after = NA_integer_,
+    omp_num_threads = Sys.getenv("OMP_NUM_THREADS", unset = NA_character_),
+    openblas_num_threads = Sys.getenv("OPENBLAS_NUM_THREADS", unset = NA_character_),
+    mkl_num_threads = Sys.getenv("MKL_NUM_THREADS", unset = NA_character_),
     input_representation = "R_double_matrix_for_both_routes",
     warmup_scope = "untimed_128_row_one_shot_then_faissR_cache_clear",
     benchmark_phases = config$phases %||% "both",
@@ -168,6 +221,14 @@ base_result <- function(config, n, p) {
     fitted_query_sec = NA_real_,
     fitted_recall_at_k = NA_real_,
     fitted_min_query_recall = NA_real_,
+    rss_before_fitted_build_kib = NA_real_,
+    rss_after_fitted_build_kib = NA_real_,
+    fitted_index_rss_delta_kib = NA_real_,
+    fitted_index_r_object_bytes = NA_real_,
+    worker_peak_rss_kib = NA_real_,
+    index_serialization_supported = if (
+      identical(config$route %||% "", "faissR_hnsw")
+    ) FALSE else NA,
     query_n = NA_integer_,
     reference_path = NA_character_,
     status = "failed",
@@ -207,7 +268,8 @@ run_worker <- function(config) {
 
   run_warmup(
     x, config$route, config$threads, config$target_recall,
-    config$algorithm_seed
+    config$algorithm_seed, config$hnsw_m, config$ef_construction,
+    config$ef_search
   )
   gc()
   phases <- config$phases %||% "both"
@@ -216,7 +278,8 @@ run_worker <- function(config) {
     started <- proc.time()[["elapsed"]]
     cold <- run_one_shot(
       x, config$route, config$k, config$threads, config$target_recall,
-      config$algorithm_seed
+      config$algorithm_seed, config$hnsw_m, config$ef_construction,
+      config$ef_search
     )
     result$cold_call_sec <- proc.time()[["elapsed"]] - started
     cold_quality <- quality(
@@ -229,16 +292,28 @@ run_worker <- function(config) {
   if (phases %in% c("both", "fitted")) {
     if (identical(config$route, "faissR_hnsw")) clear_faissr_cache()
     gc()
+    result$rss_before_fitted_build_kib <- proc_status_kib("VmRSS")
     started <- proc.time()[["elapsed"]]
     index <- build_reusable(
       x, config$route, config$k, config$threads, config$target_recall,
-      config$algorithm_seed
+      config$algorithm_seed, config$hnsw_m, config$ef_construction,
+      config$ef_search
     )
     result$fitted_build_sec <- proc.time()[["elapsed"]] - started
+    result$rss_after_fitted_build_kib <- proc_status_kib("VmRSS")
+    rss_delta <- result$rss_after_fitted_build_kib -
+      result$rss_before_fitted_build_kib
+    result$fitted_index_rss_delta_kib <- if (is.finite(rss_delta)) {
+      max(0, rss_delta)
+    } else {
+      NA_real_
+    }
+    result$fitted_index_r_object_bytes <- as.numeric(object.size(index))
     started <- proc.time()[["elapsed"]]
     fitted <- query_reusable(
       index, x, config$route, rows, config$k, config$threads,
-      config$target_recall
+      config$target_recall, config$hnsw_m, config$ef_construction,
+      config$ef_search
     )
     result$fitted_query_sec <- proc.time()[["elapsed"]] - started
     fitted_quality <- quality(fitted, reference, config$k)
@@ -246,6 +321,8 @@ run_worker <- function(config) {
     result$fitted_min_query_recall <- fitted_quality$min_query_recall
   }
   result$status <- "success"
+  result$worker_peak_rss_kib <- proc_status_kib("VmHWM")
+  result$process_threads_after <- suppressWarnings(as.integer(proc_status_value("Threads")))
   result
 }
 
@@ -327,6 +404,24 @@ main <- function() {
   reference_k <- positive_int(args$reference_k, 100L, "reference_k")
   seeds <- as.integer(strsplit(args$seeds %||% "20260706,20260807", ",", fixed = TRUE)[[1L]])
   target_recall <- as.numeric(args$target_recall %||% "0.99")
+  hnsw_m <- positive_int(args$hnsw_m, 16L, "hnsw_m")
+  ef_construction <- positive_int(args$ef_construction, 200L, "ef_construction")
+  ef_search <- positive_int(args$ef_search, max(50L, 3L * k), "ef_search")
+  faiss_hnsw_m <- positive_int(args$faiss_hnsw_m, hnsw_m, "faiss_hnsw_m")
+  faiss_ef_construction <- positive_int(
+    args$faiss_ef_construction, ef_construction, "faiss_ef_construction"
+  )
+  faiss_ef_search <- positive_int(args$faiss_ef_search, ef_search, "faiss_ef_search")
+  comparator_hnsw_m <- positive_int(
+    args$comparator_hnsw_m, hnsw_m, "comparator_hnsw_m"
+  )
+  comparator_ef_construction <- positive_int(
+    args$comparator_ef_construction, ef_construction,
+    "comparator_ef_construction"
+  )
+  comparator_ef_search <- positive_int(
+    args$comparator_ef_search, ef_search, "comparator_ef_search"
+  )
   phases <- tolower(args$phases %||% "both")
   if (!phases %in% c("both", "cold", "fitted")) {
     stop("`--phases` must be both, cold, or fitted.", call. = FALSE)
@@ -357,7 +452,16 @@ main <- function() {
           repeat_id = repeat_id, pair_seed = pair_seed, pair_id = pair_id,
           order_position = position, algorithm_seed = seed + repeat_id,
           threads = threads, quality_n = quality_n,
-          reference_k = reference_k, phases = phases
+          reference_k = reference_k, phases = phases,
+          hnsw_m = if (identical(route, "faissR_hnsw")) {
+            faiss_hnsw_m
+          } else comparator_hnsw_m,
+          ef_construction = if (identical(route, "faissR_hnsw")) {
+            faiss_ef_construction
+          } else comparator_ef_construction,
+          ef_search = if (identical(route, "faissR_hnsw")) {
+            faiss_ef_search
+          } else comparator_ef_search
         ), timeout, script)
         append_csv(result, results_path)
       }

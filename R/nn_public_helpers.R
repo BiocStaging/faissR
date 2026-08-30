@@ -54,7 +54,7 @@ prepare_public_nn_request <- function(
 }
 
 public_nn_auto_selection <- function(request) {
-    nn_auto_selection_metadata(
+    selection <- nn_auto_selection_metadata(
         data = request$data,
         points = request$points,
         points_missing = request$points_missing,
@@ -67,6 +67,68 @@ public_nn_auto_selection <- function(request) {
         exclude_self = request$exclude_self,
         target_recall = request$target_recall
     )
+    if (is.null(selection) || !identical(request$method, "auto")) {
+        return(selection)
+    }
+    if (identical(selection$predicted_device %||% NA_character_, "cpu")) {
+        selection$auto_policy_status <-
+            "calibration_informed_not_independently_validated"
+        selection$auto_policy_evidence_scope <-
+            "cpu_static_policy_experimental"
+    } else if (
+        identical(selection$predicted_device %||% NA_character_, "cuda")
+    ) {
+        selection$auto_policy_status <-
+            "experimental_l40s_calibrated_cold_full_self_search"
+        selection$auto_policy_evidence_scope <-
+            "cuda_l40s_cold_full_self_search_experimental"
+    }
+    selection
+}
+
+nn_hardware_warning_enabled <- function() {
+    value <- faissr_option("warn_hardware_extrapolation", TRUE)
+    isTRUE(value)
+}
+
+nn_maybe_warn_auto_hardware <- function(selection, requested_method = "auto") {
+    if (
+        is.null(selection) ||
+            !identical(normalize_nn_method(requested_method), "auto") ||
+            !identical(selection$predicted_device %||% NA_character_, "cuda") ||
+            identical(
+                selection$hardware_evidence %||% NA_character_,
+                "calibration_hardware_matched"
+            ) ||
+            !nn_hardware_warning_enabled()
+    ) {
+        return(invisible(FALSE))
+    }
+    runtime <- as.character(
+        selection$runtime_hardware_model %||% "unidentified CUDA device"
+    )[1L]
+    if (is.na(runtime) || !nzchar(runtime)) {
+        runtime <- "unidentified CUDA device"
+    }
+    key <- paste0("hardware_warning:", nn_normalize_hardware_name(runtime))
+    if (exists(key, envir = .faissR_auto_hardware_cache, inherits = FALSE)) {
+        return(invisible(FALSE))
+    }
+    assign(key, TRUE, envir = .faissR_auto_hardware_cache)
+    warning(
+        "faissR CUDA `method = \"auto\"` is applying its NVIDIA L40S-",
+        "informed static route policy on ", runtime, ". Search results retain ",
+        "the documented method semantics, but the selected route is not ",
+        "validated as locally fastest on this hardware/provider stack. ",
+        "Inspect `attr(result, \"auto_selection\")`, request an explicit ",
+        "method, or use `tuning = \"pilot\"` for local parameter tuning ",
+        "within the resolved method. Full local cross-method policy learning ",
+        "is not implemented. Set ",
+        "`options(faissR.warn_hardware_extrapolation = FALSE)` to silence ",
+        "this warning.",
+        call. = FALSE
+    )
+    invisible(TRUE)
 }
 
 decorate_public_nn_result <- function(result, request, auto_selection) {
@@ -87,12 +149,17 @@ decorate_public_nn_result <- function(result, request, auto_selection) {
     )
     if (!is.null(auto_selection)) {
         attr(result, "auto_selection") <- auto_selection
+        attr(result, "auto_policy_status") <-
+            auto_selection$auto_policy_status %||% NA_character_
+        attr(result, "auto_policy_evidence_scope") <-
+            auto_selection$auto_policy_evidence_scope %||% NA_character_
     }
     finalize_nn_output(result, request$output)
 }
 
 execute_public_nn_request <- function(request) {
     auto_selection <- public_nn_auto_selection(request)
+    nn_maybe_warn_auto_hardware(auto_selection, request$method)
     result <- nn_compute(
         request$data,
         request$points,

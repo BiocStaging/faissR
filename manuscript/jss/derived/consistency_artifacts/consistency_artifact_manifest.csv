@@ -1,0 +1,6 @@
+"artifact","rows","sha256"
+"reference_record_dimensions.csv",87,"b10e1c8f77025657ef3fcf78592d70a0cd58906ef2b097cb9e5e70a7b13bbde4"
+"calibration_candidate_grid_manifest.csv",63,"9aab47794c6d329d990a19d5c54b76b578bc448c253b0a3526ac3c7f630b34fc"
+"calibration_candidate_grid_public.csv.gz",41229,"2c1cb4b937e5f7acc029d1cf51255caa95469a3e8d4699b18661f65e01b3d82f"
+"experiment_version_boundaries.csv",2,"e9213b9821321eeb91a6800778d3f7c5a512c0809d7890affb920c3f99051e2c"
+"experiment_version_changes.csv",4,"d1c98f94cf9d6fcf54b842e1ed4fe1c9d810d9930730f9e26349a526b9859180"

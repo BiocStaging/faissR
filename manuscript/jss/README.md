@@ -8,14 +8,20 @@ This directory contains the JSS-format manuscript source:
 - `code.R` and `code.html`: commented standalone replication entry point and
   freshly executed output.
 - `replication_article.R`: compact examples, pre-analysis archive verification,
-  frozen-result validation, and analysis orchestration.
+  checksummed-result validation, and analysis orchestration.
 - `build_manuscript_tables.R`: recreates every article and supplement table
   and writes a checksum manifest.
-- `faissR_jss_frozen_results.tar.gz` and its `.sha256` file: frozen campaign
-  evidence and required pre-analysis digest.
-- `practical_cpu_example.R`: executable 20,000-row Letter Recognition example
-  covering exact search, three recall-targeted auto calls, observed recall,
-  returned evidence, and fitted-index reuse.
+- `build_paired_cpu_figure.R`: verifies the checksummed controlled-pair evidence and
+  recreates the main-text dataset-level log-ratio figure.
+- `paired_cpu_comparison/`: checksummed controlled same-node CPU HNSW pairs.
+- `faissR_jss_evidence_snapshot.tar.gz` and its `.sha256` file: checksummed
+  campaign evidence and required pre-analysis digest. This is a version-pinned
+  experiment snapshot; the archival frozen release will follow package acceptance.
+- `cpu_loodo/`: checksummed machine-readable CPU leave-one-dataset-out results
+  reconstructed from the explicit independent-query routes in the latest HPC transfer.
+- `practical_cpu_example.R`: executable Bioconductor `ALL` example covering
+  exact search, three recall-targeted HNSW calls, observed recall, returned
+  evidence, and fitted-index reuse.
 - `build_docx.py`: reproducibly converts the JSS source to the Word reading
   copy while preserving package names, code blocks, tables, and workflow
   figures.
@@ -45,7 +51,7 @@ Rscript code.R
 Rscript -e 'knitr::spin("code.R", knit = TRUE)'
 ```
 
-Recreate all 15 manuscript and supplement tables from the frozen archive on a
+Recreate all 15 manuscript and supplement tables from the checksummed snapshot on a
 regular computer with:
 
 ```sh
@@ -57,11 +63,22 @@ Rscript code.R
 The archive digest is checked before extraction. A mismatch stops the script
 before any result is read. Successful execution writes
 `archive_verification.csv`, `manuscript_tables/manuscript_table_manifest.csv`,
-`manuscript_tables/MANUSCRIPT_TABLE_AUDIT.txt`, and a fresh `sessionInfo.txt`.
+`manuscript_tables/MANUSCRIPT_TABLE_AUDIT.txt`, a fresh `sessionInfo.txt`, and
+the consistency artifacts `reference_record_dimensions.csv`,
+`calibration_candidate_grid_manifest.csv`,
+`calibration_candidate_grid_public.csv.gz`,
+`experiment_version_boundaries.csv`, and `experiment_version_changes.csv`.
 Use `FAISSR_JSS_MODE=all` to run the compact package examples and archive
 reconstruction in one process.
 
-Run the practical CPU example after installing the optional `mlbench` package:
+Recreate the paired CPU figure directly with:
+
+```sh
+Rscript build_paired_cpu_figure.R
+```
+
+Run the practical CPU example with the Bioconductor `ALL` and `Biobase`
+packages listed in the package `Suggests` field:
 
 ```sh
 Rscript practical_cpu_example.R
@@ -73,7 +90,7 @@ cross-package benchmark evidence.
 
 The full special-hardware experiment uses
 `benchmark_scripts/jss_reproduction/final_campaign/submit_campaign.R`.
-That single commented entry point validates the frozen image and submits the
+That single commented entry point validates the version-pinned image and submits the
 existing independent CPU/CUDA launchers one phase at a time; it does not hide
 their resource headers or advance past an unchecked evidence gate. Its ledger
 is updated after every submission so a partial Slurm phase remains auditable.
@@ -86,8 +103,9 @@ replication, and document-builder sources are tracked. The package
 `.Rbuildignore` excludes this directory from the Bioconductor source tarball.
 
 The manuscript distinguishes metric correctness, desired-recall attainment,
-and independent held-out performance. The replication workflow includes route
-QA, exact-reference and calibration audits, held-out evaluation, reusable-index
+independent-query within-dataset validation, and dataset-withholding analyses.
+The replication workflow includes route QA, exact-reference and calibration audits,
+independent-query evaluation, reusable-index
 experiments, auto-versus-oracle analysis, and archive checksums. Only evidence
 that passes the corresponding audit is eligible for a reported result.
 

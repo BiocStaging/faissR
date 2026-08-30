@@ -4,12 +4,12 @@ set -euo pipefail
 
 BACKEND="${1:?Usage: submit_held_out_resume.sh cpu|cuda TASK_FILE}"
 TASK_FILE="${2:?Usage: submit_held_out_resume.sh cpu|cuda TASK_FILE}"
-: "${FAISSR_PACKAGE_COMMIT:?Export the frozen 40-character faissR commit}"
-: "${SINGULARITY_IMAGE:?Export the frozen Singularity image path}"
+: "${FAISSR_PACKAGE_COMMIT:?Export the version-pinned 40-character faissR commit}"
+: "${SINGULARITY_IMAGE:?Export the checksummed Singularity image path}"
+: "${EXPECTED_FAISSR_VERSION:?Export EXPECTED_FAISSR_VERSION}"
 
 BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
 SUITE_ROOT="${SUITE_ROOT:-${BASE_DIR}/benchmark_scripts/jss_reproduction}"
-EXPECTED_FAISSR_VERSION="${EXPECTED_FAISSR_VERSION:-0.99.21}"
 TASK_FILE="$(readlink -f "${TASK_FILE}")"
 N_TASKS="$(( $(wc -l < "${TASK_FILE}") - 1 ))"
 

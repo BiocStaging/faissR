@@ -639,6 +639,19 @@ Rcpp::List make_faiss_gpu_knn_result(FaissGpuKnnHandle* handle,
       data_view.compatibility_conversion || points_view.compatibility_conversion,
     Rcpp::Named("device_to_host_result_copies") = 0,
     Rcpp::Named("device_to_host_result_copies_known") = true,
+    Rcpp::Named("memory_owner") = "handle_externalptr",
+    Rcpp::Named("buffer_ownership") =
+      "indices_ptr_and_distances_ptr_are_non_owning",
+    Rcpp::Named("owner_lifetime") =
+      "retain_result_until_all_consumer_cuda_work_completes",
+    Rcpp::Named("producer_synchronization") =
+      "cuda_device_synchronized_before_return",
+    Rcpp::Named("stream_semantics") =
+      "no_stream_handle_exported;consumer_selects_stream_after_return",
+    Rcpp::Named("consumer_device_requirement") =
+      "select_recorded_device_before_pointer_use",
+    Rcpp::Named("serialization_supported") = false,
+    Rcpp::Named("interprocess_sharing_supported") = false,
     Rcpp::Named("host_to_device_data_copies") = 1,
     Rcpp::Named("host_to_device_query_copies") = same_storage ? 0 : 1,
     Rcpp::Named("host_to_device_copies_known") = true,

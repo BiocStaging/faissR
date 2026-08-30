@@ -1,0 +1,8 @@
+CUDA_HOME ?= $(shell dirname $$(dirname $$(command -v nvcc 2>/dev/null || echo /usr/local/cuda/bin/nvcc)))
+NVCC = $(CUDA_HOME)/bin/nvcc
+PKG_CPPFLAGS += -I$(CUDA_HOME)/include
+PKG_LIBS += -L$(CUDA_HOME)/lib64 -lcudart
+OBJECTS = init.o consumer.o consumer_cuda.o
+
+consumer_cuda.o: consumer_cuda.cu
+	$(NVCC) -std=c++17 -Xcompiler -fPIC -c $< -o $@

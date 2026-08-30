@@ -11,8 +11,8 @@ gpu_knn_to_host(x)
 }
 \value{
 A host `faissR_nn` list with integer `indices` and numeric
-    `distances`. The distance-contract metadata from the GPU object is
-    retained.
+  `distances`. The distance-contract metadata from the GPU object is
+  retained.
 }
 \description{
 `gpu_knn_to_host()` is an explicit diagnostic/conversion helper for
@@ -21,9 +21,9 @@ ordinary R matrices. It is never called automatically by `nn_gpu()`.
 }
 \examples{
 if (cuda_available()) {
-    x <- matrix(rnorm(200), ncol = 4)
-    gpu_knn <- nn_gpu(x, k = 5, exclude_self = TRUE)
-    host_knn <- gpu_knn_to_host(gpu_knn)
-    str(host_knn)
+  x <- matrix(rnorm(200), ncol = 4)
+  gpu_knn <- nn_gpu(x, k = 5, exclude_self = TRUE)
+  host_knn <- gpu_knn_to_host(gpu_knn)
+  str(host_knn)
 }
 }

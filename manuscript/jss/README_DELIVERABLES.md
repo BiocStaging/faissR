@@ -1,6 +1,6 @@
 # faissR JSS deliverables
 
-Package snapshot: faissR 0.99.20
+Package snapshot: faissR 0.99.28
 
 ## Tracked source
 
@@ -8,7 +8,9 @@ Package snapshot: faissR 0.99.20
 - `faissR_jss_supplement.tex`: authoritative supplementary source.
 - `code.R` and `code.html`: compact JSS replication entry point and its
   executed rendered output.
-- `replication_article.R`: frozen-result validator and table/figure collation.
+- `replication_article.R`: checksummed-result validator and table/figure collation.
+- `build_paired_cpu_figure.R` and `paired_cpu_comparison/`: reproducible
+  dataset-level controlled HNSW comparison and checksummed source evidence.
 - `build_docx.py` and `build_supplement_docx.py`: Word reading-copy builders.
 - `jss.cls`, `jss.bst`, and `jsslogo.jpg`: JSS template files.
 
@@ -25,24 +27,13 @@ version control:
 
 ## Evidence boundary
 
-The manuscript and supplement report deterministic CPU/CUDA
-metric-conformance checks and systems-ablation measurement coverage from the
-pre-freeze development archive. They do not claim a cross-dataset speed winner
-or automatic-selector optimality because the commit-locked,
-fingerprint-matched held-out explicit-method, external-package,
-reusable-index, and auto-versus-oracle aggregates are not yet available. The
-evaluation set contains nine real datasets with historical metric-matched
-exact references; the final campaign accepts only references regenerated or
-validated with matching package version, package commit, image commit, dataset
-fingerprint, metric, seed, and query rows.
+The manuscript and supplement report the version-pinned calibration, held-out,
+leave-one-dataset-out, route-contract, and controlled same-node CPU HNSW
+evidence. The evaluation contains nine real datasets with metric-matched exact
+references. The replication entry point verifies archive and controlled-pair
+checksums before recreating all manuscript tables and the paired log-ratio
+figure.
 
-The current PDF and Word reading copies have been rendered and visually
-inspected. The JSS-layout article is currently 21 pages, the supplement is 12
-pages, the vignette is 11 pages, and the reference manual is 21 pages. These
-are not the final submission freeze: all deliverables must be regenerated
-after the pending aggregates have been validated and inserted.
-
-The focused execution order, eligibility rules, and remaining evidence gates
-are recorded in `JSS_EXPERIMENT_PLAN.md`. The generated Slurm launchers remain
-the authoritative executable protocol; the plan does not replace their route,
-fingerprint, or archive validators.
+The JSS-layout article is currently 17 pages. Generated PDF and Word reading
+copies, the vignette, and the reference manual must be regenerated from these
+tracked sources for the submission bundle.

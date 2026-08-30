@@ -1,7 +1,8 @@
 # Nearest-Neighbour Methods
 
 Cosine zero vectors and constant correlation rows are zero-normalized edge
-cases with deterministic documented behavior.
+cases with documented, backend-dependent behavior; `nn_metric_preflight()`
+reports affected rows before search.
 
 [Home](../README.md) |
 [Installation](installation.md) |
@@ -46,6 +47,37 @@ The `runtime_reason` labels are machine-readable, for example `available`,
 `unsupported_combination`, `missing_faiss`, `missing_faiss_gpu`,
 `missing_cuda`, `missing_cuda_route`, and `missing_cuvs`.
 
+## Numerical Contract And Input Preflight
+
+Returned Euclidean distances are ordinary L2 distances. Providers that compute
+squared L2 internally are square-rooted before faissR returns the result.
+Cosine normalization and correlation centering/normalization on FAISS and cuVS
+routes produce row-major float32 coordinates; row sums and squared norms are
+accumulated in double precision before the transformed coordinates are stored
+as floats. Native double routes retain R double input. Passing an R double
+matrix to a float32 provider therefore includes a double-to-float32 conversion.
+
+All backends reject `NA`, `NaN`, `Inf`, and `-Inf`. On CPU, two all-zero cosine
+rows or two constant correlation rows have package-defined distance `0`, while
+a degenerate row versus a non-degenerate row has distance `1`. Explicit CUDA
+routes reject those rows rather than silently repairing results on CPU. These
+are intentionally backend-dependent conventions. Inspect them before search:
+
+```r
+check <- nn_metric_preflight(x, metric = "cosine", backend = "cuda")
+check$data_rows
+check$action
+```
+
+Native exact results sort ties by `(distance, reference row ID)`. External
+providers may return a different member of a tied boundary set; exact audits
+therefore compare sorted distances and admit tied boundary identifiers. The
+publication's frozen float32 audit uses
+`abs(observed - reference) <= 1e-5 + 1e-4 * abs(reference)`. This tolerance is
+an exhaustive-route audit threshold chosen for float32 accumulation and
+provider ordering differences; it is not used by search or approximate-recall
+eligibility.
+
 CUDA result cleanup is deliberately backend-owned. When a CUDA route returns
 `attr(result, "gpu_residency")`, faissR treats the indices/distances as already
 ordered and shaped by C++/CUDA, and does not remove self-neighbours or reshape
@@ -63,8 +95,9 @@ layout support require `exclude_self = TRUE` and report an error otherwise.
 | `"ivf"` | approximate | FAISS IVF-Flat | FAISS GPU IVF-Flat | FAISS IVF [1-2,16] |
 | `"ivfpq"` | approximate | FAISS IVF-PQ | FAISS GPU IVF-PQ | product quantization [6,16] |
 | `"ivfpq_fastscan"` | approximate | FAISS IVFPQ FastScan with Flat refinement | cuVS IVF-PQ with 4-bit compressed codes | 4-bit IVFPQ compressed-code scan [6,34] |
-| `"vamana_style"` | approximate | package-owned Vamana-derived candidate graph | package-owned Vamana-derived candidate graph with CUDA refinement | DiskANN/Vamana [3,24] |
-| `"nsg_style"` | approximate | package-owned CPU NSG/MRNG-derived candidate graph | package-owned CUDA NSG/MRNG-derived candidate graph | NSG/FAISS [16,21,29] |
+| `"vamana_style"` | approximate, experimental | package-owned Vamana-derived candidate graph | package-owned Vamana-derived candidate graph with CUDA refinement | DiskANN/Vamana [3,24] |
+| `"nsg_style"` | approximate, experimental | package-owned CPU NSG/MRNG-derived candidate graph | package-owned CUDA NSG/MRNG-derived candidate graph | NSG/FAISS [16,21,29] |
+| `"nndescent_style"` | approximate; native CPU route experimental | package-owned NN-descent-derived refinement | direct cuVS NN-descent provider | NN-descent/cuVS [4,13-16] |
 | `"cagra"` | approximate | unsupported | FAISS GPU CAGRA or cuVS CAGRA | FAISS/cuVS CAGRA [3,13-16] |
 
 For clarity, new code should use `"nsg_style"`, `"vamana_style"`, and
@@ -74,8 +107,59 @@ the same internal method families. Native results record the preferred spelling
 in `preferred_public_method`, set
 `canonical_reimplementation = FALSE` and identify themselves as package-owned
 derived graph-refinement algorithms. The `_style` suffix is a scope marker,
-not an algorithm name. Direct cuVS NN-descent is an external-provider route and
-is labeled separately.
+not an algorithm name. Package-owned style routes are experimental, carry
+machine-readable status metadata, and are excluded from the publication's
+principal performance claims. Direct cuVS NN-descent is an external-provider
+route and is labeled separately.
+
+### Package-owned experimental graph refinements
+
+All three native routes are self-KNN candidate-refinement procedures. Cosine
+input is row-normalized before Euclidean refinement; correlation input is
+row-centered and then row-normalized. For a fixed input, seed, and parameter
+set, the package-owned stages are deterministic. A provider used to construct
+the seed graph can retain its own documented floating-point or threading
+variation.
+
+`nsg_style` starts from an ordered seed-neighbor matrix. For each row it keeps
+the first `k` candidates, then accepts a later candidate only when no retained
+candidate is closer to it than the query is. It fills unused degree slots from
+the original order and exactly rescores the retained row candidates. This
+borrows the relative-neighborhood pruning test used by NSG/MRNG constructions,
+but omits canonical NSG navigation, medoid selection, connectivity repair, and
+graph traversal.
+
+`vamana_style` uses the same seed/refine framework with robust pruning: a
+candidate at query distance `d(q, v)` is rejected when a retained candidate
+`u` satisfies `alpha * d(u, v) <= d(q, v)`. It does not implement canonical
+Vamana's incremental insertion order, medoid graph search, reciprocal edge
+updates, reachability repair, or disk layout.
+
+`nndescent_style` on CPU initializes each candidate pool from Gaussian random
+projections plus seeded random fill. Each fixed refinement iteration uses a
+frozen graph snapshot, bounded reverse-neighbor lists, and capped
+neighbor-of-neighbor joins before retaining the best candidate pool. It omits
+canonical NN-descent's new/old flags, sampled local joins, and convergence
+stopping. On CUDA the same public name can resolve instead to direct cuVS
+NN-descent; returned metadata distinguishes that external provider.
+
+Let `n` be the number of rows, `p` the dimension, `s` the seed width, `r` the
+retained degree, `C` the NN-descent candidate cap, `P` the projection count,
+and `t` the number of refinement iterations. Exact seed construction dominates
+NSG-/Vamana-style execution at `O(n^2 p)`; pruning is at most `O(n r^2 p)` and
+row rescoring is `O(n r p)`, with `O(np + ns + nr)` memory. NN-descent-style
+initialization costs approximately `O(Pnp + Pn log n + nLp)` and refinement is
+bounded by `O(tnCp)`, with `O(np + n(L + C))` memory. These are implementation
+bounds, not complexity claims for the canonical algorithms.
+
+The native low-dimensional `grid` route is different: it is an exact 2D/3D
+uniform-grid search with expanding cells and a distance lower-bound stopping
+rule. Build cost and memory are `O(n + B^d)` for `B` cells per axis and
+`d` in `{2, 3}`; query cost is occupancy-dependent and `O(n)` in the worst
+case. IVF-PQ and FastScan are provider-backed FAISS/cuVS implementations, not
+package-owned algorithms. They remain supported secondary routes, but the
+current principal held-out comparison does not make route-specific performance
+claims for them.
 
 ## Metric Support Matrix
 
@@ -141,7 +225,7 @@ stored in `attr(result, "requested_backend")`,
 `attr(result, "requested_method")`, and `attr(result, "tuning")` together with
 the resolved backend in `attr(result, "resolved_backend")` and approximation
 parameters. Auto requests also carry `attr(result, "auto_selection")`, a
-compiled no-pilot record of the shape/k/metric rule that predicted the concrete
+compiled no-pilot record of the workload/shape/k/metric rule that predicted the concrete
 route. The record stores
 `policy = "cpp_static_shape_k_metric_selector"`, keeps the internal
 `predicted_backend`, and also exposes `predicted_method` plus

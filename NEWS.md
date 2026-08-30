@@ -1,3 +1,17 @@
+# faissR 0.99.29
+
+* Restricts the public nearest-neighbour metric contract to Euclidean, cosine,
+  and correlation distance and adds `nn_metric_preflight()` diagnostics for
+  non-finite, zero-norm, and constant rows.
+* Labels CUDA automatic routing as an experimental, L40S-calibrated policy for
+  cold full-self-search and separates installed-policy evidence from post hoc
+  candidate-set sensitivity analyses.
+* Expands and organizes the JSS replication suite, including selector-regret,
+  grouped holdout, recall-inference, workload, memory, interoperability, and
+  comprehensive R-package comparison protocols.
+* Revises the manuscript, supplement, vignette, reference documentation, and
+  tests to match the audited public API and evidence scope.
+
 # faissR 0.99.28
 
 * Prevents spurious Windows ARM64 installation warnings by suppressing only

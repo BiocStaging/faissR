@@ -67,6 +67,33 @@ The main public functions are:
 | `backend_info()` and `nn_capabilities()` | inspect compiled backends |
 | `print()` and `summary()` | inspect result and fitted-model metadata |
 
+## Input, result, and lifecycle contract
+
+The search interfaces accept dense numeric matrices, data frames, and optional
+`float::fl()` matrices, with observations in rows. Sparse, delayed, and
+file-backed matrices are not searched in place. Matrix-like objects may be
+eagerly materialized by `as.matrix()`, which can densify the input; explicitly
+materialize or batch these objects before search when memory matters. A direct
+FAISS/cuVS route converts an ordinary R double matrix to contiguous float32
+storage (about `4 * nrow(x) * ncol(x)` temporary bytes) while the original R
+matrix remains live. A supported direct `float` adapter can avoid the numeric
+conversion, although metadata may still report a layout copy.
+
+`nn()` returns a `faissR_nn` list whose integer `indices` and `distances` have
+one row per query and one column per neighbor. Identifiers are one-based.
+Duplicate observations retain distinct identifiers and can have distance zero.
+For self-search, `exclude_self = TRUE` removes only the query row identifier;
+if an approximate candidate list omitted that identifier, faissR retains the
+first `k` non-self candidates rather than removing another row.
+
+Fitted FAISS indexes and GPU results contain session-local external pointers.
+There is no public manual destroy function: the owning object's finalizer
+releases native allocations after the object becomes unreachable. A saved and
+reloaded `faissR_knn_model` rebuilds its requested index before prediction;
+native index serialization is not supported. A `faissR_gpu_knn` object cannot
+be serialized or shared across processes/devices. Keep its owner alive until
+all downstream CUDA work has completed, then allow normal garbage collection.
+
 # Installation contract
 
 FAISS is mandatory. A source installation stops when its headers or library
@@ -177,13 +204,24 @@ provider, `flat` explicitly requests FAISS Flat, and CUDA `bruteforce` prefers
 direct cuVS brute force. They should have the same neighbor quality; timing
 differences measure provider and wrapper overhead.
 
+| Public name | CPU | CUDA capability resolution |
+|---|---|---|
+| `exact` | FAISS Flat | FAISS GPU Flat, otherwise direct cuVS brute force |
+| `flat` | FAISS Flat | FAISS GPU Flat; errors when unavailable |
+| `bruteforce` | FAISS Flat | direct cuVS brute force, otherwise FAISS GPU Flat |
+
+The metric-specific value in `backend_used` is authoritative for the current
+installation.
+
 ## Automatic method selection
 
 The default `method = "auto"` uses compiled shape-, metric-, `k`-, backend-,
 and target-recall-aware rules. These rules are deterministic; they do not run a
 slow tuning pass inside ordinary user calls.
 For approximate methods, `target_recall` selects a calibrated operating policy;
-it is not a guarantee for a new dataset. Inspect
+it accepts only `0.90`, `0.95`, or `0.99`. Other values error; faissR neither
+rounds nor interpolates between tiers. The value is a requested recall tier,
+not a guarantee for a new dataset. Inspect
 `tuning_benchmark_target_met` in the returned metadata and validate recall
 against an exact reference when the application requires a quality bound.
 
@@ -200,9 +238,17 @@ auto_nearest <- nn(
 
 c(
     backend_used = attr(auto_nearest, "backend_used"),
-    requested_method = attr(auto_nearest, "requested_method")
+    requested_method = attr(auto_nearest, "requested_method"),
+    auto_policy_status = attr(auto_nearest, "auto_policy_status")
 )
 ```
+
+CPU automatic selection is a calibration-informed experimental static policy;
+it does not have the independent installed-policy validation reported for CUDA.
+The printed object and `auto_policy_status` make that evidence distinction
+visible. Automatic selection currently has no memory budget, build/latency
+deadline, or `allow_exhaustive = FALSE` control. Use an explicit method when
+those operational constraints apply.
 
 For large two- or three-dimensional self-KNN, `method = "auto"` can select the
 native grid route. CPU and CUDA have separate implementations. The explicit
@@ -260,7 +306,8 @@ nn(
 The package-owned candidate-graph refinements use the preferred request names
 `nsg_style`, `vamana_style`, and `nndescent_style`. The shorter historical names
 remain compatibility aliases. Returned metadata and `print()` explicitly state
-that these are style implementations rather than canonical reproductions;
+that these are experimental package-owned derived graph algorithms rather than
+canonical reproductions;
 `preferred_public_method` records the unambiguous spelling, and
 direct cuVS NN-descent is identified as an external-provider route.
 
@@ -272,7 +319,21 @@ The public metric set is intentionally small:
 
 Cosine normalizes each row before searching. Correlation first centers each row
 and then applies row normalization. Every result declares whether its values
-form a metric and whether they are comparable across query rows.
+form a metric and whether they are comparable across query rows. Euclidean
+results are ordinary L2 distances, not squared L2 values. All backends reject
+non-finite input. CPU routes apply the documented finite convention to
+all-zero cosine rows and constant correlation rows; explicit CUDA routes reject
+those rows. The explicit preflight scan reports affected one-based row indices
+without running a search.
+
+```{r metric-preflight}
+edge_x <- rbind(c(0, 0), c(1, 0), c(1, 1))
+nn_metric_preflight(
+    edge_x,
+    metric = "cosine",
+    backend = "cuda"
+)
+```
 
 ```{r metrics}
 metric_results <- lapply(

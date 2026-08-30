@@ -167,7 +167,8 @@ test_that("public API excludes retired wrapper and platform-specific helper name
     "knn",
     "nn",
     "nn_gpu",
-    "nn_capabilities"
+    "nn_capabilities",
+    "nn_metric_preflight"
   )
   retired_exports <- c(
     "knn_fit",

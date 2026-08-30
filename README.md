@@ -30,16 +30,17 @@ still install the package from source and use the CPU/FAISS functionality. For
 NVIDIA GPU users, the GPU stack should be requested explicitly so missing CUDA
 or RAPIDS libraries are fatal rather than silently producing a CPU-only build.
 
-`target_recall` has a precise benchmark meaning. A validation replicate meets
-target `tau` when its mean query-level recall@k against a metric-matched exact
-reference is at least `tau`; a calibrated cell passes only when every
-prespecified validation-seed x timing-repeat replicate passes with complete
-coverage. Minimum query recall is a robustness diagnostic, not the acceptance
-threshold. The argument selects a calibrated operating point and does not
-guarantee recall on an unseen dataset. Tuning metadata records
-`target_recall_statistic = "mean_query_recall_at_k"`,
-`target_recall_replicate_rule = "all_prespecified_validation_replicates"`,
-and `target_recall_min_query_role = "diagnostic_only"`.
+`target_recall` has a precise publication-benchmark meaning. Approximate recall
+is tie-aware at the kth-neighbor boundary: strictly closer reference neighbors
+must match by identifier, while exactly rescored candidates can receive credit
+for an equivalent boundary tie. For each independently sampled query seed, a
+one-sided 95% lower confidence bound is computed from 1,000 deterministic
+query-bootstrap resamples. A calibrated cell passes only when this bound is at
+least `tau` for every query seed. Timing repeats reuse the same queries and
+measure runtime dispersion; they are not independent recall evidence. Minimum
+query recall remains a diagnostic. The argument selects a calibrated operating
+point and is not a guarantee for an unseen dataset. Tuning metadata records the
+statistic, confidence level, bootstrap count, and independent-seed rule.
 
 Exact-family routes use a separate `exact-audited` classification. Their audit
 accepts identical neighbor identifiers or an equivalent sorted distance
@@ -48,24 +49,36 @@ does not create a false failure. Raw set overlap remains diagnostic. Benchmark
 selection and the empirical oracle use `exact_audited ||
 approximate_target_met` as their eligibility rule.
 
-Selector sensitivity is evaluated with cross-fitted leave-one-dataset-out
-(LOODO) analysis. Every row from one named dataset is removed before a method
+Post hoc candidate-set sensitivity is evaluated with cross-fitted
+leave-one-dataset-out (LOODO) analysis. Every row from one named dataset is
+removed before a method
 family is selected from the remaining shape evidence; the choice is then
 evaluated on the omitted dataset without revision. Outputs report
 operating-point attainment, selected/oracle time ratio, route-family agreement,
 abstention, and exact-selection frequency per held-out dataset. The installed
 full-calibration `method = "auto"` result is kept in separate diagnostic
-columns and is not presented as LOODO or out-of-collection evidence.
+columns and is not presented as LOODO, installed-policy validation, or
+out-of-collection evidence. The explicit routes used for cross-fitting do not
+share the installed Flat/IVF candidate universe.
 
-The compiled automatic policy was calibrated on UCT HPC CPU12 jobs and NVIDIA
-L40S CUDA jobs. It checks runtime capabilities but does not retune from a
+The compiled CUDA automatic policy is an optional experimental policy
+calibrated on NVIDIA L40S jobs for cold full-self-search. It checks runtime
+capabilities but does not retune from a
 CPU/GPU model string. `attr(result, "auto_selection")$hardware_evidence` is
 `"calibration_hardware_matched"` for a confirmed L40S match and
 `"hardware_extrapolated_unvalidated"` for a different or unidentified
 machine. In the latter case the static policy remains active and no silent
-method/device fallback occurs. Request `method = "exact"` explicitly when
-exhaustive search is required; locally optimal ANN performance requires local
-calibration.
+method/device fallback occurs. CUDA `method = "auto"` also emits one visible
+warning per runtime GPU model when that match is not confirmed; suppress it
+only after review with
+`options(faissR.warn_hardware_extrapolation = FALSE)`. Request
+`method = "exact"` explicitly when exhaustive search is required. The opt-in
+`tuning = "pilot"` and `"cache"` modes tune parameters within an explicit or
+resolved method on local data; they do not learn a new cross-method routing
+policy. Full local route-policy construction is not currently a public package
+feature, so the bundled CUDA selector is an L40S-informed experimental
+heuristic outside the evaluated environment or workload. It is not the
+package's principal contribution.
 
 The package code does not depend on Python or conda. Conda/mamba environments
 can be useful for development or benchmarking because they provide compatible
@@ -176,6 +189,9 @@ headers and libraries discovered by `configure`.
   compiled/runtime backend support.
 - `nn_capabilities()` to report supported nearest-neighbour
   method/backend/metric combinations for benchmark preflight checks.
+- `nn_metric_preflight()` to identify non-finite rows, zero vectors for cosine,
+  and constant rows for correlation before search. It reports one-based row
+  indices and whether the requested CPU or CUDA backend will proceed.
 - Set the faissR session default with
   `options(faissR.backend = "cuda")`, or use
   `Sys.setenv(FAISSR_BACKEND = "cuda")`. An explicit function argument always
@@ -215,6 +231,7 @@ method/backend/metric matrix is in the
 | `predict()` | S3 method for `faissR_knn_model` objects. It predicts labels, numeric responses, or class probabilities with `type = "response"` or `"prob"`. Prediction sends the full query matrix in one batched NN call. | Same fitted route where compatible; otherwise rebuilds the same requested route rather than silently switching algorithms. | A vector/data frame of predictions or a probability matrix, with the underlying `nn()` metadata attached. |
 | `backend_info()` | Inspect compiled/runtime backend support and implementation notes. | All compiled backend families. | A data frame of public backend names, implementation labels, runtime availability, and notes. |
 | `nn_capabilities()` | Preflight check for supported public `method`/`backend`/`metric` combinations. `runtime = TRUE` adds current-machine availability information. | CPU, CUDA, FAISS, and cuVS capability checks. | A data frame suitable for benchmark filtering before a large run. |
+| `nn_metric_preflight()` | Inspect metric inputs without running a search. | CPU/CUDA contract check. | A list of affected one-based row indices and a stable backend action label. |
 | `faiss_available()` | Check whether faissR was compiled and linked against FAISS. | FAISS CPU. | A single logical value. |
 | `faiss_gpu_available()` | Check whether the linked FAISS build reports GPU support. | FAISS GPU. | A single logical value. |
 | `cuda_available()` | Check whether native CUDA support was compiled and a CUDA device/runtime is available. | Native CUDA. | A single logical value. |
@@ -271,7 +288,8 @@ high-dimensional self-KNN, and FAISS IVF for selected large low-dimensional
 datasets where the tuning sweep showed better speed at the requested recall.
 The public nearest-neighbour metrics are `"euclidean"`, `"cosine"`, and
 `"correlation"`; distance choices belong in `metric`, not in separate method
-names. Correlation is centered cosine distance. For normalized cosine and
+names. Euclidean results are ordinary L2 distances, not squared L2 values.
+Correlation is centered cosine distance. For normalized cosine and
 correlation routes, all-zero cosine rows and constant correlation rows are
 handled explicitly: two zero-normalized rows have distance `0`, while a
 zero-normalized row versus a nonzero row has distance `1`. CPU FAISS Flat uses
@@ -279,10 +297,13 @@ the exact CPU scorer for this degenerate case to preserve deterministic
 small-`k` tie handling; explicit CUDA routes do not perform CPU repair and
 therefore error clearly for these degenerate normalized rows. The finite CPU
 values are software conventions for otherwise undefined cosine or correlation
-cases, not mathematical cosine similarities or Pearson correlations.
+cases, not mathematical cosine similarities or Pearson correlations. All
+backends reject rows containing `NA`, `NaN`, `Inf`, or `-Inf`.
 Unsupported method/backend/metric combinations fail without changing the
 requested metric, method, or device; use `nn_capabilities(runtime = TRUE)` to
-preflight both design support and locally available providers.
+preflight both design support and locally available providers. Use
+`nn_metric_preflight()` to inspect the data-dependent contract and obtain the
+affected row indices before selecting a backend.
 
 Every KNN result makes the value contract machine-readable through
 `distance_is_metric`, `distance_semantics`,
@@ -298,12 +319,15 @@ The historical `"nsg"`, `"vamana"`, and `"nndescent"` spellings remain
 compatibility aliases. Here `_style` is a scope marker, not an algorithm name:
 the package-owned CPU routes are distinct graph-refinement algorithms derived
 from selected ideas in the named canonical algorithms, not feature-complete
-reimplementations. CUDA `nndescent_style` may resolve to direct external cuVS
+reimplementations. These package-owned routes are experimental and are
+excluded from the publication's principal comparative performance claims.
+Returned objects set `implementation_status = "experimental"` and
+`experimental = TRUE`. CUDA `nndescent_style` may resolve to direct external cuVS
 NN-descent. Native results report
 `preferred_public_method`,
 `implementation_scope = "package_owned_style_implementation"`, a qualified
 `implementation_label`, and `canonical_reimplementation = FALSE`; `print()`
-also states that the route is a package-owned derived algorithm. Direct cuVS
+also states that the route is experimental and package-owned. Direct cuVS
 NN-descent is labeled separately as an external-provider implementation.
 The [Autotuning guide](docs/autotuning.md) explains how the HPC target-recall
 sweeps convert speed, recall, failure, and shape-summary tables into

@@ -138,6 +138,17 @@ safe_fraction <- function(numerator, denominator) {
   if (!is.finite(denominator) || denominator <= 0) NA_real_ else numerator / denominator
 }
 
+route_confusion <- function(result, first, second, first_label, second_label) {
+  tab <- as.data.frame(
+    table(result[[first]], result[[second]], useNA = "ifany"),
+    stringsAsFactors = FALSE
+  )
+  names(tab) <- c("first_route", "second_route", "n_cells")
+  tab$first_policy <- first_label
+  tab$second_policy <- second_label
+  tab[, c("first_policy", "second_policy", "first_route", "second_route", "n_cells")]
+}
+
 summarize_loodo <- function(part, keys) {
   crossfit_evaluable <- !part$crossfit_abstained & is.finite(part$crossfit_time_sec)
   crossfit_agreement_evaluable <- crossfit_evaluable &
@@ -343,11 +354,47 @@ main <- function() {
   ))
   write.csv(by_dataset, file.path(out_dir, "jss_leave_one_dataset_out_by_dataset.csv"), row.names = FALSE)
 
+  confusion <- rbind(
+    route_confusion(
+      result, "package_auto_resolved_route_family", "crossfit_resolved_route_family",
+      "compiled_package_policy", "cross_fitted_policy"
+    ),
+    route_confusion(
+      result, "package_auto_resolved_route_family", "oracle_resolved_route_family",
+      "compiled_package_policy", "held_out_empirical_oracle"
+    ),
+    route_confusion(
+      result, "crossfit_resolved_route_family", "oracle_resolved_route_family",
+      "cross_fitted_policy", "held_out_empirical_oracle"
+    )
+  )
+  confusion <- confusion[confusion$n_cells > 0L, , drop = FALSE]
+  write.csv(
+    confusion,
+    file.path(out_dir, "jss_leave_one_dataset_out_route_confusion.csv"),
+    row.names = FALSE
+  )
+
+  joint <- as.data.frame(table(
+    compiled_package_policy = result$package_auto_resolved_route_family,
+    cross_fitted_policy = result$crossfit_resolved_route_family,
+    held_out_empirical_oracle = result$oracle_resolved_route_family,
+    useNA = "ifany"
+  ), stringsAsFactors = FALSE)
+  names(joint)[[4L]] <- "n_cells"
+  joint <- joint[joint$n_cells > 0L, , drop = FALSE]
+  write.csv(
+    joint,
+    file.path(out_dir, "jss_leave_one_dataset_out_route_joint.csv"),
+    row.names = FALSE
+  )
+
   writeLines(c(
     "# Leave-one-dataset-out selector sensitivity", "",
     "For each held-out dataset and backend/metric/k/target cell, the cross-fitted analysis excludes every row from that named dataset before selecting a method family. It first uses the same predeclared shape group; when that group is absent, it uses the three nearest training datasets in log(n)-log(p) space. It maximizes complete qualifying dataset coverage and then minimizes median log runtime.", "",
     "A cross-fitted operating point passes when the held-out route is complete and is either exact-audited or, for an approximate route, its mean query recall@k meets the requested threshold in every prespecified validation replicate. Exact selection and approximate target attainment are reported separately. Minimum query recall is not used for eligibility.", "",
     "The installed package `method = \"auto\"` result is reported separately as a non-independent diagnostic because its compiled policy summarizes the full calibration collection. It is not presented as leave-one-dataset-out evidence.", "",
+    "Candidate-universe qualification: the compiled policy could resolve to Flat or IVF, whereas the complete explicit held-out CUDA routes available to the cross-fitted policy and empirical oracle were exact-family routes and CAGRA. Explicit IVF was not present in that held-out experiment. The route-confusion outputs therefore compare the recorded policies but do not identify cross-fitting itself as the cause of the IVF-to-CAGRA change.", "",
     paste0("Held-out cells: ", nrow(result), "."),
     paste0("Cross-fitted operating points attained: ", sum(result$crossfit_operating_point_met), "."),
     paste0("Cross-fitted abstentions: ", sum(result$crossfit_abstained), "."),

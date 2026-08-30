@@ -6,7 +6,10 @@ nonzero row has distance `1`. These are software conventions for otherwise
 undefined cases. Explicit CUDA routes fail clearly when preserving them would
 require hidden CPU repair. Unsupported method/backend/metric combinations fail
 without changing the requested metric, method, or device; use
-`nn_capabilities(runtime = TRUE)` for preflight checks.
+`nn_capabilities(runtime = TRUE)` for route preflight checks. Use
+`nn_metric_preflight()` for the data-dependent check: it reports one-based
+non-finite, zero-vector, and constant-row indices together with the requested
+backend's action. All backends reject non-finite values.
 
 CUDA exact and brute-force requests use direct cuVS brute force when available,
 while FAISS GPU Flat remains the provider-backed alternative.
@@ -41,6 +44,13 @@ in the named canonical algorithms. Results make the qualification explicit throu
 `preferred_public_method`, `implementation_label`, `implementation_scope`, and
 `canonical_reimplementation = FALSE`; direct cuVS NN-descent is labelled as an
 external-provider implementation instead.
+
+Package-owned `*_style` implementations are experimental. Their result
+metadata sets `implementation_status = "experimental"` and
+`experimental = TRUE`; direct cuVS NN-descent is marked as an external-provider
+implementation instead. Experimental routes remain available for explicit
+evaluation but are excluded from the publication's principal comparative
+performance claims.
 
 FAISS is the required compiled vector-search dependency. CUDA, FAISS GPU, and
 RAPIDS cuVS are optional for CPU-only builds [1-3,13-16].

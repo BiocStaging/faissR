@@ -169,7 +169,8 @@ All KNN routes return a `faissR_nn` object with:
   approximate-method parameter rules also record `tuning_source = "cpp"`. For
   IVFPQ/PQ compression settings, PQ-specific fields are prefixed with `pq_`.
 - `attr(result, "auto_selection")`: for requests involving
-  `backend = "auto"` or `method = "auto"`, the compiled static shape/k/metric
+  `backend = "auto"` or `method = "auto"`, the compiled static
+  workload/shape/k/metric
   decision record. It stores
   `policy = "cpp_static_shape_k_metric_selector"`, the predicted concrete
   backend, public method class, device class, the reason for the selection,
@@ -433,10 +434,14 @@ The preferred public names for the package-owned candidate-graph routes are
 spellings remain compatibility aliases. The suffix is a scope marker rather
 than an algorithm name. These routes are distinct package-owned derived
 graph-refinement algorithms, not feature-complete reproductions of NSG,
-DiskANN/Vamana, or NN-descent. Host results expose `preferred_public_method`,
+DiskANN/Vamana, or NN-descent. The package-owned routes are experimental and
+are excluded from the publication's principal comparative performance claims.
+Host results expose `preferred_public_method`,
 `implementation_label`, `implementation_scope`, and
-`canonical_reimplementation`; printed package-owned results state
-`canonical reproduction: no`. Direct cuVS NN-descent is labelled separately
+`canonical_reimplementation`, plus `implementation_status = "experimental"`
+and `experimental = TRUE`; printed package-owned results state
+`status: experimental` and `canonical reproduction: no`. Direct cuVS
+NN-descent is labelled separately
 as an external-provider implementation.
 
 For native CPU Vamana with `metric = "euclidean"`, `metric = "cosine"`, or
@@ -729,6 +734,17 @@ The owning `handle` must be kept alive by downstream code for as long as either
 device pointer is used. `gpu_knn_to_host()` is an explicit diagnostic helper
 that copies those buffers back to R matrices; it is never called automatically
 by `nn_gpu()`.
+
+Both producers synchronize the recorded CUDA device before returning the R
+object. They do not export a CUDA stream, FAISS resource object, or cuVS
+resource handle. The handoff is therefore a synchronized same-process device-
+pointer contract: a consumer selects the recorded device, chooses its own
+stream, retains the owner until its work is complete, and synchronizes that
+work before the owner can be finalized. The child external pointers are views;
+their addresses must never be freed by the consumer. The allocations are not
+CUDA IPC handles and cannot be serialized or moved to another process. A
+consumer built against a different CUDA stack is responsible for runtime and
+device compatibility; provider-specific resource managers are not shared.
 
 The first GPU-resident implementation covers exact method labels
 `method = "auto"`, `"exact"`, `"flat"`, and `"bruteforce"`. Euclidean inputs

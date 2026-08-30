@@ -1,0 +1,5 @@
+"release","relevant_change","validity_control"
+"0.99.22","Added session backend precedence; benchmark calls use explicit backends.","No 0.99.21 timing was relabelled or rerun under this release."
+"0.99.23","Restricted the public metrics to Euclidean, cosine, and correlation; removed inner-product evidence; refactored input and route metadata.","The article filters the older archive to the same three retained metrics; controlled 0.99.25 routes were re-audited rather than assumed unchanged."
+"0.99.24","Added Bioconductor metadata and centralized suppression of expected optional-runtime warnings.","No nearest-neighbor timing result is transferred from this release."
+"0.99.25","Restored Windows eligibility and added the controlled CPU comparison and its independent recall audit.","Its elapsed times form a separate experiment and are never pooled with the 0.99.21 campaign."

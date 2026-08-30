@@ -167,14 +167,20 @@ The target recall tiers have different roles:
 
 ### Target-recall contract
 
-The statistic compared with `target_recall` is the **mean query-level
-recall@k within each validation replicate**. A candidate attains target `tau`
-only when this mean is at least `tau` in every prespecified validation-seed x
-timing-repeat replicate, with no missing or failed replicate. For a shape-group
-policy, the same condition must hold for every represented dataset. Median and
-minimum query-level recall are robustness diagnostics; minimum query recall is
-not the acceptance threshold. The public value requests a calibrated operating
-point, not a statistical guarantee on unseen data.
+The statistic compared with `target_recall` is a **one-sided 95% lower
+confidence bound for mean tie-aware query recall@k**. Strictly closer reference
+neighbors must match by identifier. An unmatched returned neighbor can receive
+credit only when exact metric rescoring places it at an equivalent kth-distance
+boundary, and boundary credit cannot exceed the number of boundary slots. The
+bound uses 1,000 deterministic query-level bootstrap resamples. A candidate
+attains target `tau` only when the bound is at least `tau` for every independent
+validation query seed, with no missing or failed seed. Repeated timings of one
+query set are collapsed within seed and do not count as independent recall
+evidence. For a shape-group policy, the same condition must hold for every
+represented dataset. Identifier-overlap recall, point tie-aware recall, median
+and minimum query recall, and boundary-substitution frequency are diagnostics.
+The public value requests a calibrated operating point, not a statistical
+guarantee on unseen data.
 
 Method-specific interpretation of the tuning files:
 
@@ -425,7 +431,39 @@ for the parameter rule, backend policy, and final selection.
   IVF for very large high-dimensional data only at lower target-recall tiers.
   This avoids treating IVF as a generic "large data" rule when exact FAISS GPU
   Flat was faster on MNIST/FashionMNIST-like and ImageNet-like high-dimensional
-  rows.
+rows.
+
+## Hardware Portability
+
+The bundled CUDA `method = "auto"` route policy is an optional experimental,
+static L40S-calibrated heuristic for cold full-self-search. It is not rebuilt
+from the runtime GPU model and should not be interpreted as a general policy
+for other query workloads. Returned
+`auto_selection` metadata contain the calibration profile, runtime model,
+hardware match status, and extrapolation label. When CUDA auto runs without a
+confirmed L40S match, faissR emits one warning per runtime GPU model in the R
+session. The route is retained and results keep their documented semantics;
+only the claim of local timing optimality is withheld. The warning can be
+silenced after inspection with:
+
+```r
+options(faissR.warn_hardware_extrapolation = FALSE)
+```
+
+`tuning = "pilot"` evaluates a reduced parameter grid for the resolved or
+explicit method, and `tuning = "cache"` reuses that result when its data and
+method key match. These modes can improve a method's local operating point, but
+they do not compare method families or install a replacement auto policy.
+Returning to the bundled behavior requires no stored policy cleanup: use
+`method = "auto", tuning = "auto"` and restore the warning with
+`options(faissR.warn_hardware_extrapolation = TRUE)`.
+
+The publication campaign scripts record package commit, container checksum,
+GPU identity, driver, and software environment for reproducible policy
+development. They remain research/replication infrastructure rather than a
+supported end-user policy compiler. A full local calibration API with
+cross-method validation, versioned fingerprints, provider-upgrade invalidation,
+and policy installation is not implemented in this release.
 - Prefer `method = "hnsw"` for CPU approximate self-KNN. In this benchmark its
   FAISS HNSW implementation route gave a better speed/accuracy balance than
   NN-Descent [4-5].

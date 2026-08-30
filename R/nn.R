@@ -8100,8 +8100,10 @@ cuda_cagra_route_available <- function(
 #'   tables.
 #' @return A data frame with one row per public `method`, `backend` (`"auto"`,
 #'   `"cpu"`, or `"cuda"`), and `metric` combination. Columns include
-#'   `supported`, `exact`, `implementation`, and `notes`. If `runtime = TRUE`,
-#'   runtime availability columns are appended.
+#'   `supported`, `exact`, `implementation`, `implementation_status`, and
+#'   `notes`. Package-owned `*_style` routes are marked `"experimental"`;
+#'   external-provider NN-descent is identified separately. If
+#'   `runtime = TRUE`, runtime availability columns are appended.
 #' @examples
 #' caps <- nn_capabilities()
 #' subset(caps, method == "flat" & supported)
@@ -8401,9 +8403,30 @@ nn_capability_row <- function(method, backend, metric) {
         supported = capability$supported,
         exact = capability$exact,
         implementation = capability$implementation,
+        implementation_status = nn_capability_implementation_status(
+            method,
+            backend
+        ),
         notes = capability$notes,
         stringsAsFactors = FALSE
     )
+}
+
+nn_capability_implementation_status <- function(method, backend) {
+    method <- normalize_nn_method(method)
+    backend <- normalize_nn_backend_arg(backend)
+    if (method %in% c("nsg", "vamana")) {
+        return("experimental")
+    }
+    if (identical(method, "nndescent")) {
+        return(switch(
+            backend,
+            cpu = "experimental",
+            cuda = "external_provider",
+            auto = "provider_dependent"
+        ))
+    }
+    "supported"
 }
 
 normalize_nn_tuning <- function(tuning) {
@@ -14112,6 +14135,8 @@ grid_self_knn <- function(
 #' \itemize{
 #'   \item `"auto"`: deterministic selection from the requested backend,
 #'   metric, data shape, `k`, and target recall. It does not run a timing pilot.
+#'   The CPU policy is calibration-informed and experimental: it has not
+#'   received the independent installed-policy validation reported for CUDA.
 #'   \item `"exact"`: exact search using FAISS Flat or direct cuVS brute force.
 #'   \item `"flat"`: an explicit FAISS exhaustive Flat index.
 #'   \item `"bruteforce"`: exhaustive search, using FAISS on CPU and preferring
@@ -14123,16 +14148,19 @@ grid_self_knn <- function(
 #'   \item `"ivfpq"`: compressed FAISS IVF-PQ approximate search.
 #'   \item `"ivfpq_fastscan"`: FAISS FastScan on CPU and the package's
 #'   separately identified cuVS 4-bit IVF-PQ route on CUDA.
-#'   \item `"vamana_style"` (`"vamana"` compatibility alias): a package-owned
+#'   \item `"vamana_style"` (`"vamana"` compatibility alias): an experimental
+#'   package-owned
 #'   robust-pruned candidate graph inspired by DiskANN/Vamana, followed by CPU
 #'   or CUDA candidate refinement. It is not a feature-complete Vamana
 #'   reproduction.
 #'   \item `"nsg_style"` (`"nsg"` compatibility alias): a distinct
-#'   package-owned candidate-graph algorithm derived from selected NSG/MRNG
+#'   experimental package-owned candidate-graph algorithm derived from selected
+#'   NSG/MRNG
 #'   pruning ideas, followed by CPU or CUDA candidate refinement. It is not a
 #'   feature-complete NSG reproduction.
 #'   \item `"nndescent_style"` (`"nndescent"` compatibility alias): a
-#'   distinct package-owned CPU graph-refinement algorithm derived from
+#'   distinct experimental package-owned CPU graph-refinement algorithm derived
+#'   from
 #'   NN-descent ideas, or direct external-provider cuVS NN-descent on CUDA.
 #'   \item `"cagra"`: CUDA-only FAISS GPU CAGRA or direct cuVS CAGRA. Use
 #'   `cagra_implementation` to request a provider explicitly.
@@ -14212,9 +14240,14 @@ grid_self_knn <- function(
 #'   marker, not an algorithm name: native results explicitly report a distinct
 #'   package-owned derived graph-refinement algorithm rather than a
 #'   feature-complete canonical reproduction. CUDA cuVS NN-descent is
-#'   identified separately as an external-provider implementation.
+#'   identified separately as an external-provider implementation. Package-owned
+#'   routes carry `implementation_status = "experimental"` and
+#'   `experimental = TRUE` in their returned metadata. They are available for
+#'   explicit evaluation but are excluded from the package's principal
+#'   comparative performance claims.
 #' @param metric Distance metric. The intentionally small public set is
 #'   `"euclidean"`, `"cosine"`, and `"correlation"`.
+#'   Euclidean results are ordinary L2 distances, not squared L2 values.
 #'   Legacy aliases such as `"l2"`, `"cor"`, `"pearson"`, and `"ip"` are
 #'   rejected; use the canonical metric names. `"cosine"` uses row L2
 #'   normalization, and `"correlation"` is centered cosine
@@ -14235,7 +14268,10 @@ grid_self_knn <- function(
 #'   small-`k` tie handling; explicit CUDA routes error clearly instead of
 #'   repairing those rows on CPU. These finite values are software conventions
 #'   for otherwise undefined cosine or correlation cases, not mathematical
-#'   cosine similarities or Pearson correlations. CUDA FAISS/cuVS results carry
+#'   cosine similarities or Pearson correlations. All backends reject rows
+#'   containing `NA`, `NaN`, `Inf`, or `-Inf`. Use
+#'   [nn_metric_preflight()] to obtain affected one-based row indices and the
+#'   requested backend's action before search. CUDA FAISS/cuVS results carry
 #'   `attr(result, "gpu_residency")` metadata with provider, index residency,
 #'   host/device transfer strategy, query device reuse, and CPU fallback flags.
 #'   CPU `method = "auto"` can use FAISS Flat for larger exact non-Euclidean
@@ -14261,6 +14297,8 @@ grid_self_knn <- function(
 #'   (default). Approximate methods use it to select a speed/quality policy;
 #'   `method = "auto"` may also use it when choosing a method. It is a target,
 #'   not a guarantee: inspect `tuning_benchmark_target_met` and measured recall.
+#'   Other numeric values are rejected; faissR does not round or interpolate
+#'   between the three calibrated tiers.
 #'   Exact methods remain exact and use this value only as policy metadata.
 #' @param cagra_implementation CUDA CAGRA provider for this call. `NULL` uses
 #'   the global `options(faissR.cagra_implementation = ...)` value. `"auto"`
@@ -14321,13 +14359,29 @@ grid_self_knn <- function(
 #'   attributes including `attr(result, "requested_backend")`,
 #'   `attr(result, "requested_method")`, `attr(result, "tuning")`, and
 #'   `attr(result, "resolved_backend")`. Auto requests also include
-#'   `attr(result, "auto_selection")`, a static shape/k/metric decision record
-#'   that records the predicted internal backend, public method class, device
+#'   `attr(result, "auto_selection")`, a static workload/shape/k/metric decision
+#'   record. It includes reference rows and variables, query-row count,
+#'   self-query status, the `n * n_points * p` work estimate, and the predicted
+#'   internal backend, public method class, device
 #'   class, explicit backend/method flags, backend/method decision reasons, and
-#'   hardware provenance. A capability-compatible machine that differs from
+#'   hardware provenance. CPU auto
+#'   records `auto_policy_status =
+#'   "calibration_informed_not_independently_validated"` and
+#'   `auto_policy_evidence_scope = "cpu_static_policy_experimental"`. CUDA
+#'   auto is a separately evaluated but still experimental L40S-calibrated
+#'   policy for cold full-self-search and records `auto_policy_status =
+#'   "experimental_l40s_calibrated_cold_full_self_search"`; neither label
+#'   implies general workload or hardware validation.
+#'   Expected future query batches are not an input; use a
+#'   fitted or cached index when construction will be amortized. A
+#'   capability-compatible machine that differs from
 #'   the calibration hardware keeps the compiled policy but is labelled
 #'   `hardware_extrapolated_unvalidated`; hardware identity alone never causes
-#'   a silent method or device fallback. The selector does not run pilot
+#'   a silent method or device fallback. CUDA auto emits one warning per
+#'   unmatched runtime GPU model unless
+#'   `options(faissR.warn_hardware_extrapolation = FALSE)` is set. Pilot/cache
+#'   tuning adjusts parameters within a method and does not install a new
+#'   cross-method policy. The selector does not run pilot
 #'   tuning. CPU FAISS Flat/HNSW/IVF/IVFPQ/FastScan routes use a
 #'   bounded session-local fitted-index cache for repeated raw `nn()` calls
 #'   with matching data and parameters. CUDA `method = "ivfpq_fastscan"` also
@@ -14427,7 +14481,13 @@ nn <- function(
 #' `auto_residency_constraint`. It also records the actual exact-family
 #' `execution_tuning` used by the GPU-resident route and the
 #' `auto_preferred_tuning` row for the approximate method selected by the
-#' compiled policy when available.
+#' compiled policy when available. That policy is an optional experimental
+#' L40S-calibrated heuristic for cold full-self-search. Because it is
+#' L40S-informed,
+#' unmatched or unidentified CUDA hardware emits the same once-per-model
+#' extrapolation warning as `nn()`; set
+#' `options(faissR.warn_hardware_extrapolation = FALSE)` only after reviewing
+#' the returned `auto_selection` metadata.
 #'
 #' @param data Numeric matrix/data frame or optional `float::fl()`/`float32`
 #'   reference matrix.
@@ -14452,7 +14512,10 @@ nn <- function(
 #'   fields as `nn()`. With `tuning = "auto"`, it also includes
 #'   `execution_tuning`; with `method = "auto"`, it includes
 #'   `auto_preferred_tuning` when the compiled selector has a preferred CUDA
-#'   method/tuning row.
+#'   method/tuning row. Ownership metadata states that `handle` owns both
+#'   allocations, the buffer pointers are non-owning, the producing device is
+#'   synchronized before return, and serialization/interprocess sharing are not
+#'   supported.
 #' @examples
 #' if (cuda_available()) {
 #'   x <- matrix(rnorm(200), ncol = 4)
@@ -14634,6 +14697,14 @@ print.faissR_nn <- function(x, ...) {
     if (!is.null(metric) && !is.na(metric)) {
         cat("  metric: ", metric, "\n", sep = "")
     }
+    auto_status <- attr(x, "auto_policy_status")
+    if (
+        length(auto_status) == 1L &&
+            !is.na(auto_status) &&
+            nzchar(auto_status)
+    ) {
+        cat("  auto policy: ", auto_status, "\n", sep = "")
+    }
     if (
         !is.null(x$implementation_label) &&
             identical(
@@ -14642,6 +14713,9 @@ print.faissR_nn <- function(x, ...) {
             )
     ) {
         cat("  implementation: ", x$implementation_label, "\n", sep = "")
+        if (identical(x$implementation_status, "experimental")) {
+            cat("  status: experimental\n")
+        }
         cat("  canonical reproduction: no\n")
     }
     if (!isTRUE(attr(x, "exact"))) {

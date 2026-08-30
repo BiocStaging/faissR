@@ -29,13 +29,17 @@ For every KNN method record:
 - downstream sanity checks such as openTSNE/UMAP plots when KNN is used for
   embeddings.
 
-For target attainment, `recall_at_k` is the mean query-level recall@k within
-one prespecified validation replicate. A cell reaches `target_recall = tau`
-only when this mean is at least `tau` in every validation-seed x timing-repeat
-replicate and all required replicates complete successfully. Minimum
-query-level recall is reported separately as a robustness diagnostic and does
-not determine attainment. Shape-group calibration additionally requires this
-condition for every represented dataset.
+For target attainment, approximate routes use a one-sided 95% lower confidence
+bound for mean tie-aware query recall@k, based on 1,000 deterministic
+query-bootstrap resamples. Strictly closer neighbors must match by identifier;
+exact rescoring can credit an equivalent candidate at a tied kth-distance
+boundary. A cell reaches `target_recall = tau` only when the lower bound is at
+least `tau` for every independent validation query seed and all required seeds
+complete successfully. Timing repeats reuse the seed's queries and measure
+runtime only; they are collapsed within seed for recall inference. Raw
+identifier overlap, point tie-aware recall, minimum query recall, and boundary
+substitution frequency are reported separately as diagnostics. Shape-group
+calibration additionally requires the condition for every represented dataset.
 
 Exact-family routes are not classified by the ANN target-attainment rule.
 They are `exact-audited` when the exhaustive route and reference audit pass.

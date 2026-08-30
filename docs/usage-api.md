@@ -27,6 +27,7 @@ expected to set. For the full R help page after installation, use
 | `predict()` | S3 method for `faissR_knn_model`; predicts labels, numeric responses, or class probabilities from `knn()`. |
 | `backend_info()` | Report available CPU, FAISS, CUDA, and cuVS capabilities. |
 | `nn_capabilities()` | Report supported nearest-neighbour method/backend/metric combinations for preflight checks; `runtime = TRUE` adds current-build availability columns. |
+| `nn_metric_preflight()` | Report non-finite rows and metric-degenerate zero/constant rows, together with the requested backend's action, without running a search. |
 | `faiss_available()` | Logical check for compiled/linked FAISS CPU support. |
 | `faiss_gpu_available()` | Logical check for FAISS GPU support in the linked FAISS build. |
 | `cuda_available()` | Logical check for native CUDA support and an available CUDA runtime/device. |
@@ -75,9 +76,9 @@ nn(data, points = data, k = NULL, exclude_self = FALSE, backend = "auto",
 | `exclude_self` | Logical; if `TRUE`, remove each query row from its own neighbour list. This is valid only for self-query calls where `points` is omitted or identical to `data`. The flag is passed into the compiled backend path, so self-neighbour removal is handled in C++/CUDA rather than by R-side row filtering. |
 | `backend` | Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses a validated CUDA route only when supported and otherwise resolves to CPU. Explicit `"cuda"` fails when CUDA support is unavailable. |
 | `method` | Algorithm selector: `"auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"vamana_style"`, `"nsg_style"`, `"nndescent_style"`, `"ivfpq_fastscan"`, or `"cagra"` [1-6,13-16,22-24,34]. The shorter graph-family names remain compatibility aliases. Resolved implementation labels are metadata, not public values. `method = "grid"` maps to native CPU or CUDA code according to `backend`; unsupported combinations stop clearly. |
-| `metric` | Canonical distance metric: `"euclidean"`, `"cosine"`, or `"correlation"`. Legacy aliases are rejected. |
+| `metric` | Canonical distance metric: `"euclidean"`, `"cosine"`, or `"correlation"`. Euclidean output is ordinary L2, not squared L2. Legacy aliases are rejected. |
 | `tuning` | Tuning policy: `"auto"`, `"cache"`, `"pilot"`, `"fixed"`, `"off"`, or `"none"`. Automatic policies are selected in compiled code. |
-| `target_recall` | Calibration objective: `0.9`, `0.95`, or `0.99`. It is not a guarantee for a new dataset. |
+| `target_recall` | Requested recall tier: exactly `0.9`, `0.95`, or `0.99`. Other values error; faissR does not round or interpolate. The tier is not a guarantee for a new dataset. |
 | `cagra_implementation` | CUDA CAGRA provider for this call. `NULL` uses `options(faissR.cagra_implementation = ...)`; `"auto"` uses a deterministic shape-aware provider rule, selecting direct cuVS CAGRA for compact high-dimensional self-KNN and otherwise keeping FAISS GPU CAGRA as the default when both providers are available; `"faiss_gpu"` or `"cuvs"` force one provider for benchmark rows. This affects `backend = "cuda", method = "cagra"` and CUDA-auto routes that select CAGRA. |
 | `cagra_build_algo` | Direct RAPIDS cuVS CAGRA graph-build algorithm for this call. `NULL` uses `options(faissR.cuvs_cagra_build_algo = "auto")`; for direct cuVS CAGRA, `"auto"` applies faissR's deterministic shape-aware build rule, choosing iterative CAGRA construction for compact high-dimensional self-KNN cases and IVF-PQ construction otherwise. `"ivf_pq"` requests the IVF-PQ graph builder, `"nn_descent"` requests cuVS NN-descent graph construction, and `"iterative_cagra_search"` requests cuVS iterative CAGRA graph building. This is a CAGRA construction parameter, not a fallback to a different public method, and successful results record it in `route_parameters`. |
 | `output` | Distance storage type: `"double"` returns the default R numeric matrix; `"float"` returns `distances` as a `float::fl()`/`float32` matrix and records `distance_type = "float32"` plus `attr(result, "distance_type") = "float32"`. Direct FAISS/cuVS float routes can construct float distances without first materializing an R double distance matrix, including CPU FAISS Flat/IVF/IVFPQ/FastScan, cached CPU FAISS fitted indexes, FAISS GPU Flat/IVF/IVFPQ, and direct Euclidean RAPIDS cuVS routes. Float32-route results expose `input_layout`, `input_owns_data`, and `float32_compatibility_conversion` so callers can distinguish direct float payload use from one-time double-to-float adaptation; unsupported native float32 routes error. The `float` package is optional and used only when this output is requested or a float32 input object is supplied. |
@@ -85,7 +86,11 @@ nn(data, points = data, k = NULL, exclude_self = FALSE, backend = "auto",
 | `n_threads` | Number of CPU worker threads for CPU/FAISS CPU backends. GPU backends ignore this argument. |
 
 For cosine and correlation, zero-normalized rows use the documented finite
-edge-case convention. CUDA exact and brute-force requests use direct cuVS brute
+edge-case convention on CPU, whereas explicit CUDA requests reject them rather
+than applying CPU repair. All backends reject non-finite values. Call
+`nn_metric_preflight(data, points, metric, backend)` to obtain the affected
+one-based row indices and a stable action label before search. CUDA exact and
+brute-force requests use direct cuVS brute
 force when available, while FAISS GPU Flat remains the provider-backed
 alternative.
 
@@ -94,8 +99,10 @@ For package-owned graph refinement, prefer `"nsg_style"`,
 compatibility aliases. The `_style` suffix is a scope marker rather than an
 algorithm name: package-owned routes are distinct derived graph-refinement
 algorithms, while CUDA `nndescent_style` can resolve to direct cuVS
-NN-descent. Result fields `preferred_public_method`,
-`implementation_label`, `implementation_scope`, and
+NN-descent. Package-owned implementations are experimental and excluded from
+the publication's principal comparative performance claims. Result fields
+`preferred_public_method`, `implementation_label`, `implementation_scope`,
+`implementation_status`, `experimental`, and
 `canonical_reimplementation` distinguish these derived algorithms from
 direct external-provider routes.
 
@@ -140,7 +147,7 @@ nn_gpu(data, points = data, k = NULL, exclude_self = FALSE,
 | `method` | GPU-resident method selector. `"auto"` consults the compiled shape/k/metric/target-recall selector, but currently returns exact-family GPU-resident buffers; `"exact"`, `"flat"`, and `"bruteforce"` force the same resident exact search family. |
 | `metric` | Canonical distance metric: `"euclidean"`, `"cosine"`, or `"correlation"`. Legacy aliases are rejected. |
 | `tuning` | Tuning policy: `"auto"`, `"cache"`, `"pilot"`, `"fixed"`, `"off"`, or `"none"`. Automatic policies are selected in compiled code. |
-| `target_recall` | Calibration objective: `0.9`, `0.95`, or `0.99`. It is not a guarantee for a new dataset. |
+| `target_recall` | Requested recall tier: exactly `0.9`, `0.95`, or `0.99`; no rounding or interpolation. |
 
 `nn_gpu()` is for downstream CUDA consumers that need the KNN output to stay on
 the GPU. It returns a `faissR_gpu_knn` object with an owning `handle` plus
@@ -151,8 +158,8 @@ pointer.
 
 The current GPU-resident route is exact search for `method = "auto"`,
 `"exact"`, `"flat"`, or `"bruteforce"`. Euclidean inputs above three
-2D/3D Euclidean uses the native direct-difference CUDA kernel. Raw
-converted on the CUDA device to faissR's shifted smaller-is-better distance.
+dimensions use FAISS GPU direct distance search; 2D/3D Euclidean uses the
+native direct-difference CUDA kernel.
 Cosine and correlation use the native CUDA GPU-resident exact route.
 `target_recall` is recorded for API symmetry. The route is exhaustive, but raw
 set-overlap recall can differ from 1.0 at tied boundaries; publication analyses
@@ -169,6 +176,32 @@ are exposed with persistent GPU ownership.
 
 Use `gpu_knn_to_host(x)` only when you explicitly want to inspect or test a
 GPU-resident result in R; it copies both result buffers to host matrices.
+
+### Ownership and CUDA execution contract
+
+- `handle` is the sole owner of both CUDA allocations. `indices_ptr` and
+  `distances_ptr` are non-owning views. Retain the complete result (or at least
+  its owning handle) until every downstream CUDA operation has completed.
+- The handle finalizer releases both allocations when the owner becomes
+  unreachable. Garbage collection is not a synchronization mechanism. An
+  asynchronous consumer must preserve the owner and synchronize its stream or
+  record an equivalent completion event before allowing finalization.
+- The producing route calls `cudaDeviceSynchronize()` before returning. No
+  faissR stream or provider-resource handle is exported. A consumer may select
+  its own stream after return, but must first select the recorded `device` and
+  must not assume that its library-specific FAISS/cuVS resource object is the
+  same object used by faissR.
+- The pointers are ordinary same-process CUDA allocations on one device. They
+  are not CUDA IPC handles, are not valid on another device or process, and
+  require a CUDA-runtime-compatible consuming package. Different CUDA resource
+  managers may use the buffers after the synchronized handoff; they do not
+  share allocator or stream ownership.
+- External-pointer GPU results and fitted indexes are session objects. Saving
+  them with `saveRDS()` does not create a reusable GPU/index serialization.
+  `serialization_supported = FALSE` and
+  `interprocess_sharing_supported = FALSE` make this explicit.
+- `gpu_knn_to_host()` copies the two complete buffers but does not invalidate
+  the original GPU object. It remains resident until its owner is finalized.
 
 ## `gpu_knn_to_host()`
 
@@ -188,7 +221,7 @@ consume CUDA device pointers. It is never called automatically by `nn_gpu()`.
 
 | `method` | Description |
 | --- | --- |
-| `"auto"` | Shape-aware selector for the chosen backend. CPU auto uses exact search for tiny data, grid search for large 2D/3D self-search, FAISS HNSW for most medium/high-dimensional CPU self-KNN, FAISS IVF for selected large low-dimensional Euclidean rows, native CPU NSG/MRNG-derived refinement for selected larger non-Euclidean self-KNN cases, and native CPU NN-descent for other large self-KNN cases [1-2,5,21]. CUDA auto uses CUDA grid for large 2D/3D self-search; Euclidean non-grid self-KNN chooses exact Flat/brute force or IVF-Flat from the compiled shape/k/target-recall policy; non-grid cosine and correlation stay on exact FAISS GPU Flat or cuVS brute force when available [1-3,13-16]. |
+| `"auto"` | Shape-aware selector for the chosen backend. CPU auto is a calibration-informed experimental static policy and returns `auto_policy_status = "calibration_informed_not_independently_validated"`; it uses exact search for tiny data, grid search for large 2D/3D self-search, FAISS HNSW for most medium/high-dimensional CPU self-KNN, FAISS IVF for selected large low-dimensional Euclidean rows, native CPU NSG/MRNG-derived refinement for selected larger non-Euclidean self-KNN cases, and native CPU NN-descent for other large self-KNN cases [1-2,5,21]. CUDA auto is also experimental: it is L40S-calibrated for cold full-self-search. It uses CUDA grid for large 2D/3D self-search; Euclidean non-grid self-KNN chooses exact Flat/brute force or IVF-Flat from the compiled shape/k/requested-recall-tier policy; non-grid cosine and correlation stay on exact FAISS GPU Flat or cuVS brute force when available [1-3,13-16]. Neither selector accepts a memory budget, latency/build deadline, or prohibition on exhaustive search. |
 | `"grid"` | Native spatial grid search for 2D/3D Euclidean, cosine, and correlation self-KNN. Cosine/correlation use normalized Euclidean grid search. It is intended for low-dimensional spatial or simulated data and errors clearly outside supported dimensions. |
 
 Use `nn(..., exclude_self = TRUE)` for embedding
@@ -318,7 +351,7 @@ prob  <- knn(Xtrain, Ytrain, Xtest, type = "prob")
 | `method` | Nearest-neighbour algorithm selector passed to `nn()`. `"auto"` chooses the most appropriate method for the selected backend. |
 | `metric` | Canonical distance metric: `"euclidean"`, `"cosine"`, or `"correlation"`. Legacy aliases are rejected. |
 | `tuning` | Tuning policy: `"auto"`, `"cache"`, `"pilot"`, `"fixed"`, `"off"`, or `"none"`. Automatic policies are selected in compiled code. |
-| `target_recall` | Calibration objective: `0.9`, `0.95`, or `0.99`. It is not a guarantee for a new dataset. |
+| `target_recall` | Requested recall tier: exactly `0.9`, `0.95`, or `0.99`; no rounding or interpolation. |
 | `cagra_implementation` | CUDA CAGRA provider passed to `nn()` for fitting/immediate prediction. |
 | `cagra_build_algo` | Direct RAPIDS cuVS CAGRA graph-build algorithm passed to `nn()` for direct cuVS CAGRA routes. |
 | `task` | `"auto"`, `"classification"`, or `"regression"`. `"auto"` treats numeric `Ytrain` as regression and non-numeric `Ytrain` as classification. |
@@ -374,7 +407,7 @@ predict(object, newdata, k = NULL,
 | `k` | Number of neighbours for this prediction call. If `NULL`, uses the model default. |
 | `backend` | Device backend for the prediction-time neighbour search: `"auto"`, `"cpu"`, or `"cuda"`. The fitted model's method and metric are reused. |
 | `tuning` | Tuning policy: `"auto"`, `"cache"`, `"pilot"`, `"fixed"`, `"off"`, or `"none"`. Automatic policies are selected in compiled code. |
-| `target_recall` | Calibration objective: `0.9`, `0.95`, or `0.99`. It is not a guarantee for a new dataset. |
+| `target_recall` | Requested recall tier: exactly `0.9`, `0.95`, or `0.99`; no rounding or interpolation. |
 | `cagra_implementation` | CUDA CAGRA provider for this prediction call. `NULL` reuses the fitted model setting, then the global option. |
 | `cagra_build_algo` | Direct RAPIDS cuVS CAGRA graph-build algorithm for this prediction call. `NULL` reuses the fitted model setting, then the global option. |
 | `vote` | `"majority"` for unweighted classification votes or regression means; `"weighted"` for inverse-distance weighting. |

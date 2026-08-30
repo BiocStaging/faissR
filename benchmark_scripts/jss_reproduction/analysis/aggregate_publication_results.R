@@ -132,6 +132,12 @@ robust_summary <- function(x, expected_seeds, expected_repeats) {
     success <- part$status == "success"
     times <- suppressWarnings(as.numeric(part$time_sec[success]))
     recalls <- suppressWarnings(as.numeric(part$recall_at_k[success]))
+    tie_recalls <- if ("tie_aware_recall_at_k" %in% names(part)) {
+      suppressWarnings(as.numeric(part$tie_aware_recall_at_k[success]))
+    } else numeric()
+    tie_lcb <- if ("tie_aware_recall_lcb" %in% names(part)) {
+      suppressWarnings(as.numeric(part$tie_aware_recall_lcb[success]))
+    } else numeric()
     memory_valid <- if ("memory_valid_for_comparison" %in% names(part)) {
       value <- suppressWarnings(as.logical(part$memory_valid_for_comparison))
       success & !is.na(value) & value
@@ -177,7 +183,19 @@ robust_summary <- function(x, expected_seeds, expected_repeats) {
       (!direct_exact_audit_available || all(tie_values))
     overlap_target_met <- complete && length(recalls) == expected_runs &&
       all(is.finite(recalls) & recalls >= target)
-    approximate_target_met <- if (exact_audited) NA else overlap_target_met
+    tie_point_target_met <- complete && length(tie_recalls) == expected_runs &&
+      all(is.finite(tie_recalls) & tie_recalls >= target)
+    lcb_available <- complete && length(tie_lcb) == expected_runs &&
+      all(is.finite(tie_lcb))
+    uncertainty_target_met <- if (lcb_available) {
+      all(vapply(seeds, function(seed) {
+        values <- tie_lcb[part$validation_seed[success] == seed]
+        length(values) == expected_repeats && all(values >= target)
+      }, logical(1L)))
+    } else {
+      overlap_target_met
+    }
+    approximate_target_met <- if (exact_audited) NA else uncertainty_target_met
     data.frame(
       part[1L, columns, drop = FALSE],
       n_rows = nrow(part),
@@ -196,14 +214,28 @@ robust_summary <- function(x, expected_seeds, expected_repeats) {
       median_host_copy_sec = if (any(is.finite(copies))) median(copies[is.finite(copies)]) else NA_real_,
       mean_recall_at_k = if (any(is.finite(recalls))) mean(recalls[is.finite(recalls)]) else NA_real_,
       min_recall_at_k = if (any(is.finite(recalls))) min(recalls[is.finite(recalls)]) else NA_real_,
+      mean_tie_aware_recall_at_k = if (any(is.finite(tie_recalls))) {
+        mean(tie_recalls[is.finite(tie_recalls)])
+      } else NA_real_,
+      min_tie_aware_recall_lcb = if (any(is.finite(tie_lcb))) {
+        min(tie_lcb[is.finite(tie_lcb)])
+      } else NA_real_,
       mean_run_mean_query_recall_at_k = if (any(is.finite(recalls))) mean(recalls[is.finite(recalls)]) else NA_real_,
       min_run_mean_query_recall_at_k = if (any(is.finite(recalls))) min(recalls[is.finite(recalls)]) else NA_real_,
-      target_recall_statistic = "mean_query_recall_at_k",
-      target_recall_replicate_rule = "all_prespecified_validation_replicates",
+      target_recall_statistic = if (lcb_available) {
+        "tie_aware_mean_query_recall_at_k_one_sided_bootstrap_lcb"
+      } else "mean_query_recall_at_k",
+      target_recall_replicate_rule =
+        "all_independent_query_seeds;timing_repeats_collapsed_within_seed",
       min_query_recall_role = "diagnostic_only",
       set_overlap_target_met_all_runs = overlap_target_met,
-      target_met_all_runs = overlap_target_met,
-      target_attained_all_validation_replicates = overlap_target_met,
+      tie_aware_point_target_met_all_runs = tie_point_target_met,
+      target_met_all_runs = uncertainty_target_met,
+      target_attained_all_validation_replicates = uncertainty_target_met,
+      target_attained_all_independent_seeds = uncertainty_target_met,
+      recall_eligibility_basis = if (lcb_available) {
+        "tie_aware_query_bootstrap_lcb"
+      } else "legacy_identifier_overlap_point_estimate",
       exact_family = exact_family,
       exact_audited = exact_audited,
       exact_audit_basis = if (exact_audited && direct_exact_audit_available) {
@@ -707,13 +739,13 @@ write_report <- function(out_dir, files, combined, summary, best, route_errors,
     paste0("- Robust method cells: ", nrow(summary), "."),
     paste0("- Complete validation cells: ", sum(summary$complete_validation), "."),
     paste0("- Exact-audited cells: ", sum(summary$complete_validation & summary$exact_audited), "."),
-    paste0("- Approximate cells meeting target in every prespecified replicate: ", sum(summary$complete_validation & !summary$exact_audited & !is.na(summary$approximate_target_met) & summary$approximate_target_met), "."),
+    paste0("- Approximate cells meeting the eligibility criterion for every independent query seed: ", sum(summary$complete_validation & !summary$exact_audited & !is.na(summary$approximate_target_met) & summary$approximate_target_met), "."),
     paste0("- Selection-eligible cells: ", sum(selection_eligible_rows(summary)), "."),
     paste0("- Successful route mismatches: ", nrow(route_errors), "."),
     "",
     "A complete exhaustive route is eligible after its exactness audit passes: identical neighbour identifiers or an equivalent sorted distance multiset within the frozen tolerance. An approximate route is eligible only when every replicate's mean query-level recall@k reaches the target. Raw set overlap and minimum query recall remain diagnostics for exact routes and cannot make an audited exhaustive route ineligible. Failed, timed-out, unsupported, duplicated, incomplete, and route-mismatched rows remain in the archive.",
     "",
-    "Paired performance is the primary timing analysis. Ratios are first computed within identical dataset x metric x k x target cells, then reduced to one median ratio per dataset, and only then summarized across datasets. Thus each dataset is the primary, equally weighted unit. External ratios are comparator_time/faissR_auto_time (>1 favors faissR); selector-regret ratios are faissR_auto_time/faissR_oracle_time (>1 favors the oracle). Unpaired cells, timeouts, and out-of-memory failures remain in the denominators and count columns. Host-memory medians require an explicit fresh-process validity flag; shared-process VmHWM observations and historical rows without the flag are excluded.",
+    "Paired performance is the primary timing analysis. Ratios are first computed within identical dataset x metric x k x target cells, then reduced to one median ratio per dataset, and only then summarized across datasets. Thus each dataset is the primary, equally weighted unit. External ratios are comparator_time/faissR_auto_time (>1 favors faissR); the auto/explicit-oracle diagnostic ratio is faissR_auto_time/faissR_oracle_time (>1 favors the explicit oracle). The dedicated selector-regret analysis also includes the selected route itself in the feasible-route denominator. Unpaired cells, timeouts, and out-of-memory failures remain in the denominators and count columns. Host-memory medians require an explicit fresh-process validity flag; shared-process VmHWM observations and historical rows without the flag are excluded.",
     "",
     paste0("Paired dataset-level summary rows: ", nrow(paired_summary), "."),
     paste0("Selection-stability cells: ", nrow(stability$cells), "."),

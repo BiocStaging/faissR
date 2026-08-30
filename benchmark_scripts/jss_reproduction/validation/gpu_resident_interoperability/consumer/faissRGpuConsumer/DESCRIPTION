@@ -1,0 +1,15 @@
+Package: faissRGpuConsumer
+Type: Package
+Title: Minimal GPU Consumer for the faissR Publication Audit
+Version: 0.0.1
+Authors@R: person("Publication", "Audit", role = c("aut", "cre"),
+                  email = "tkcaccia@gmail.com")
+Description: A deliberately small downstream package used only by the faissR
+    publication benchmark. It retrieves faissR's registered C-callable GPU
+    entry point and launches a CUDA checksum kernel over GPU-resident neighbor
+    buffers without materializing the full result on the host.
+License: MIT
+Encoding: UTF-8
+Imports: Rcpp, faissR
+LinkingTo: Rcpp, faissR
+SystemRequirements: CUDA

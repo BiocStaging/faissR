@@ -3,9 +3,35 @@
 #' `faissR` contains FAISS-backed neighbour search, k-means,
 #' and kNN classifier/regressor helpers. The main public entry points are
 #' `nn()`, `nn_gpu()`, `gpu_knn_to_host()`, `candidate_knn()`, `fast_kmeans()`,
-#' `knn()`, `predict()`, `backend_info()`, and `nn_capabilities()`.
+#' `knn()`, `predict()`, `backend_info()`, `nn_capabilities()`, and
+#' `nn_metric_preflight()`.
 #' Classification probabilities
 #' are returned with `predict(type = "prob")`.
+#'
+#' `nn()` returns a `faissR_nn` list containing one-based integer `indices`
+#' and `distances` matrices with one row per query and one column per returned
+#' neighbour. `nn_gpu()` instead returns an owning session-local external
+#' pointer plus non-owning int32/float32 CUDA buffer views; use
+#' `gpu_knn_to_host()` for explicit materialization. `knn()` returns a reusable
+#' `faissR_knn_model` when `Xtest` is omitted, and `fast_kmeans()` returns a
+#' `faissR_kmeans` object.
+#'
+#' Search input is dense: numeric matrices, data frames, and optional
+#' `float::fl()` matrices are supported. Sparse, delayed, and file-backed
+#' representations are not searched in place and may be eagerly materialized
+#' or densified by `as.matrix()`. Duplicate observations remain distinct row
+#' identifiers. With self-search, `exclude_self = TRUE` removes only the query
+#' row identifier.
+#'
+#' `target_recall` is a discrete requested recall tier: only `0.9`, `0.95`,
+#' and `0.99` are accepted, with no rounding or interpolation. CPU
+#' `method = "auto"` is a calibration-informed experimental static policy and
+#' records `auto_policy_status =
+#' "calibration_informed_not_independently_validated"`. CUDA
+#' `method = "auto"` is an optional experimental L40S-calibrated policy for
+#' cold full-self-search, not a general hardware or query-workload policy.
+#' Automatic selection does not accept memory, build-time, or latency budgets;
+#' request an explicit method when those constraints govern execution.
 #'
 #' FAISS is a required system dependency for every functional native build.
 #' Diagnostic-only builds on explicitly unsupported WebAssembly or Bioconductor
@@ -27,8 +53,16 @@
 #' `faissR_c_api_version()`, and obtain the typed callable with
 #' `faissR_get_nn_cuda_tuned_gpu()`. The returned external pointer owns the
 #' device buffers and must remain protected for as long as a consumer uses the
-#' non-owning index or distance pointers. Host materialization is explicit via
-#' `gpu_knn_to_host()`.
+#' non-owning index or distance pointers. The producer synchronizes before
+#' return but exports no stream; consumers select the recorded device, retain
+#' the owner until their own stream completes, and must not free either view.
+#' GPU results are session-local and do not support serialization or CUDA IPC.
+#' Host materialization is explicit via `gpu_knn_to_host()`.
+#' Fitted native indexes are also session-local. There is no public manual
+#' destroy function; owning external pointers release native allocations in
+#' their finalizers. Saving a `faissR_knn_model` preserves its R specification
+#' and training data, but a later `predict()` rebuilds an invalid native index
+#' rather than treating the pointer as a portable serialization.
 #'
 #' @keywords internal
 "_PACKAGE"

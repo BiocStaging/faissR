@@ -5,7 +5,7 @@
 #' # Replication code for the faissR JSS article
 #'
 #' This is the standalone entry point for both the reduced ordinary-computer
-#' replication and the frozen publication analysis. It never analyzes an
+#' replication and the checksummed publication analysis. It never analyzes an
 #' archive until its SHA-256 digest has been verified.
 #'
 #' Full calibration and validation are deliberately not launched here. Their
@@ -19,7 +19,7 @@
 #' Sys.setenv(FAISSR_JSS_DERIVED_DIR = "/path/to/derived")
 #' ```
 #'
-#' To rebuild every manuscript table from the bundled frozen archive:
+#' To rebuild every manuscript table from the bundled checksummed snapshot:
 #'
 #' ```r
 #' Sys.setenv(FAISSR_JSS_MODE = "archive")
@@ -29,8 +29,8 @@
 #'
 #' ```r
 #' Sys.setenv(
-#'   FAISSR_JSS_ARCHIVE = "/path/to/faissR_jss_frozen_results.tar.gz",
-#'   FAISSR_JSS_ARCHIVE_SHA256 = "/path/to/faissR_jss_frozen_results.tar.gz.sha256"
+#'   FAISSR_JSS_ARCHIVE = "/path/to/faissR_jss_evidence_snapshot.tar.gz",
+#'   FAISSR_JSS_ARCHIVE_SHA256 = "/path/to/faissR_jss_evidence_snapshot.tar.gz.sha256"
 #' )
 #' ```
 
@@ -76,6 +76,13 @@ if (file.exists(verification_file)) {
   )
   print(archive_verification, row.names = FALSE)
 }
+cpu_loodo_file <- file.path(derived_dir, "cpu_loodo_verification.csv")
+if (file.exists(cpu_loodo_file)) {
+  cpu_loodo_verification <- utils::read.csv(
+    cpu_loodo_file, stringsAsFactors = FALSE
+  )
+  print(cpu_loodo_verification, row.names = FALSE)
+}
 manifest_file <- file.path(
   derived_dir, "manuscript_tables", "manuscript_table_manifest.csv"
 )
@@ -88,5 +95,6 @@ sessionInfo()
 
 #' The generated directory contains the example summary, `sessionInfo.txt`,
 #' and, in archive mode, checksum verification, analysis outputs, all 15
-#' manuscript tables, and a table manifest. Any checksum, schema, fingerprint,
-#' aggregation, or table-audit failure stops execution.
+#' manuscript tables, the paired CPU figure, and their audit summaries. Any
+#' checksum, schema, fingerprint, aggregation, table-audit, or figure-audit
+#' failure stops execution.

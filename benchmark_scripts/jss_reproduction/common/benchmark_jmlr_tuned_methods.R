@@ -150,9 +150,25 @@ stop_gpu_memory_sampler <- function(sampler) {
 
 script_file <- function() {
   file_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)
-  if (length(file_arg)) return(normalizePath(sub("^--file=", "", file_arg[[1L]]), mustWork = TRUE))
-  normalizePath("benchmark_scripts/benchmark_jmlr_tuned_methods.R", mustWork = FALSE)
+  if (length(file_arg)) {
+    candidate <- sub("^--file=", "", file_arg[[1L]])
+    if (file.exists(candidate)) return(normalizePath(candidate, mustWork = TRUE))
+  }
+  frame_files <- Filter(nzchar, vapply(sys.frames(), function(frame) {
+    as.character(frame$ofile %||% "")[[1L]]
+  }, character(1L)))
+  if (length(frame_files)) {
+    return(normalizePath(tail(frame_files, 1L), mustWork = TRUE))
+  }
+  normalizePath(
+    "benchmark_scripts/jss_reproduction/common/benchmark_jmlr_tuned_methods.R",
+    mustWork = FALSE
+  )
 }
+
+recall_helper <- file.path(dirname(script_file()), "benchmark_recall_inference.R")
+if (!file.exists(recall_helper)) recall_helper <- file.path(getwd(), "benchmark_recall_inference.R")
+if (file.exists(recall_helper)) source(recall_helper)
 
 find_data_object <- function(env) {
   if (exists("dataset", envir = env, inherits = FALSE)) {
@@ -676,8 +692,13 @@ finite_mean <- function(x) {
   if (!length(x)) NA_real_ else mean(x)
 }
 
-quality_metrics <- function(obj, ref, rows, k, exact_atol = 1e-5,
-                            exact_rtol = 1e-4) {
+quality_metrics <- function(obj, ref, rows, k, data, metric, bootstrap_seed,
+                            bootstrap_confidence = 0.95,
+                            bootstrap_resamples = 1000L,
+                            exact_atol = 1e-5, exact_rtol = 1e-4) {
+  if (!exists("recall_inference_summary", mode = "function", inherits = TRUE)) {
+    stop("benchmark_recall_inference.R was not loaded.", call. = FALSE)
+  }
   empty <- data.frame(
     recall_at_k = NA_real_,
     mean_query_recall_at_k = NA_real_,
@@ -685,6 +706,15 @@ quality_metrics <- function(obj, ref, rows, k, exact_atol = 1e-5,
     median_query_recall_at_k = NA_real_,
     min_recall_at_k = NA_real_,
     min_query_recall_at_k = NA_real_,
+    tie_aware_recall_at_k = NA_real_,
+    identifier_recall_lcb = NA_real_,
+    tie_aware_recall_lcb = NA_real_,
+    tie_substitution_query_fraction = NA_real_,
+    mean_boundary_tie_credit = NA_real_,
+    recall_independent_query_n = NA_integer_,
+    recall_confidence_level = bootstrap_confidence,
+    recall_bootstrap_resamples = as.integer(bootstrap_resamples),
+    recall_uncertainty_method = "query_bootstrap_percentile_lcb",
     tie_aware_exact_pass = NA,
     tie_aware_exact_query_fraction = NA_real_,
     tie_aware_exact_max_distance_error = NA_real_,
@@ -780,6 +810,16 @@ quality_metrics <- function(obj, ref, rows, k, exact_atol = 1e-5,
   mean_query_recall <- finite_mean(recalls)
   median_query_recall <- if (any(is.finite(recalls))) median(recalls[is.finite(recalls)]) else NA_real_
   min_query_recall <- if (any(is.finite(recalls))) min(recalls[is.finite(recalls)]) else NA_real_
+  inference <- recall_inference_summary(
+    idx[rows, seq_len(kk), drop = FALSE],
+    ref$indices[, seq_len(kk), drop = FALSE],
+    ref$distances[, seq_len(kk), drop = FALSE],
+    data = data, query_rows = rows, metric = metric,
+    bootstrap_seed = bootstrap_seed,
+    confidence = bootstrap_confidence,
+    bootstrap_resamples = bootstrap_resamples,
+    atol = exact_atol, rtol = exact_rtol
+  )
   data.frame(
     recall_at_k = mean_query_recall,
     mean_query_recall_at_k = mean_query_recall,
@@ -787,6 +827,16 @@ quality_metrics <- function(obj, ref, rows, k, exact_atol = 1e-5,
     median_query_recall_at_k = median_query_recall,
     min_recall_at_k = min_query_recall,
     min_query_recall_at_k = min_query_recall,
+    tie_aware_recall_at_k = inference$tie_aware_mean,
+    identifier_recall_lcb = inference$identifier_lcb,
+    tie_aware_recall_lcb = inference$tie_aware_lcb,
+    tie_substitution_query_fraction =
+      inference$tie_substitution_query_fraction,
+    mean_boundary_tie_credit = inference$mean_boundary_credit,
+    recall_independent_query_n = inference$n_independent_queries,
+    recall_confidence_level = inference$confidence,
+    recall_bootstrap_resamples = inference$bootstrap_resamples,
+    recall_uncertainty_method = "query_bootstrap_percentile_lcb",
     tie_aware_exact_pass = length(tie_aware_query_pass) > 0L &&
       all(tie_aware_query_pass),
     tie_aware_exact_query_fraction = mean(tie_aware_query_pass),
@@ -1016,6 +1066,13 @@ aggregate_success_rows <- function(success) {
   pieces <- lapply(split(success, key), function(x) {
     target <- suppressWarnings(as.numeric(x$target_recall[[1L]]))
     recalls <- suppressWarnings(as.numeric(x$recall_at_k))
+    tie_recalls <- if ("tie_aware_recall_at_k" %in% names(x)) {
+      suppressWarnings(as.numeric(x$tie_aware_recall_at_k))
+    } else recalls
+    tie_recalls[!is.finite(tie_recalls)] <- recalls[!is.finite(tie_recalls)]
+    tie_lcb <- if ("tie_aware_recall_lcb" %in% names(x)) {
+      suppressWarnings(as.numeric(x$tie_aware_recall_lcb))
+    } else rep(NA_real_, nrow(x))
     times <- suppressWarnings(as.numeric(x$time_sec))
     copies <- suppressWarnings(as.numeric(x$host_copy_sec))
     memory_valid <- if ("memory_valid_for_comparison" %in% names(x)) {
@@ -1049,10 +1106,28 @@ aggregate_success_rows <- function(success) {
     direct_exact_audit_available <- all(!is.na(tie_values))
     exact_audited <- exact_family &&
       (!direct_exact_audit_available || all(tie_values))
+    seed_groups <- split(seq_len(nrow(x)), as.character(x$validation_seed))
+    seed_point <- vapply(seed_groups, function(index) {
+      value <- tie_recalls[index]
+      if (all(is.finite(value))) min(value) else NA_real_
+    }, numeric(1L))
+    seed_lcb <- vapply(seed_groups, function(index) {
+      value <- tie_lcb[index]
+      if (all(is.finite(value))) min(value) else NA_real_
+    }, numeric(1L))
     overlap_target_met <- if (is.finite(target)) {
-      all(is.finite(recalls) & recalls >= target)
+      all(is.finite(seed_point) & seed_point >= target)
     } else {
       NA
+    }
+    lcb_available <- length(seed_lcb) > 0L && all(is.finite(seed_lcb))
+    uncertainty_target_met <- if (is.finite(target) && lcb_available) {
+      all(seed_lcb >= target)
+    } else overlap_target_met
+    eligibility_basis <- if (lcb_available) {
+      "tie_aware_query_bootstrap_lcb_all_independent_seeds"
+    } else {
+      "legacy_point_recall_all_independent_seeds"
     }
     data.frame(
       x[1L, group_cols, drop = FALSE],
@@ -1066,21 +1141,35 @@ aggregate_success_rows <- function(success) {
       median_gpu_memory_peak_mib = if (any(is.finite(gpu_memory))) stats::median(gpu_memory[is.finite(gpu_memory)]) else NA_real_,
       mean_recall_at_k = if (any(is.finite(recalls))) mean(recalls[is.finite(recalls)]) else NA_real_,
       min_seed_recall_at_k = if (any(is.finite(recalls))) min(recalls[is.finite(recalls)]) else NA_real_,
+      mean_tie_aware_recall_at_k = if (any(is.finite(tie_recalls))) {
+        mean(tie_recalls[is.finite(tie_recalls)])
+      } else NA_real_,
+      min_seed_tie_aware_recall_at_k = if (any(is.finite(seed_point))) {
+        min(seed_point[is.finite(seed_point)])
+      } else NA_real_,
+      min_seed_tie_aware_recall_lcb = if (any(is.finite(seed_lcb))) {
+        min(seed_lcb[is.finite(seed_lcb)])
+      } else NA_real_,
       mean_run_mean_query_recall_at_k = if (any(is.finite(recalls))) mean(recalls[is.finite(recalls)]) else NA_real_,
       min_run_mean_query_recall_at_k = if (any(is.finite(recalls))) min(recalls[is.finite(recalls)]) else NA_real_,
-      target_recall_statistic = "mean_query_recall_at_k",
-      target_recall_replicate_rule = "all_prespecified_validation_replicates",
+      target_recall_statistic = if (lcb_available) {
+        "tie_aware_mean_query_recall_at_k_one_sided_bootstrap_lcb"
+      } else "mean_query_recall_at_k",
+      target_recall_replicate_rule =
+        "all_independent_query_seeds;timing_repeats_collapsed_within_seed",
       min_query_recall_role = "diagnostic_only",
       set_overlap_target_met_all_runs = overlap_target_met,
-      target_met_all_runs = overlap_target_met,
-      target_attained_all_validation_replicates = overlap_target_met,
+      target_met_all_runs = uncertainty_target_met,
+      target_attained_all_validation_replicates = uncertainty_target_met,
+      target_attained_all_independent_seeds = uncertainty_target_met,
+      recall_eligibility_basis = eligibility_basis,
       exact_family = exact_family,
       exact_audited = exact_audited,
-      approximate_target_met = if (exact_audited) NA else overlap_target_met,
+      approximate_target_met = if (exact_audited) NA else uncertainty_target_met,
       quality_class = if (exact_audited) "exact-audited" else "approximate",
-      selection_eligible = exact_audited || isTRUE(overlap_target_met),
+      selection_eligible = exact_audited || isTRUE(uncertainty_target_met),
       selection_eligibility_basis = if (exact_audited) "exact_audited" else
-        if (isTRUE(overlap_target_met)) "approximate_target_met" else "ineligible",
+        if (isTRUE(uncertainty_target_met)) eligibility_basis else "ineligible",
       stringsAsFactors = FALSE
     )
   })
@@ -1256,13 +1345,23 @@ worker_main <- function(args) {
     median_query_recall_at_k = NA_real_,
     min_recall_at_k = NA_real_,
     min_query_recall_at_k = NA_real_,
+    tie_aware_recall_at_k = NA_real_,
+    identifier_recall_lcb = NA_real_,
+    tie_aware_recall_lcb = NA_real_,
+    tie_substitution_query_fraction = NA_real_,
+    mean_boundary_tie_credit = NA_real_,
+    recall_independent_query_n = NA_integer_,
+    recall_confidence_level = 0.95,
+    recall_bootstrap_resamples = 1000L,
+    recall_uncertainty_method = "query_bootstrap_percentile_lcb",
     tie_aware_exact_pass = NA,
     tie_aware_exact_query_fraction = NA_real_,
     tie_aware_exact_max_distance_error = NA_real_,
     tie_aware_exact_atol = 1e-5,
     tie_aware_exact_rtol = 1e-4,
     target_recall_statistic = "mean_query_recall_at_k",
-    target_recall_replicate_rule = "all_prespecified_validation_replicates",
+    target_recall_replicate_rule =
+      "all_independent_query_seeds;timing_repeats_not_independent_recall_evidence",
     min_query_recall_role = "diagnostic_only",
     exactness_criterion = "identifier_set_or_sorted_distance_multiset_within_tolerance",
     exactness_target_recall_role = "diagnostic_only",
@@ -1348,13 +1447,26 @@ worker_main <- function(args) {
       base$host_copy_sec <- 0
       if (method$implementation == "faissR") meta <- result_metadata(obj)
     }
-    q <- quality_metrics(obj, reference, rows, k)
+    q <- quality_metrics(
+      obj, reference, rows, k, data = ds$data, metric = metric,
+      bootstrap_seed = seed
+    )
     base$recall_at_k <- q$recall_at_k
     base$mean_query_recall_at_k <- q$mean_query_recall_at_k
     base$median_recall_at_k <- q$median_recall_at_k
     base$median_query_recall_at_k <- q$median_query_recall_at_k
     base$min_recall_at_k <- q$min_recall_at_k
     base$min_query_recall_at_k <- q$min_query_recall_at_k
+    base$tie_aware_recall_at_k <- q$tie_aware_recall_at_k
+    base$identifier_recall_lcb <- q$identifier_recall_lcb
+    base$tie_aware_recall_lcb <- q$tie_aware_recall_lcb
+    base$tie_substitution_query_fraction <-
+      q$tie_substitution_query_fraction
+    base$mean_boundary_tie_credit <- q$mean_boundary_tie_credit
+    base$recall_independent_query_n <- q$recall_independent_query_n
+    base$recall_confidence_level <- q$recall_confidence_level
+    base$recall_bootstrap_resamples <- q$recall_bootstrap_resamples
+    base$recall_uncertainty_method <- q$recall_uncertainty_method
     base$tie_aware_exact_pass <- q$tie_aware_exact_pass
     base$tie_aware_exact_query_fraction <- q$tie_aware_exact_query_fraction
     base$tie_aware_exact_max_distance_error <- q$tie_aware_exact_max_distance_error
@@ -1473,7 +1585,7 @@ summarize_results <- function(out_dir, methods, config) {
     paste0("- Metrics: `", paste(config$metrics, collapse = "`, `"), "`."),
     paste0("- k values: `", paste(config$k_values, collapse = "`, `"), "`."),
     paste0("- Target recall tiers for faissR methods: `", paste(config$target_recalls, collapse = "`, `"), "`."),
-    "- Target attainment: mean query-level recall@k must meet the tier in every prespecified validation-seed x timing-repeat replicate; minimum query-level recall is diagnostic only.",
+    "- Approximate target attainment: the one-sided 95% query-bootstrap lower bound for tie-aware mean recall@k must meet the tier for every independent query seed; timing repeats are not independent recall evidence.",
     paste0("- Threads: `", config$threads, "`."),
     paste0("- Timeout per method/dataset/k/metric/target combination: `", config$timeout, "` seconds."),
     paste0("- Input manifest: `", config$manifest, "`."),
@@ -1747,8 +1859,18 @@ main <- function() {
                 median_query_recall_at_k = NA_real_,
                 min_recall_at_k = NA_real_,
                 min_query_recall_at_k = NA_real_,
+                tie_aware_recall_at_k = NA_real_,
+                identifier_recall_lcb = NA_real_,
+                tie_aware_recall_lcb = NA_real_,
+                tie_substitution_query_fraction = NA_real_,
+                mean_boundary_tie_credit = NA_real_,
+                recall_independent_query_n = NA_integer_,
+                recall_confidence_level = 0.95,
+                recall_bootstrap_resamples = 1000L,
+                recall_uncertainty_method = "query_bootstrap_percentile_lcb",
                 target_recall_statistic = "mean_query_recall_at_k",
-                target_recall_replicate_rule = "all_prespecified_validation_replicates",
+                target_recall_replicate_rule =
+                  "all_independent_query_seeds;timing_repeats_not_independent_recall_evidence",
                 min_query_recall_role = "diagnostic_only",
                 rank_correlation = NA_real_,
                 mean_relative_distance_error = NA_real_,

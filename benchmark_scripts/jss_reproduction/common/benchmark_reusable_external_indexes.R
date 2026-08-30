@@ -184,7 +184,8 @@ remove_query_self <- function(result, rows, k) {
   list(indices = out_i, distances = out_d)
 }
 
-query_index <- function(index, route, x, rows, k, threads, metric) {
+query_index <- function(index, route, x, rows, k, threads, metric,
+                        ef_search = max(50L, 3L * k)) {
   if (route %in% c("RcppAnnoy_euclidean", "RcppAnnoy_angular")) {
     result <- remove_annoy_self(index, rows, k)
     if (identical(route, "RcppAnnoy_angular")) {
@@ -200,7 +201,7 @@ query_index <- function(index, route, x, rows, k, threads, metric) {
         x[rows, , drop = FALSE],
         index,
         k = k + 1L,
-        ef = max(50L, 3L * k),
+        ef = as.integer(ef_search),
         verbose = FALSE,
         progress = "none",
         n_threads = threads,
@@ -228,7 +229,9 @@ query_index <- function(index, route, x, rows, k, threads, metric) {
   result
 }
 
-build_index <- function(x, route, metric, k, threads, index_seed) {
+build_index <- function(x, route, metric, k, threads, index_seed,
+                        hnsw_m = 16L, ef_construction = 200L,
+                        ef_search = max(50L, 3L * k)) {
   if (route %in% c("RcppAnnoy_euclidean", "RcppAnnoy_angular")) {
     expected_metric <- switch(
       route,
@@ -265,8 +268,8 @@ build_index <- function(x, route, metric, k, threads, index_seed) {
     return(RcppHNSW::hnsw_build(
       x,
       distance = metric,
-      M = 16L,
-      ef = 200L,
+      M = as.integer(hnsw_m),
+      ef = as.integer(ef_construction),
       verbose = FALSE,
       progress = "none",
       n_threads = threads,
@@ -287,9 +290,9 @@ build_index <- function(x, route, metric, k, threads, index_seed) {
     BiocNeighbors_hnsw =
       BiocNeighbors::HnswParam(
         distance = distance,
-        nlinks = 16L,
-        ef.construction = 200L,
-        ef.search = max(50L, 3L * k)
+        nlinks = as.integer(hnsw_m),
+        ef.construction = as.integer(ef_construction),
+        ef.search = as.integer(ef_search)
       ),
     BiocNeighbors_annoy =
       BiocNeighbors::AnnoyParam(

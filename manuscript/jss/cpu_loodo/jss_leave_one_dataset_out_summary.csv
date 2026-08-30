@@ -1,0 +1,10 @@
+"backend","metric","target_recall","n_cells","n_crossfit_evaluable","n_crossfit_operating_point_met","crossfit_operating_point_attainment_fraction","n_crossfit_abstained","crossfit_abstention_fraction","n_crossfit_exact_selected","crossfit_exact_selection_fraction","n_crossfit_method_agreement","crossfit_method_agreement_fraction","median_crossfit_over_oracle","p90_crossfit_over_oracle","n_package_auto_evaluable","n_package_auto_operating_point_met","package_auto_operating_point_attainment_fraction","n_package_auto_abstained","package_auto_abstention_fraction","n_package_auto_exact_selected","package_auto_exact_selection_fraction","n_package_auto_method_agreement","package_auto_method_agreement_fraction","median_package_auto_over_oracle","p90_package_auto_over_oracle"
+"cpu","correlation",0.9,36,36,34,0.944444444444444,0,0,0,0,34,1,1,1,0,0,0,36,1,0,NA,0,NA,NA,NA
+"cpu","correlation",0.95,36,36,35,0.972222222222222,0,0,0,0,35,1,1,1,0,0,0,36,1,0,NA,0,NA,NA,NA
+"cpu","correlation",0.99,36,36,34,0.944444444444444,0,0,5,0.138888888888889,31,0.885714285714286,1,1,0,0,0,36,1,0,NA,7,NA,NA,NA
+"cpu","cosine",0.9,36,36,35,0.972222222222222,0,0,0,0,35,1,1,1,0,0,0,36,1,0,NA,0,NA,NA,NA
+"cpu","cosine",0.95,36,36,36,1,0,0,0,0,36,1,1,1,0,0,0,36,1,0,NA,0,NA,NA,NA
+"cpu","cosine",0.99,36,36,32,0.888888888888889,0,0,6,0.166666666666667,26,0.742857142857143,1,1.33118675362578,0,0,0,36,1,0,NA,3,NA,NA,NA
+"cpu","euclidean",0.9,36,36,35,0.972222222222222,0,0,0,0,35,1,1,1,0,0,0,36,1,0,NA,0,NA,NA,NA
+"cpu","euclidean",0.95,36,36,36,1,0,0,0,0,36,1,1,1,0,0,0,36,1,0,NA,0,NA,NA,NA
+"cpu","euclidean",0.99,36,32,24,0.666666666666667,4,0.111111111111111,0,0,24,0.857142857142857,1,1,0,0,0,36,1,0,NA,4,NA,NA,NA

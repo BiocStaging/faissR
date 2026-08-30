@@ -222,6 +222,7 @@ resolve_nn_gpu_plan <- function(request) {
         metric = request$metric,
         target_recall = request$target_recall
     )
+    nn_maybe_warn_auto_hardware(plan$selection, request$method)
     plan
 }
 
