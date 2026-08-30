@@ -1,3 +1,11 @@
+# faissR 0.99.32
+
+* Fixes Windows ARM64 installation warnings by using the existing C++ exact
+  nearest-neighbour path instead of compiling the optional Fortran accelerator
+  on Windows. Unix builds retain the optional Fortran path unchanged.
+* Adds a source-configuration regression test confirming that Windows builds
+  exclude the Fortran object and define the matching compile-time guard.
+
 # faissR 0.99.31
 
 * Resolves BiocCheck coding-practice notes by normalizing four-space

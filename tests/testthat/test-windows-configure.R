@@ -30,4 +30,6 @@ test_that("Windows diagnostic Makevars do not pass unsupported flang flags", {
     expect_false(any(grepl("Wno-unused-command-line-argument", makevars, fixed = TRUE)))
     expect_false(any(grepl("^PKG_FFLAGS", makevars)))
     expect_true(any(grepl("FAISSR_WINDOWS_NO_FAISS", makevars, fixed = TRUE)))
+    expect_true(any(grepl("FAISSR_NO_FORTRAN_NN", makevars, fixed = TRUE)))
+    expect_false(any(grepl("nn_fortran[.]o", makevars)))
 })

@@ -18,6 +18,7 @@ using Rcpp::List;
 using Rcpp::LogicalMatrix;
 using Rcpp::NumericMatrix;
 
+#ifndef FAISSR_NO_FORTRAN_NN
 extern "C" {
 void faissr_knn_euclidean_range(const double* data,
                                     const double* points,
@@ -31,6 +32,7 @@ void faissr_knn_euclidean_range(const double* data,
                                     int* indices,
                                     double* distances);
 }
+#endif
 
 namespace {
 
@@ -51,10 +53,12 @@ bool neighbor_less(const Neighbor& a, const Neighbor& b) {
   return a.distance < b.distance;
 }
 
+#ifndef FAISSR_NO_FORTRAN_NN
 bool fortran_nn_enabled() {
   const char* value = std::getenv("FAISSR_USE_FORTRAN_NN");
   return value != nullptr && std::string(value) == "1";
 }
+#endif
 
 bool env_is_truthy(const char* value) {
   if (value == nullptr) return false;
@@ -1529,6 +1533,7 @@ List nn_cpp(NumericMatrix data,
   const bool use_parallel = parallel && work_size >= 1000000.0;
   const int n_threads = requested_threads(use_parallel, cores, n_points);
 
+#ifndef FAISSR_NO_FORTRAN_NN
   if (distance_kind == DistanceKind::Euclidean && !square && fortran_nn_enabled()) {
     auto write_fortran = [&](const int query_start, const int query_end) {
       if (query_end <= query_start) return;
@@ -1569,6 +1574,7 @@ List nn_cpp(NumericMatrix data,
     result.attr("row_major_copy_mb") = 0.0;
     return result;
   }
+#endif
 
   std::vector<double> data_row_major;
   std::vector<double> points_row_major;
