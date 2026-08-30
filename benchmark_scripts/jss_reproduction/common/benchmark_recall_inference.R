@@ -147,6 +147,14 @@ recall_inference_summary <- function(actual_indices, reference_indices,
   list(
     identifier_mean = if (length(finite_identifier)) mean(finite_identifier) else NA_real_,
     tie_aware_mean = if (length(finite_tie)) mean(finite_tie) else NA_real_,
+    identifier_p05 = if (length(finite_identifier)) {
+      unname(stats::quantile(finite_identifier, 0.05, names = FALSE, type = 8))
+    } else NA_real_,
+    tie_aware_p05 = if (length(finite_tie)) {
+      unname(stats::quantile(finite_tie, 0.05, names = FALSE, type = 8))
+    } else NA_real_,
+    identifier_min = if (length(finite_identifier)) min(finite_identifier) else NA_real_,
+    tie_aware_min = if (length(finite_tie)) min(finite_tie) else NA_real_,
     identifier_lcb = query_bootstrap_lcb(
       finite_identifier, confidence, bootstrap_resamples, bootstrap_seed
     ),
@@ -162,6 +170,7 @@ recall_inference_summary <- function(actual_indices, reference_indices,
     n_independent_queries = length(finite_tie),
     confidence = confidence,
     bootstrap_resamples = as.integer(bootstrap_resamples),
+    uncertainty_interpretation = "empirical_query_bootstrap_lcb_not_distribution_free",
     query = query
   )
 }

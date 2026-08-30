@@ -890,6 +890,8 @@ base_row <- function(config, status = "success", error = NA_character_) {
     median_recall_at_k = NA_real_, median_query_recall_at_k = NA_real_,
     min_recall_at_k = NA_real_, min_query_recall_at_k = NA_real_,
     tie_aware_recall_at_k = NA_real_,
+    identifier_query_recall_p05 = NA_real_,
+    tie_aware_query_recall_p05 = NA_real_,
     identifier_recall_lcb = NA_real_, tie_aware_recall_lcb = NA_real_,
     tie_substitution_query_fraction = NA_real_,
     mean_boundary_tie_credit = NA_real_,
@@ -897,7 +899,7 @@ base_row <- function(config, status = "success", error = NA_character_) {
     recall_confidence_level = 0.95, recall_bootstrap_resamples = 1000L,
     recall_uncertainty_method = "query_bootstrap_percentile_lcb",
     target_recall_statistic =
-      "tie_aware_mean_query_recall_at_k_one_sided_bootstrap_lcb",
+      "tie_aware_mean_query_recall_at_k_empirical_query_bootstrap_lcb",
     target_recall_replicate_rule = "single_calibration_query_seed",
     min_query_recall_role = "diagnostic_only",
     reference_status = config$reference_status %||% NA_character_,
@@ -964,6 +966,8 @@ run_method <- function(config) {
   row$min_recall_at_k <- quality$min_recall_at_k
   row$min_query_recall_at_k <- quality$min_query_recall_at_k
   row$tie_aware_recall_at_k <- inference$tie_aware_mean
+  row$identifier_query_recall_p05 <- inference$identifier_p05
+  row$tie_aware_query_recall_p05 <- inference$tie_aware_p05
   row$identifier_recall_lcb <- inference$identifier_lcb
   row$tie_aware_recall_lcb <- inference$tie_aware_lcb
   row$tie_substitution_query_fraction <-
@@ -1128,12 +1132,9 @@ summarize_results <- function(out_dir, results_path, target_recalls, method) {
       , drop = FALSE
     ]
     for (target in target_recalls) {
-      eligibility <- if ("tie_aware_recall_lcb" %in% names(part0) &&
-                         any(is.finite(part0$tie_aware_recall_lcb))) {
-        part0$tie_aware_recall_lcb
-      } else {
-        part0$recall_at_k
-      }
+      use_lcb <- "tie_aware_recall_lcb" %in% names(part0) &&
+        any(is.finite(part0$tie_aware_recall_lcb))
+      eligibility <- if (use_lcb) part0$tie_aware_recall_lcb else part0$recall_at_k
       ok <- part0[is.finite(eligibility) & eligibility >= target, , drop = FALSE]
       best <- if (nrow(ok)) {
         ok[
@@ -1149,10 +1150,28 @@ summarize_results <- function(out_dir, results_path, target_recalls, method) {
         ][1L, , drop = FALSE]
       }
       idx <- idx + 1L
-      rows[[idx]] <- cbind(target_recall_threshold = target, recommendation_basis = if (nrow(ok)) "fastest_meeting_target" else "best_recall_below_target", best)
+      rows[[idx]] <- cbind(
+        target_recall_threshold = target,
+        eligibility_criterion = if (use_lcb) {
+          "empirical_query_bootstrap_lcb"
+        } else {
+          "point_estimate_calibration_screen"
+        },
+        recommendation_basis = if (nrow(ok)) {
+          "fastest_meeting_target"
+        } else {
+          "best_recall_below_target"
+        },
+        best
+      )
     }
   }
-  rec <- if (length(rows)) do.call(rbind, rows) else cbind(target_recall_threshold = numeric(0), recommendation_basis = character(0), x[FALSE, , drop = FALSE])
+  rec <- if (length(rows)) do.call(rbind, rows) else cbind(
+    target_recall_threshold = numeric(0),
+    eligibility_criterion = character(0),
+    recommendation_basis = character(0),
+    x[FALSE, , drop = FALSE]
+  )
   write.csv(rec, file.path(out_dir, sprintf("%s_tuning_recommendations.csv", method)), row.names = FALSE)
   method_notes <- character()
   if (identical(method, "ivf")) {

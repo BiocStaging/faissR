@@ -1,0 +1,88 @@
+name: Functional CPU checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    env:
+      R_KEEP_PKG_SOURCE: yes
+      FAISSR_REQUIRE_FAISS: 1
+      FAISSR_USE_CUDA: 0
+      FAISSR_USE_CUVS: 0
+      FAISSR_USE_CUGRAPH: 0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::rcmdcheck, any::BiocManager
+          needs: check
+      - name: Install Linux build tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build gfortran git libopenblas-dev liblapack-dev
+      - name: Build FAISS 1.14.3 on Linux
+        if: runner.os == 'Linux'
+        run: |
+          git clone --depth 1 --branch v1.14.3 https://github.com/facebookresearch/faiss.git /tmp/faiss-src
+          cmake -S /tmp/faiss-src -B /tmp/faiss-build -G Ninja \
+            -DFAISS_ENABLE_GPU=OFF -DFAISS_ENABLE_PYTHON=OFF \
+            -DBUILD_TESTING=OFF -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/tmp/faiss
+          cmake --build /tmp/faiss-build --parallel 2
+          cmake --install /tmp/faiss-build
+          echo "FAISS_HOME=/tmp/faiss" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=/tmp/faiss/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+      - name: Install FAISS on macOS
+        if: runner.os == 'macOS'
+        run: |
+          brew install faiss libomp gcc
+          echo "FAISS_HOME=$(brew --prefix faiss)" >> "$GITHUB_ENV"
+          echo "LIBOMP_HOME=$(brew --prefix libomp)" >> "$GITHUB_ENV"
+      - name: Record toolchain
+        run: |
+          R --version
+          R CMD config CXX20
+          R CMD config FC
+          cmake --version
+      - name: Build and check
+        run: |
+          R CMD build .
+          tarball=$(find . -maxdepth 1 -name 'faissR_*.tar.gz' -print -quit)
+          Rscript -e 'rcmdcheck::rcmdcheck(command_args="--as-cran", error_on="warning")'
+          R CMD INSTALL "$tarball"
+      - name: Functional smoke and compact replication
+        run: |
+          Rscript -e 'library(faissR); stopifnot(faiss_available()); x <- matrix(rnorm(240), 40); z <- nn(x, 3, method="exact", backend="cpu"); stopifnot(identical(dim(z$indices), c(40L, 3L)))'
+          FAISSR_JSS_MODE=compact \
+          FAISSR_JSS_DERIVED_DIR="$RUNNER_TEMP/jss-compact" \
+          Rscript manuscript/jss/replication_article.R
+
+  archive-replication:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::openssl
+      - name: Verify archive and rebuild reported tables
+        run: |
+          FAISSR_JSS_MODE=archive \
+          FAISSR_JSS_DERIVED_DIR="$RUNNER_TEMP/jss-archive" \
+          Rscript manuscript/jss/replication_article.R
+          test -f "$RUNNER_TEMP/jss-archive/sessionInfo.txt"

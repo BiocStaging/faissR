@@ -23,7 +23,7 @@ is performed.
 
 The audit emits two views for approximate-method comparisons. The
 prespecified-interface view includes every successful paired replicate. The
-recall-equivalent view retains a dataset-metric-`k` cell only when both routes
+point-recall-matched view retains a dataset-metric-`k` cell only when both routes
 achieve mean recall@`k` of at least 0.99 in every validation replicate. Observed
 recall for both routes remains in the paired output; speed is never interpreted
 as an algorithm comparison when this equivalence criterion is not met.

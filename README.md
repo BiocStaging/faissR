@@ -400,6 +400,16 @@ FAISSR_REQUIRE_CUDA=1 FAISSR_REQUIRE_CUVS=1 R CMD INSTALL .
 ```
 
 See [Installation](docs/installation.md) for CRAN/source-build details.
+The installed package also includes an installation and portability vignette:
+
+```r
+vignette("installation", package = "faissR")
+```
+
+A functional build is one for which `faiss_available()` is `TRUE` and a CPU
+smoke search completes. Diagnostic-only builds are used only on unsupported
+automated targets that lack FAISS; they load so that capability diagnostics can
+be inspected, but they do not provide nearest-neighbour computation.
 
 ## Bioconductor Readiness
 
@@ -412,14 +422,14 @@ tarball:
 
 ```sh
 R CMD build .
-R CMD check --as-cran faissR_0.99.27.tar.gz
+R CMD check --as-cran faissR_0.99.29.tar.gz
 ```
 
 and then:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.27.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.29.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA and cuVS are
@@ -625,6 +635,10 @@ nn_res$indices[1:3, 1:5]
 
 ## License
 
-`faissR` is released under the MIT license. External libraries such as FAISS
+`faissR` is released under the MIT license. FAISS is MIT-licensed and cuVS is
+Apache-2.0-licensed; both are supplied by the user's system and are not
+vendored. The CUDA toolkit and driver remain subject to NVIDIA's CUDA SDK
+license. See `inst/THIRD_PARTY_LICENSES.md` for links and the distribution
+boundary. External libraries such as FAISS
 and RAPIDS cuVS are linked as system dependencies and are not vendored into
 the R package [1-3,13-16].

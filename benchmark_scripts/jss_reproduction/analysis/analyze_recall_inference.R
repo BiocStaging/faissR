@@ -50,12 +50,18 @@ seed_rows <- do.call(rbind, lapply(groups, function(z) {
     independent_queries = max(z$recall_independent_query_n, na.rm = TRUE),
     identifier_mean_recall = min(z$recall_at_k, na.rm = TRUE),
     tie_aware_mean_recall = min(z$tie_aware_recall_at_k, na.rm = TRUE),
+    tie_aware_query_recall_p05 = if (
+      "tie_aware_query_recall_p05" %in% names(z) &&
+      any(is.finite(z$tie_aware_query_recall_p05))
+    ) min(z$tie_aware_query_recall_p05, na.rm = TRUE) else NA_real_,
     tie_aware_recall_lcb = min(z$tie_aware_recall_lcb, na.rm = TRUE),
     tie_substitution_query_fraction =
       max(z$tie_substitution_query_fraction, na.rm = TRUE),
     identifier_point_target_met = all(z$recall_at_k >= target),
     tie_aware_point_target_met = all(z$tie_aware_recall_at_k >= target),
     tie_aware_lcb_target_met = all(z$tie_aware_recall_lcb >= target),
+    target_attainment_criterion =
+      "empirical_query_bootstrap_lcb_all_independent_query_seeds",
     stringsAsFactors = FALSE
   )
 }))
@@ -77,6 +83,9 @@ cells <- do.call(rbind, lapply(cell_groups, function(z) data.frame(
   maximum_tie_substitution_query_fraction =
     max(z$tie_substitution_query_fraction, na.rm = TRUE),
   minimum_tie_aware_recall_lcb = min(z$tie_aware_recall_lcb, na.rm = TRUE),
+  minimum_tie_aware_query_recall_p05 = if (
+    any(is.finite(z$tie_aware_query_recall_p05))
+  ) min(z$tie_aware_query_recall_p05, na.rm = TRUE) else NA_real_,
   decision_changed_by_ties =
     all(z$tie_aware_point_target_met) != all(z$identifier_point_target_met),
   decision_changed_by_uncertainty =

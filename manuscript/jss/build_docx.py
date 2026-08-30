@@ -164,7 +164,7 @@ def build_intermediate(source: str, architecture: Path, validation: Path) -> str
         "Moussa Kassim (1,2; co-first); Martin Ocharo (1,2; co-first); "
         "Dalia Ahmed (1); Dupe Ojo (1); Alessia Vignoli (3,4); "
         "Leonardo Tenori (3,4); "
-        "Dinesh Gupta (20); Silvano Piazza (21,22); "
+        "Dinesh Gupta (5); Silvano Piazza (6,7); "
         "Stefano Cacciatore (1,2; corresponding)"
     )
     front = f"""\\documentclass{{article}}

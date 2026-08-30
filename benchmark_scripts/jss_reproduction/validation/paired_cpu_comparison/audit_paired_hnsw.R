@@ -45,6 +45,8 @@ paired$cold_recall_equivalent <- paired$cold_recall_at_k_faissR >= 0.99 &
   paired$cold_recall_at_k_comparator >= 0.99
 paired$fitted_recall_equivalent <- paired$fitted_recall_at_k_faissR >= 0.99 &
   paired$fitted_recall_at_k_comparator >= 0.99
+paired$cold_point_recall_matched <- paired$cold_recall_equivalent
+paired$fitted_point_recall_matched <- paired$fitted_recall_equivalent
 write.csv(paired, file.path(out_dir, "jss_paired_hnsw_pairs.csv"), row.names = FALSE)
 
 successful <- paired[
@@ -99,6 +101,7 @@ report <- c(
   "",
   "Every speed ratio is T_comparator / T_faissR; values above one favor faissR.",
   "Cold-call, fitted-index build, and fitted-index query ratios are reported separately.",
+  "Legacy `*_recall_equivalent` CSV columns mean point-recall-matched: both routes have mean recall@k >= 0.99; they do not apply the empirical query-bootstrap validation criterion.",
   "The first route is randomized deterministically within each seed and alternates across repetitions.",
   "Each route repetition runs in an isolated R worker, while both routes in a pair share one Slurm allocation and node.",
   "",

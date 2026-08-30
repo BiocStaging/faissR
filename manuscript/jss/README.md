@@ -51,7 +51,7 @@ Rscript code.R
 Rscript -e 'knitr::spin("code.R", knit = TRUE)'
 ```
 
-Recreate all 15 manuscript and supplement tables from the checksummed snapshot on a
+Recreate all 18 manuscript and supplement tables from the checksummed snapshot on a
 regular computer with:
 
 ```sh

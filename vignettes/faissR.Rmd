@@ -55,6 +55,10 @@ Explicit `backend = "auto"` retains faissR's shape-aware routing. The current
 faissR implementation does not contain a Metal backend, so selecting `metal`
 fails clearly instead of silently changing the computation.
 
+Here `backend` is the requested execution **device** policy. The historical
+metadata field `backend_used` is the concrete resolved **provider/route** (for
+example, `faiss_hnsw`) and is retained for API compatibility.
+
 The main public functions are:
 
 | Function | Purpose |
@@ -85,12 +89,17 @@ Duplicate observations retain distinct identifiers and can have distance zero.
 For self-search, `exclude_self = TRUE` removes only the query row identifier;
 if an approximate candidate list omitted that identifier, faissR retains the
 first `k` non-self candidates rather than removing another row.
+Host identifiers and GPU identifiers use signed 32-bit integers, so the public
+row-identifier limit is `.Machine$integer.max` (2,147,483,647). Provider and
+memory limits are normally much lower.
 
 Fitted FAISS indexes and GPU results contain session-local external pointers.
 There is no public manual destroy function: the owning object's finalizer
 releases native allocations after the object becomes unreachable. A saved and
-reloaded `faissR_knn_model` rebuilds its requested index before prediction;
-native index serialization is not supported. A `faissR_gpu_knn` object cannot
+reloaded `faissR_knn_model` rebuilds its requested route through the ordinary
+search path before prediction; that first post-reload call reports
+`query_source = "nn"`, not `"fitted_index"`. Native index serialization is not
+supported. A `faissR_gpu_knn` object cannot
 be serialized or shared across processes/devices. Keep its owner alive until
 all downstream CUDA work has completed, then allow normal garbage collection.
 
@@ -204,16 +213,25 @@ provider, `flat` explicitly requests FAISS Flat, and CUDA `bruteforce` prefers
 direct cuVS brute force. They should have the same neighbor quality; timing
 differences measure provider and wrapper overhead.
 
-| Public name | CPU | CUDA capability resolution |
-|---|---|---|
-| `exact` | FAISS Flat | FAISS GPU Flat, otherwise direct cuVS brute force |
-| `flat` | FAISS Flat | FAISS GPU Flat; errors when unavailable |
-| `bruteforce` | FAISS Flat | direct cuVS brute force, otherwise FAISS GPU Flat |
+| Public name | CPU | CUDA capability resolution | Choose it when... |
+|---|---|---|---|
+| `exact` | FAISS Flat | FAISS GPU Flat, otherwise direct cuVS brute force | any exhaustive provider is acceptable |
+| `flat` | FAISS Flat | FAISS GPU Flat; errors when unavailable | FAISS Flat is required explicitly |
+| `bruteforce` | FAISS Flat | direct cuVS brute force, otherwise FAISS GPU Flat | direct cuVS exhaustive search is preferred on CUDA |
 
 The metric-specific value in `backend_used` is authoritative for the current
 installation.
 
 ## Automatic method selection
+
+The automatic arguments act at different levels:
+
+| Argument | Decision |
+|---|---|
+| `backend = "auto"` | choose the CPU/CUDA execution device |
+| `method = "auto"` | choose a method family using the experimental policy |
+| `tuning = "auto"` | choose parameters within the resolved method |
+| `target_recall` | choose one discrete tier: 0.90, 0.95, or 0.99 |
 
 The default `method = "auto"` uses compiled shape-, metric-, `k`-, backend-,
 and target-recall-aware rules. These rules are deterministic; they do not run a
@@ -237,9 +255,20 @@ auto_nearest <- nn(
 )
 
 c(
-    backend_used = attr(auto_nearest, "backend_used"),
-    requested_method = attr(auto_nearest, "requested_method"),
-    auto_policy_status = attr(auto_nearest, "auto_policy_status")
+    requested_device = attr(auto_nearest, "requested_backend"),
+    selected_route = attr(auto_nearest, "auto_selection")$predicted_method,
+    resolved_provider = attr(auto_nearest, "backend_used"),
+    requested_recall_tier = attr(auto_nearest, "target_recall"),
+    attained_status = if (isTRUE(attr(auto_nearest, "exact"))) {
+        "exact_audited"
+    } else {
+        "inspect_approximation_evidence"
+    },
+    evidence_source = attr(auto_nearest, "auto_selection")$policy,
+    hardware_evidence = attr(auto_nearest, "auto_selection")$hardware_evidence,
+    input_conversion = attr(auto_nearest, "memory_layout"),
+    index_reused = FALSE,
+    device_to_host_result_copies = 0L
 )
 ```
 
@@ -415,6 +444,18 @@ prob_display <- matrix(
     dimnames = dimnames(prob)
 )
 round(prob_display, 3)
+```
+
+Serialization preserves the R model but not its native index. This executable
+example makes the rebuild visible:
+
+```{r knn-serialization}
+path <- tempfile(fileext = ".rds")
+saveRDS(fit, path)
+restored <- readRDS(path)
+restored_prediction <- predict(restored, x[1:6, , drop = FALSE])
+attr(restored_prediction, "faissR_nn")$query_source
+unlink(path)
 ```
 
 Immediate prediction uses the same interface:

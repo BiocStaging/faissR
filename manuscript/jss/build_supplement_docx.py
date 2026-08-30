@@ -47,6 +47,10 @@ def word_source(source: str) -> str:
         r"\begin{tabular}{p{0.13\textwidth}p{0.23\textwidth}p{0.45\textwidth}p{0.09\textwidth}}",
     )
     source = source.replace(
+        r"\begin{tabularx}{\textwidth}{@{}p{0.19\textwidth}p{0.25\textwidth}X@{}}",
+        r"\begin{tabular}{p{0.19\textwidth}p{0.25\textwidth}p{0.46\textwidth}}",
+    )
+    source = source.replace(
         r"\begin{tabularx}{\linewidth}{P{0.30\linewidth}Y}",
         r"\begin{tabular}{p{0.30\linewidth}p{0.60\linewidth}}",
     )
@@ -83,6 +87,10 @@ def word_source(source: str) -> str:
     source = source.replace(
         r"\begin{tabularx}{\textwidth}{@{}lYY@{}}",
         r"\begin{tabular}{@{}lp{0.36\textwidth}p{0.36\textwidth}@{}}",
+    )
+    source = source.replace(
+        r"\begin{tabularx}{\textwidth}{@{}YY@{}}",
+        r"\begin{tabular}{@{}p{0.45\textwidth}p{0.45\textwidth}@{}}",
     )
     source = source.replace(
         r"\begin{tabularx}{\textwidth}{@{}Yrr@{}}",

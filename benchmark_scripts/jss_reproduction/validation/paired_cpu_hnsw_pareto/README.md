@@ -7,8 +7,10 @@ For `faissR`, `BiocNeighbors`, and `RcppHNSW`, calibration varies `ef.search`
 across five levels for every dataset and `k`. At `k = 30`, it additionally
 varies graph-construction effort (`ef.construction = 100, 200, 400`). `M` or
 `nlinks` is held at 16 so the experiment remains tractable and interpretable.
-Each provider's fastest configuration attaining mean recall at least 0.99 in
-all three calibration repeats is selected independently. The selected faissR
+Each provider's fastest configuration passing the point-recall calibration
+screen (mean recall at least 0.99 in all three calibration repeats) is selected
+independently. This screen is distinct from empirical query-bootstrap
+validation attainment. The selected faissR
 and comparator configurations are then coexecuted in the same Slurm task and
 node for five repetitions using the independent validation seed.
 

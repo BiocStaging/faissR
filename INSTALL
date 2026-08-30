@@ -103,3 +103,21 @@ Bioconductor and r-universe CPU builders need FAISS installed or FAISS_HOME set.
 CUDA/cuVS/libcugraph should not be required on CPU-only builders. If NVIDIA GPU
 support is required for a particular build environment, use the strict
 FAISSR_REQUIRE_* variables above.
+
+Functional verification
+-----------------------
+
+A production or CI installation should set FAISSR_REQUIRE_FAISS=1. After
+installation, loading the package is not sufficient evidence of functionality;
+run:
+
+  Rscript -e 'library(faissR); stopifnot(faiss_available()); x <- matrix(rnorm(240), 40); z <- nn(x, 3, method="exact", backend="cpu"); stopifnot(identical(dim(z$indices), c(40L, 3L)))'
+
+Diagnostic-only artifacts can be produced on explicitly recognized automated
+targets without FAISS. They load and report provider availability, but they do
+not perform nearest-neighbour search and are not functional platform results.
+
+The installed vignette gives pinned, tested commands, provider/toolchain
+combinations, capability checks, license boundaries, and troubleshooting:
+
+  Rscript -e 'vignette("installation", package="faissR")'

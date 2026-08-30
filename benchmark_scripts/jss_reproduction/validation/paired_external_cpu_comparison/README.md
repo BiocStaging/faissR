@@ -17,8 +17,9 @@ metric, or returned-object contract differs.
   target successes.
 - `nndescent_rnndescent` compares the package-owned NN-descent-derived route
   with `rnndescent::nnd_knn()` for Euclidean, cosine, and correlation distance.
-  Speed summaries require both routes to attain mean recall@k of at least 0.99
-  in every prespecified validation replicate.
+  Point-recall-matched speed summaries require both routes to have mean
+  recall@k of at least 0.99 in every prespecified replicate. This matching rule
+  is distinct from empirical query-bootstrap validation attainment.
 
 Each dataset-by-k task runs both routes in one Slurm allocation and on one node.
 The first route is selected deterministically from the validation seed and the

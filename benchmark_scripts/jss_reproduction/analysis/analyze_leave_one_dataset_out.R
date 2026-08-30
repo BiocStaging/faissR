@@ -392,11 +392,11 @@ main <- function() {
   writeLines(c(
     "# Leave-one-dataset-out selector sensitivity", "",
     "For each held-out dataset and backend/metric/k/target cell, the cross-fitted analysis excludes every row from that named dataset before selecting a method family. It first uses the same predeclared shape group; when that group is absent, it uses the three nearest training datasets in log(n)-log(p) space. It maximizes complete qualifying dataset coverage and then minimizes median log runtime.", "",
-    "A cross-fitted operating point passes when the held-out route is complete and is either exact-audited or, for an approximate route, its mean query recall@k meets the requested threshold in every prespecified validation replicate. Exact selection and approximate target attainment are reported separately. Minimum query recall is not used for eligibility.", "",
+    "A cross-fitted operating point passes its historical point-recall screen when the held-out route is complete and is either exact-audited or, for an approximate route, its mean query recall@k meets the requested threshold in every prespecified replicate. This post hoc screen is distinct from empirical query-bootstrap validation attainment. Exact selection and approximate point-screen qualification are reported separately. Minimum query recall is not used for eligibility.", "",
     "The installed package `method = \"auto\"` result is reported separately as a non-independent diagnostic because its compiled policy summarizes the full calibration collection. It is not presented as leave-one-dataset-out evidence.", "",
     "Candidate-universe qualification: the compiled policy could resolve to Flat or IVF, whereas the complete explicit held-out CUDA routes available to the cross-fitted policy and empirical oracle were exact-family routes and CAGRA. Explicit IVF was not present in that held-out experiment. The route-confusion outputs therefore compare the recorded policies but do not identify cross-fitting itself as the cause of the IVF-to-CAGRA change.", "",
     paste0("Held-out cells: ", nrow(result), "."),
-    paste0("Cross-fitted operating points attained: ", sum(result$crossfit_operating_point_met), "."),
+    paste0("Cross-fitted operating points passing the point screen: ", sum(result$crossfit_operating_point_met), "."),
     paste0("Cross-fitted abstentions: ", sum(result$crossfit_abstained), "."),
     paste0("Cross-fitted exact selections: ", sum(result$crossfit_exact_selected), "."),
     paste0("Cross-fitted method-family agreements with the held-out empirical oracle: ",

@@ -94,7 +94,7 @@ if (file.exists(manifest_file)) {
 sessionInfo()
 
 #' The generated directory contains the example summary, `sessionInfo.txt`,
-#' and, in archive mode, checksum verification, analysis outputs, all 15
+#' and, in archive mode, checksum verification, analysis outputs, all 18
 #' manuscript tables, the paired CPU figure, and their audit summaries. Any
 #' checksum, schema, fingerprint, aggregation, table-audit, or figure-audit
 #' failure stops execution.

@@ -1,3 +1,11 @@
+# faissR 0.99.30
+
+* Fixes Windows ARM64 compilation with LLVM flang by removing an unsupported
+  package-specific warning-control option from generated `Makevars.win` files.
+  The diagnostic-stub and functional Windows FAISS configurations now inherit
+  the Rtools Fortran flags unchanged.
+* Adds a source-tree regression test for the Windows diagnostic configuration.
+
 # faissR 0.99.29
 
 * Restricts the public nearest-neighbour metric contract to Euclidean, cosine,

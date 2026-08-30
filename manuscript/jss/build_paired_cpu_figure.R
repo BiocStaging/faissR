@@ -104,12 +104,12 @@ dataset_order <- c(
   "ImageNet features", "mass41", "MetRef", "MNIST", "USPS"
 )
 comparators <- c("BiocNeighbors", "RcppHNSW")
-colors <- c(BiocNeighbors = "#0072B2", RcppHNSW = "#222222")
-symbols <- c(BiocNeighbors = 16L, RcppHNSW = 15L)
+colors <- c(BiocNeighbors = "#111111", RcppHNSW = "#666666")
+symbols <- c(BiocNeighbors = 16L, RcppHNSW = 17L)
 offsets <- c(BiocNeighbors = 0.14, RcppHNSW = -0.14)
 
 grDevices::pdf(output, width = 7.2, height = 5.2, useDingbats = FALSE)
-graphics::par(mar = c(4.2, 9.2, 0.8, 2.7), las = 1, xpd = FALSE)
+graphics::par(mar = c(4.2, 9.2, 0.8, 4.5), las = 1, xpd = NA)
 y <- rev(seq_along(dataset_order))
 graphics::plot(
   NA, NA, log = "x", xlim = c(0.45, 48), ylim = c(0.45, 9.55),
@@ -136,21 +136,27 @@ for (comparator in comparators) {
                          col = colors[[comparator]], lwd = 1.8)
       graphics::points(z$median_ratio, yi, pch = symbols[[comparator]],
                        col = colors[[comparator]], cex = 0.8)
+      graphics::text(
+        48, yi,
+        labels = paste0("n=", z$target_equivalent_pairs),
+        col = colors[[comparator]], cex = 0.62, adj = 0
+      )
     } else {
       graphics::points(0.52, yi, pch = 4, col = "#888888", cex = 0.9, lwd = 1.4)
+      graphics::text(48, yi, labels = "n=0", col = "#777777", cex = 0.62, adj = 0)
     }
     if (z$comparator_timeouts > 0L) {
-      graphics::points(39, yi, pch = 17, col = "#D55E00", cex = 0.9)
-      graphics::text(43, yi, labels = z$comparator_timeouts,
-                     col = "#D55E00", cex = 0.7)
+      graphics::points(39, yi, pch = 4, col = "#111111", cex = 0.9, lwd = 1.4)
+      graphics::text(43, yi, labels = paste0("t=", z$comparator_timeouts),
+                     col = "#111111", cex = 0.62)
     }
   }
 }
 
 graphics::legend(
   "topleft",
-  legend = c("BiocNeighbors", "RcppHNSW", "No eligible pair", "Timeout count"),
-  col = c(colors, "#888888", "#D55E00"), pch = c(symbols, 4, 17),
+  legend = c("BiocNeighbors", "RcppHNSW", "No eligible pair", "Timeout (t)"),
+  col = c(colors, "#888888", "#111111"), pch = c(symbols, 4, 4),
   bty = "n", cex = 0.78, inset = 0.01
 )
 graphics::mtext("Comparator faster", side = 1, at = 0.6, line = 2.7,

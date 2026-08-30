@@ -22,6 +22,11 @@
 #' or densified by `as.matrix()`. Duplicate observations remain distinct row
 #' identifiers. With self-search, `exclude_self = TRUE` removes only the query
 #' row identifier.
+#' Host row identifiers and CUDA identifiers use signed 32-bit integers, so the
+#' public identifier space is limited to `.Machine$integer.max` reference rows;
+#' provider and memory limits are normally much lower. In function arguments,
+#' `backend` is the requested CPU/CUDA device policy, whereas the historical
+#' metadata field `backend_used` is the concrete resolved provider/route.
 #'
 #' `target_recall` is a discrete requested recall tier: only `0.9`, `0.95`,
 #' and `0.99` are accepted, with no rounding or interpolation. CPU

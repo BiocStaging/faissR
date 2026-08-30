@@ -383,6 +383,36 @@ R CMD INSTALL .
 This build links FAISS and compiles CUDA/cuVS stubs. Explicit GPU
 requests fail clearly.
 
+## Functional Versus Diagnostic Builds
+
+A functional build links a compatible FAISS library. It must satisfy:
+
+```r
+library(faissR)
+stopifnot(faiss_available())
+x <- matrix(seq_len(240), ncol = 6)
+z <- nn(x, k = 3, method = "exact", backend = "cpu")
+stopifnot(identical(dim(z$indices), c(nrow(x), 3L)))
+```
+
+A diagnostic-only build is emitted only on explicitly recognized automated
+targets without a usable native FAISS library. It can load and report
+capabilities, but `faiss_available()` is false and search calls fail with a
+provider diagnostic. A diagnostic artifact is not evidence of functional
+platform support. Use `FAISSR_REQUIRE_FAISS=1` in CI and production builds to
+prevent accidental diagnostic-only installation.
+
+## Tested Configurations
+
+The 0.99.29 release was installed and smoke-tested on macOS arm64 with R 4.6.0,
+Homebrew FAISS 1.14.3, Homebrew clang 22.1.1, GNU Fortran 12.2.0, and libomp
+22.1.x. The publication CUDA environment used Debian 13, R 4.5.3, FAISS
+1.14.3, cuVS 26.06, CUDA 13.2, and an NVIDIA L40S with driver 595.58.03. The
+exact compiler executable used to construct that frozen CUDA image was not
+retained, so this runtime combination is reported without inventing compiler
+provenance. Repository CI definitions build FAISS 1.14.3 from source on Linux
+and use Homebrew FAISS on macOS.
+
 ## Validation
 
 After installation:
@@ -434,14 +464,14 @@ itself is valid.
 ```sh
 R CMD build .
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-R CMD check --as-cran faissR_0.99.27.tar.gz
+R CMD check --as-cran faissR_0.99.29.tar.gz
 ```
 
 Bioconductor submission checks are run in addition to `R CMD check`:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.27.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.29.tar.gz", `new-package` = TRUE)
 ```
 
 A CPU-only check should still finish with `Status: OK` once FAISS is installed;

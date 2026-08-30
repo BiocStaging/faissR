@@ -7,14 +7,15 @@ passes.
 
 | Scientific question | Evidence | HPC requirement |
 |---|---|---|
-| Does query count or index reuse change the preferred route? | `query_workload/`: external query counts 1, 32, and 1,024; selected full self-search cells; cold and repeated calls; amortized totals | New CPU and CUDA jobs |
+| Does query count or index reuse change the preferred route? | `query_workload/`: external query counts 1, 32, and 1,024; selected full self-search cells; cold and repeated calls; amortized totals | Pending; not in the current analysed archive |
 | Is the single-timing screening winner stable? | `calibration_confirmation/`: prespecified shortlist, five isolated randomized timings, robust median selection, stability and regret | New CPU and CUDA jobs |
 | Does installed automatic selection attain its requested tier on independent queries? | `recall_inference/`: CPU and CUDA auto, two query seeds, tie-aware recall, one-sided bootstrap lower bounds, separate timing repetitions | New CPU and CUDA jobs |
 | How does faissR compare with other R interfaces? | `comprehensive_r_comparison/` for FNN, RANN, rnndescent, BiocNeighbors, Rnanoflann, RcppAnnoy, and RcppHNSW; `paired_cpu_hnsw_pareto/` adds recall-matched HNSW tuning | New CPU jobs |
-| Are comparisons recall-equivalent? | Independent calibration and validation in `paired_cpu_hnsw_pareto/`; observed recall retained for every external pair | Included above |
-| What are build, warm-query, and break-even costs? | `query_workload/`; fitted-query claims remain conditional on successful identity and recall audits | Included above |
-| What is gained by GPU-resident continuation? | `gpu_resident_interoperability/`: device consumer, explicit host transfer, lifetime and ownership checks | New CUDA jobs |
-| What are per-cell host and device memory costs? | `resource_memory/`: one fresh R process per cell, Linux `VmHWM`, retained host increment, result footprint, process GPU peak, OOM and timeout outcomes | New CPU and CUDA jobs |
+| What overhead does the R interface add over native FAISS/cuVS? | Same-allocation native C++ calls on a focused workload subset, decomposing conversion, index/search, metadata/wrapping, and host-transfer time | Pending; no native-overhead estimate is currently admissible |
+| Are comparisons point-recall-matched? | Independent calibration and validation in `paired_cpu_hnsw_pareto/`; observed recall retained for every external pair | Pending; no Pareto or fitted ratio is currently admissible |
+| What are build, warm-query, and break-even costs? | `query_workload/`; fitted-query claims remain conditional on successful identity and recall audits | Pending; functional reuse only in the current article |
+| What is gained by GPU-resident continuation? | `gpu_resident_interoperability/`: device consumer, explicit host transfer, lifetime and ownership checks | Pending; API/ownership contract only in the current article |
+| What are per-cell host and device memory costs? | `resource_memory/`: one fresh R process per cell, Linux `VmHWM`, retained host increment, result footprint, process GPU peak, OOM and timeout outcomes | Pending; no quantitative memory claim is currently admissible |
 | How should failures and timeouts affect speed claims? | `analysis/analyze_failure_aware_profiles.R`: planned-cell denominator, performance profile, and capped-runtime sensitivity | Existing archive only |
 | Does selector performance depend on dataset or domain identity? | Named-dataset and grouped-domain holdout analyses plus route-confusion and selector-regret tables | Existing explicit-route archive only |
 | How much does the automatic route lag the fastest feasible route? | `analysis/analyze_selector_regret.R`, reported by dataset, metric, k, target, and route family | Existing archive only |

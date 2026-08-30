@@ -158,6 +158,12 @@ if (nrow(paired)) {
       all(paired$external_recall_at_k[indices] >= 0.99)
   }
   paired$recall_equivalent <- equivalent
+  paired$point_recall_matched <- equivalent
+  paired$comparison_eligibility_criterion <- ifelse(
+    approximate,
+    "point_estimate_mean_recall_at_k_ge_0.99_all_included_replicates",
+    "exact_family_audited_separately"
+  )
   paired$recall_equivalence_rule <- ifelse(
     approximate,
     "both routes have mean recall_at_k >= 0.99 in every replicate",
@@ -168,7 +174,7 @@ if (nrow(paired)) {
     transform(paired, comparison_scope = "all_successful_prespecified_interface"),
     transform(
       paired[paired$recall_equivalent, , drop = FALSE],
-      comparison_scope = "recall_equivalent"
+      comparison_scope = "point_recall_matched"
     )
   )
   dataset_groups <- split(
@@ -233,12 +239,12 @@ report <- c(
   paste0("Successful rows: ", sum(inventory$successful_rows), "; failed or timed-out rows: ", sum(inventory$failed_rows), "."),
   paste0("Paired successful cells: ", nrow(paired), "."),
   paste0(
-    "Paired rows in recall-equivalent approximate cells: ",
+    "Paired rows in point-recall-matched approximate cells: ",
     if (nrow(paired)) sum(paired$recall_equivalent & paired$family != "exact") else 0L,
     "."
   ),
   "",
-  "Ratios are external-package elapsed time divided by faissR elapsed time; values greater than one favor faissR. faissR approximate routes use the target-0.99 operating point. External routes use the explicitly recorded prespecified public-package configuration. The prespecified-interface summary includes every successful pair. The recall-equivalent summary retains an approximate dataset-metric-k cell only when both routes have mean recall@k >= 0.99 in every validation replicate. Results are end-to-end API comparisons, not isolated kernel benchmarks.",
+  "Ratios are external-package elapsed time divided by faissR elapsed time; values greater than one favor faissR. faissR approximate routes use the target-0.99 operating point. External routes use the explicitly recorded prespecified public-package configuration. The prespecified-interface summary includes every successful pair. The point-recall-matched summary retains an approximate dataset-metric-k cell only when both routes have point-estimate mean recall@k >= 0.99 in every included replicate. This comparator-matching rule is distinct from empirical query-bootstrap validation attainment. Results are end-to-end API comparisons, not isolated kernel benchmarks.",
   "Pairing means analytical matching by dataset, metric, k, validation seed, and repeat. The one-method jobs do not guarantee same-node execution. Each timed call uses a fresh R worker, with data and reference loading before the timer, gc() immediately before timing, no untimed search warm-up, no operating-system cache flush, and no randomized cross-method execution order.",
   "",
   "The surveyed CPU comparator packages return ordinary host-resident R objects. No comparator in this experiment exposes an R nearest-neighbor result that remains resident in NVIDIA device memory for direct downstream consumption."

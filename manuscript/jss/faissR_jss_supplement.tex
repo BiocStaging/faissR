@@ -64,8 +64,10 @@ Integrative Biology (CIBIO), University of Trento, Trento, Italy.\\[0.5em]
 This supplement records the minimum additional information required to
 interpret and reproduce the results in the article. It covers the software
 environment, dataset dimensions, calibration grids, exactness and target
-criteria, completed evidence, and aggregation rules. It does not report
-unanalysed jobs or development-stage results.
+criteria, completed evidence, and aggregation rules. Quantitative tables contain
+only completed and analysed results. Planned but unexecuted systems protocols are
+isolated in a section explicitly labelled as planned and do not support any
+current performance claim.
 
 The evaluated nearest-neighbor implementation was \pkg{faissR} 0.99.21 at
 commit:
@@ -183,6 +185,16 @@ and \code{requested\_backend} from \code{backend\_used} and
 \code{resolved\_backend}; provider parameters and auto-selection evidence are
 nested rather than inferred from the public method label.
 
+In the public argument, \code{backend} denotes the requested execution device
+policy (CPU, CUDA, or automatic device resolution). The historical metadata
+field \code{backend\_used} denotes the concrete resolved provider/route, such
+as \code{faiss\_hnsw}; the name is retained for API compatibility. User-facing
+interpretation should therefore read \code{requested\_backend} as requested
+device and \code{backend\_used} as resolved provider. Host row identifiers use
+R's signed integer representation and CUDA buffers use signed int32, limiting
+the public identifier space to $2^{31}-1$ reference rows. Provider, address
+space, and memory constraints normally impose much smaller practical limits.
+
 CPU \code{method = "auto"} is explicitly labelled with
 \path{auto_policy_status=calibration_informed_not_independently_validated} and
 \path{auto_policy_evidence_scope=cpu_static_policy_experimental}. The label is
@@ -242,8 +254,11 @@ requested route. There is no public manual destroy operation. The external
 pointer is released by its finalizer after its owner becomes unreachable.
 \code{saveRDS()} preserves model specification, training data, and response,
 but not a portable native index; a reloaded model detects the stale pointer and
-rebuilds before prediction. Native index serialization is not otherwise
-supported.
+rebuilds before prediction. The first post-reload prediction consequently
+reports \code{query\_source = "nn"}; subsequent use can again retain the
+rebuilt session-local index according to route capability. Native index
+serialization is not otherwise supported, so serialized object size excludes
+the native index and reload cost can be substantial.
 
 \code{nn\_gpu()} returns a \class{faissR\_gpu\_knn} with an owning handle and
 non-owning device pointers. The buffers are column-major $m\times k$, with
@@ -495,13 +510,18 @@ principal independent-query performance claim. \\
 \end{tabularx}
 \end{table}
 
-For approximate calibration candidate $s$, eligibility requires mean query
-recall $R_s\geq\tau$. Each candidate was timed once and the eligible candidate
+For approximate calibration candidate $s$, \emph{calibration feasibility}
+requires point-estimate mean query recall $R_s\geq\tau$. Each candidate was timed once and the eligible candidate
 with minimum elapsed time was selected, with deterministic tie-breaking by
 higher recall and candidate identifier. During independent validation, target
-attainment requires mean query recall $R_{sr}\geq\tau$ in every prespecified
-replicate $r$. Minimum query recall is diagnostic and does not define
-attainment. Exact-audited candidates form a separate eligibility class.
+attainment instead requires the one-sided 95\% empirical query-bootstrap lower
+bound for tie-aware mean recall to reach $\tau$ for every independent query
+seed. These are different criteria with different names: the broad calibration
+grid is a point-estimate screen, while validation adds an uncertainty margin.
+The controlled comparator experiment uses a third label,
+\emph{point-recall-matched}, when both routes have mean recall at least 0.99 in
+every included replicate. Exact-audited candidates form a separate eligibility
+class.
 
 For the three public metrics, 6,453 of 6,804 planned calibration operating
 points produced a completed recommendation. The 351 unavailable points were
@@ -649,13 +669,26 @@ recall is tie-aware: identifiers strictly inside the archived $k$th boundary
 must match, while unmatched candidates are exactly rescored and can receive
 credit at a tied boundary within tolerance. Boundary credit is capped by the
 number of boundary slots. For each seed, 1,000 deterministic query-level
-bootstrap resamples provide a one-sided 95\% lower confidence bound for mean
+bootstrap resamples provide a one-sided 95\% empirical lower bound for mean
 tie-aware recall. A validation cell passes only when every seed completes and
-its lower bound is at least the requested target. Identifier-overlap and
-tie-aware point estimates, lower bounds, boundary-substitution frequencies,
-and minimum query recall remain in the machine-readable outputs.
+its lower bound is at least the requested target. The value 1,000 was
+prespecified as a computational compromise that gives 0.001 resolution in the
+empirical bootstrap distribution. The sensitivity analysis compares 1,000 with
+5,000 resamples and audited-query counts of 128, 256, 512, and up to 1,024 on
+flow18, mass41, and ImageNet. Identifier-overlap and tie-aware point estimates,
+lower bounds, boundary-substitution frequencies, the 5th percentile, and
+minimum query recall remain in the machine-readable outputs.
 Exact-audited cells are evaluated by exhaustive-reference identity or
 tie-equivalent distances and are not reclassified by approximate recall.
+
+Rows were sampled uniformly without replacement, using $\min(n,1024)$ rows;
+MetRef therefore contributed all 873 rows. Query-seed results are independent
+sampling replicates conditional on the same reference matrix, but query-level
+outcomes need not be mutually independent. The empirical query bootstrap is
+accordingly interpreted as a finite audit-sample diagnostic, not a
+distribution-free or cross-dataset guarantee. Dataset-wide labels suitable for
+a common stratified design were unavailable, so no rare-population claim is
+made for the cytometry collections.
 
 A separate backend-specific leave-one-dataset-out analysis removed every row associated
 with the held-out named dataset before selecting a method family. It used the
@@ -691,8 +724,9 @@ every eligible phase, the ratio is
 $T_{\mathrm{comparator}}/T_{\mathrm{faissR}}$; values above one favor
 \pkg{faissR}. The audit retains failures and timeouts and rejects any pair that
 does not verify a common hostname, allocation, and opposing route positions.
-Recall-equivalent summaries require both routes to attain mean recall at least
-0.99 in each included validation replicate.
+Point-recall-matched summaries require both routes to have mean recall at least
+0.99 in each included validation replicate. This comparator-matching rule is
+not the empirical query-bootstrap validation-attainment criterion.
 
 The comparator settings were fixed before execution:
 \pkg{BiocNeighbors} used \code{nlinks = 16},
@@ -702,12 +736,14 @@ The comparator settings were fixed before execution:
 prespecified-configuration comparisons rather than provider-optimal Pareto
 comparisons.
 
-An independently tuned HNSW extension evaluates recall--time Pareto curves for
+The planned, not-yet-run independently tuned HNSW extension will evaluate recall--time Pareto curves for
 each provider. It varies search effort at every dataset--$k$ cell and varies
 construction effort at $k=30$. The fastest configuration attaining mean recall
 of at least 0.99 in all three calibration repetitions is selected separately
-for each provider and evaluated over five repetitions on independent queries.
-Validation records cold-call, direct index-build, and fitted-query times as
+for each provider and will be evaluated over five repetitions on independent queries.
+This is a point-recall calibration screen and is not called validation target
+attainment.
+Validation will record cold-call, direct index-build, and fitted-query times as
 separate measured phases. Fitted queries request $k+1$ neighbors and remove the
 known source row before recall is calculated. No fitted ratio enters the paper
 unless both providers attain the target in every validation repetition.
@@ -726,41 +762,55 @@ Twelve threads were requested through each public API and through
 \code{MKL\_NUM\_THREADS}. The completed run did not retain CPU affinity or
 sample active thread use. Accordingly, the article reports requested threads
 and same-node coexecution but makes no claim that providers used an identical
-number of active workers. The independently tuned Pareto protocol records the
+number of active workers. The planned independently tuned Pareto protocol will record the
 Slurm allocation, Linux affinity mask, thread-control variables, and observed
 process thread counts before and after each call.
 
-\section{Reusable indexes and GPU-resident interoperability}
+\section{Planned systems experiments (not reported)}
 
-The query-workload experiment evaluates explicit query batches of 1, 32, and
+Evidence status is used literally throughout this supplement:
+\emph{completed and reported} means that raw files passed their audit and
+contribute to a result; \emph{completed but omitted} means an audited result
+was deliberately excluded (none in this release); \emph{ongoing} means that a
+job has started but contributes no evidence (none included here); and
+\emph{planned} means protocol code exists but no analysed result is claimed.
+The experiments in this section are planned. They are registered in the
+replication code but are not part of the analysed evidence archive used for
+the current manuscript. Accordingly, this section presents no
+fitted-index speed ratio, break-even count, isolated-memory estimate,
+device-to-host transfer advantage, or downstream-consumer timing. The current
+evidence for reusable indexes and GPU-resident output is limited to executable
+API, ownership, route, and conversion contract tests.
+
+The planned query-workload experiment will evaluate explicit query batches of 1, 32, and
 1,024 rows on five datasets, with full self-search on the smaller datasets.
 The fitted-index cache is cleared before the first call. Subsequent identical
-queries record whether the persistent index was reused. For each method, the
-audit reports cold time, repeated-query time, the explicit construction
+queries will record whether the persistent index was reused. For each method, the
+audit will report cold time, repeated-query time, the explicit construction
 estimate $\max(0,T_{\mathrm{cold}}-T_{\mathrm{warm}})$, amortized totals for
 1, 10, and 100 batches, and the smallest batch count satisfying
 \[
 T_{\mathrm{cold,method}}+(A-1)T_{\mathrm{warm,method}}
 \leq A T_{\mathrm{cold,Flat}}.
 \]
-Direct HNSW construction and fitted-query times are additionally measured in
-the independently tuned provider experiment rather than inferred by
-subtraction. The resident-set increase across construction is an empirical
-index-memory estimate; the proglang{R} object size is reported separately
+Direct HNSW construction and fitted-query times will additionally be measured in
+the planned independently tuned provider experiment rather than inferred by
+subtraction. The resident-set increase across construction will provide an empirical
+index-memory estimate; the proglang{R} object size will be reported separately
 because it excludes native storage owned through an external pointer. Index
 external pointers are session-local and have no supported
 portable serialization; consequently, serialization cost is not reported.
 
-The GPU-residency experiment uses 15 isolated cells: five datasets crossed
+The planned GPU-residency experiment will use 15 isolated cells: five datasets crossed
 with query batches of 1, 32, and up to 1,024 rows. A minimal downstream package
 includes \code{faissR\_api.h}, verifies ABI version 1, obtains
 \code{faissR\_nn\_cuda\_tuned\_gpu\_call} with \code{R\_GetCCallable}, and
-launches a CUDA checksum kernel over both returned device buffers. Only two
+will launch a CUDA checksum kernel over both returned device buffers. Only two
 checksum scalars are copied to the host. The alternate phase calls
 \code{gpu\_knn\_to\_host()} and materializes both complete matrices. Five
-repetitions alternate operation order and record search, consumer, and transfer
-times separately. Device memory is sampled for the worker process with
-\code{nvidia-smi}; host \code{VmHWM} is valid per cell because each cell has a
+repetitions will alternate operation order and record search, consumer, and transfer
+times separately. Device memory will be sampled for the worker process with
+\code{nvidia-smi}; host \code{VmHWM} will be valid per cell because each cell has a
 fresh process.
 
 The owning \code{handle} external pointer releases both CUDA allocations in
@@ -776,9 +826,26 @@ does not share faissR's stream, allocator, or resource ownership.
 
 All algorithmic CUDA comparisons in the main benchmark use \code{nn()}; every
 route in those comparisons returns host-resident matrices. The
-\code{nn\_gpu()} experiment is reported separately because comparing its resident
+planned \code{nn\_gpu()} experiment is separated because comparing its resident
 output directly with a host-resident route would combine search and transfer
 contracts.
+
+\begin{table}[h]
+\centering
+\caption{Status of systems experiments at the current evidence freeze.}
+\begin{tabularx}{\textwidth}{@{}YY@{}}
+\toprule
+Experiment & Status and admissible claim \\
+\midrule
+Reusable-index/query workload & Planned, not run or analysed; functional reuse only. \\
+Recall-matched HNSW Pareto and fitted query & Planned, not run or analysed; no fitted speed ratio. \\
+Isolated host/device memory & Planned, not run or analysed; no quantitative memory comparison. \\
+GPU-resident consumer and host transfer & Planned, not run or analysed; API ownership and explicit-transfer contract only. \\
+Direct native FAISS/cuVS overhead & Planned, not run or analysed; no R-interface-overhead estimate. \\
+Portable index serialization & Unsupported; no performance experiment is claimed. \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 \section{Result audit}
 
@@ -816,7 +883,7 @@ datasets, with a range of 0.14--5.83. CPU provider ratios from non-equivalent
 or separately submitted calls are not used. In the controlled
 prespecified-configuration cold-call
 experiment, 253 \pkg{BiocNeighbors} pairs across seven datasets and 268
-\pkg{RcppHNSW} pairs across eight datasets attained mean recall at least 0.99
+\pkg{RcppHNSW} pairs across eight datasets were point-recall-matched at 0.99
 for both routes. Median dataset-level ratios were 11.40 and 1.85,
 respectively; all 29 execution failures were \pkg{BiocNeighbors} time limits.
 These ratios must not be interpreted as general provider-level advantages.
@@ -825,8 +892,8 @@ These ratios must not be interpreted as general provider-level advantages.
 \centering
 \small
 \caption{Controlled CPU HNSW cold-call results by dataset. Entries give
-completed pairs, recall-equivalent pairs, and the median
-$T_{\mathrm{comparator}}/T_{\mathrm{faissR}}$ among recall-equivalent pairs.
+completed pairs, point-recall-matched pairs, and the median
+$T_{\mathrm{comparator}}/T_{\mathrm{faissR}}$ among point-recall-matched pairs.
 A dash means that no completed pair attained 0.99 for both routes.}
 \label{tab:supp-cpu-paired}
 \begin{tabular}{@{}lrrr|rrr@{}}
@@ -847,10 +914,27 @@ USPS & 40 & 13 & 23.66 & 40 & 18 & 4.90 \\
 \end{tabular}
 \end{table}
 
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{fig_paired_cpu_log_ratio.pdf}
+\caption{Secondary controlled CPU HNSW cold-call evidence for prespecified
+public configurations. Points are dataset medians and horizontal lines are
+interquartile intervals among pairs for which both routes had mean recall at
+least 0.99 in every included replicate. Ratios are
+$T_{\mathrm{comparator}}/T_{\mathrm{faissR}}$ on a logarithmic axis. Black
+circles and grey triangles distinguish the two comparators in grayscale;
+crosses denote no point-recall-matched pair. Right-margin labels show the
+number of eligible pairs (\code{n}) and timeout counts (\code{t}) among 40
+planned pairs per dataset and comparator.
+The providers were not independently tuned, active threads were not observed,
+and the conditional ratios are not provider-level speed estimates.}
+\label{fig:supp-paired-cpu}
+\end{figure}
+
 \begin{table}[ht]
 \centering
 \small
-\caption{CUDA results by dataset. Automatic target attainment covers 36
+\caption{CUDA results by dataset. Automatic validation attainment covers 36
 metric--$k$--target cells. All routes completed without timeout. Ratios use
 second-route time divided by automatic-route time. The last ratio is restricted
 to cells in which automatic selection chose IVF; values above one favor IVF.
@@ -1001,6 +1085,52 @@ in 98. These frequencies delimit the empirical contribution of recall-aware
 selection: it adapts the evaluated large Euclidean cases, while exhaustive
 search remains the stable choice elsewhere.
 
+\section{Installation, portability, and release gates}
+
+Table~\ref{tab:install-matrix} separates functional execution evidence from
+diagnostic-only portability artifacts. A diagnostic-only artifact can load and
+report an unavailable provider, but it cannot execute nearest-neighbor search
+and is never counted as functional platform support. Production and continuous
+integration installations set \code{FAISSR\_REQUIRE\_FAISS=1} so that an
+accidental diagnostic build fails at configuration time.
+
+\begin{table}[h]
+\centering
+\caption{Tested and defined installation configurations for version 0.99.29.}
+\label{tab:install-matrix}
+\small
+\begin{tabularx}{\textwidth}{@{}p{0.19\textwidth}p{0.25\textwidth}X@{}}
+\toprule
+Status & Platform and providers & Evidence or boundary \\
+\midrule
+Functional, completed & macOS arm64; R 4.6.0; FAISS 1.14.3; libomp 22.1.x; Homebrew clang 22.1.1; GNU Fortran 12.2.0 & Strict source install and CPU exact-search smoke passed. \code{R CMD check --as-cran} completed with one incoming-check NOTE for a new submission and no package warning or error. \\
+Functional, completed & Debian 13; R 4.5.3; FAISS 1.14.3; cuVS 26.06; CUDA 13.2; NVIDIA L40S, driver 595.58.03 & Frozen publication route-contract and benchmark environment. The compiler executable/version used to construct the image was not retained and is therefore not inferred. \\
+Functional, defined & Hosted Ubuntu and macOS CPU workflows & Linux builds FAISS 1.14.3 from source; macOS installs Homebrew FAISS/libomp. Both require FAISS, run package checks and a compact replication smoke. Status becomes evidence only after hosted completion. \\
+Diagnostic only & Recognized Windows, macOS staging, or WebAssembly builders without compatible FAISS & Package can load and report the missing provider; nearest-neighbor calls are unavailable. This is portability diagnostics, not functional support. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The installation vignette provides executable command sequences for a Linux
+CPU-only FAISS 1.14.3 source prefix, a Homebrew macOS CPU build, and a strict
+Linux CUDA/cuVS build. It also defines the post-install capability audit and
+troubleshooting for missing FAISS, \code{omp.h}, runtime \code{libfaiss},
+\code{GLIBCXX} mismatches, \code{nvcc}, and cuVS. The repository additionally
+tracks a scheduled isolated Valgrind smoke for exact and HNSW routes; it is a
+practical native-memory screen rather than a proof of memory safety.
+
+\pkg{faissR} is distributed under MIT terms. FAISS is MIT-licensed, cuVS is
+Apache-2.0-licensed, and the optional CUDA toolkit and driver are governed by
+NVIDIA's CUDA SDK terms. They are user/system-supplied native dependencies and
+are not copied into the package source. The installed
+\path{THIRD_PARTY_LICENSES.md} records the links and distribution boundary.
+
+The review bundle contains a checksummed snapshot rather than an archival DOI.
+Minting an immutable source/article/replication release with a persistent
+identifier, inserting that identifier in the article, and rerunning both clean
+replication modes are explicit pre-publication gates. The package repository is
+not described as a substitute for that future archive.
+
 \section{Replication}
 
 The submission material contains:
@@ -1010,7 +1140,7 @@ The submission material contains:
 \item a single commented article replication script and its HTML output;
 \item a checksummed result snapshot, its SHA-256 ledger, and a pre-analysis checksum
   gate;
-\item machine-readable reconstructions of all 15 article and supplementary
+\item machine-readable reconstructions of all 18 article and supplementary
   tables, with a table checksum manifest;
 \item software, container, dataset, and result fingerprints; and
 \item a reduced CPU path that reproduces the interface example without a GPU.
@@ -1023,6 +1153,9 @@ archive before extraction and recreates every reported table, and \code{all}
 runs both. Any digest, schema, dataset-fingerprint, aggregation, or table-audit
 failure stops execution. A successful run records archive verification,
 per-table SHA-256 digests, and a fresh \code{sessionInfo.txt}.
+Both \code{compact} and \code{archive} modes completed from clean temporary
+directories on 2026-08-30; the archive run verified its digest and rebuilt all
+18 tracked tables.
 
 \section{Interpretation}
 

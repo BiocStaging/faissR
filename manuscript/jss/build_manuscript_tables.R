@@ -116,7 +116,7 @@ ratio_row <- function(label, x) {
 }
 paired <- rbind(
   ratio_row("CPU HNSW, prespecified interfaces", per_cpu$median_ratio_BiocNeighbors_over_faissR),
-  ratio_row("CPU HNSW, recall-equivalent", per_cpu$median_recall_equivalent_ratio),
+  ratio_row("CPU HNSW, point-recall-matched", per_cpu$median_recall_equivalent_ratio),
   ratio_row("CUDA automatic / exact", per_cuda$median_ratio_exact_over_auto),
   ratio_row("CUDA automatic / brute force", per_cuda$median_ratio_bruteforce_over_auto),
   ratio_row("CUDA automatic / CAGRA", per_cuda$median_ratio_cagra_over_auto),

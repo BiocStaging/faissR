@@ -328,7 +328,7 @@ external_methods <- function(backend) {
       stringsAsFactors = FALSE
     ))
   }
-  data.frame(
+  out <- data.frame(
     method_id = c(
       "Rnanoflann_standard", "RANN_kd", "RANN_bd",
       "rnndescent_rpf", "rnndescent_rnnd", "rnndescent_nnd", "rnndescent_bruteforce",
@@ -369,6 +369,7 @@ external_methods <- function(backend) {
     ),
     stringsAsFactors = FALSE
   )
+  out
 }
 
 faissr_methods <- function(backend, include_gpu_resident = TRUE) {
@@ -707,6 +708,8 @@ quality_metrics <- function(obj, ref, rows, k, data, metric, bootstrap_seed,
     min_recall_at_k = NA_real_,
     min_query_recall_at_k = NA_real_,
     tie_aware_recall_at_k = NA_real_,
+    identifier_query_recall_p05 = NA_real_,
+    tie_aware_query_recall_p05 = NA_real_,
     identifier_recall_lcb = NA_real_,
     tie_aware_recall_lcb = NA_real_,
     tie_substitution_query_fraction = NA_real_,
@@ -820,7 +823,7 @@ quality_metrics <- function(obj, ref, rows, k, data, metric, bootstrap_seed,
     bootstrap_resamples = bootstrap_resamples,
     atol = exact_atol, rtol = exact_rtol
   )
-  data.frame(
+  out <- data.frame(
     recall_at_k = mean_query_recall,
     mean_query_recall_at_k = mean_query_recall,
     median_recall_at_k = median_query_recall,
@@ -828,6 +831,8 @@ quality_metrics <- function(obj, ref, rows, k, data, metric, bootstrap_seed,
     min_recall_at_k = min_query_recall,
     min_query_recall_at_k = min_query_recall,
     tie_aware_recall_at_k = inference$tie_aware_mean,
+    identifier_query_recall_p05 = inference$identifier_p05,
+    tie_aware_query_recall_p05 = inference$tie_aware_p05,
     identifier_recall_lcb = inference$identifier_lcb,
     tie_aware_recall_lcb = inference$tie_aware_lcb,
     tie_substitution_query_fraction =
@@ -850,6 +855,8 @@ quality_metrics <- function(obj, ref, rows, k, data, metric, bootstrap_seed,
     quality_error = "",
     stringsAsFactors = FALSE
   )
+  attr(out, "query_recall_details") <- inference$query
+  out
 }
 
 compact_value <- function(x) {
@@ -1153,7 +1160,7 @@ aggregate_success_rows <- function(success) {
       mean_run_mean_query_recall_at_k = if (any(is.finite(recalls))) mean(recalls[is.finite(recalls)]) else NA_real_,
       min_run_mean_query_recall_at_k = if (any(is.finite(recalls))) min(recalls[is.finite(recalls)]) else NA_real_,
       target_recall_statistic = if (lcb_available) {
-        "tie_aware_mean_query_recall_at_k_one_sided_bootstrap_lcb"
+        "tie_aware_mean_query_recall_at_k_empirical_query_bootstrap_lcb"
       } else "mean_query_recall_at_k",
       target_recall_replicate_rule =
         "all_independent_query_seeds;timing_repeats_collapsed_within_seed",
@@ -1346,6 +1353,8 @@ worker_main <- function(args) {
     min_recall_at_k = NA_real_,
     min_query_recall_at_k = NA_real_,
     tie_aware_recall_at_k = NA_real_,
+    identifier_query_recall_p05 = NA_real_,
+    tie_aware_query_recall_p05 = NA_real_,
     identifier_recall_lcb = NA_real_,
     tie_aware_recall_lcb = NA_real_,
     tie_substitution_query_fraction = NA_real_,
@@ -1359,7 +1368,8 @@ worker_main <- function(args) {
     tie_aware_exact_max_distance_error = NA_real_,
     tie_aware_exact_atol = 1e-5,
     tie_aware_exact_rtol = 1e-4,
-    target_recall_statistic = "mean_query_recall_at_k",
+    target_recall_statistic =
+      "tie_aware_mean_query_recall_at_k_empirical_query_bootstrap_lcb",
     target_recall_replicate_rule =
       "all_independent_query_seeds;timing_repeats_not_independent_recall_evidence",
     min_query_recall_role = "diagnostic_only",
@@ -1390,6 +1400,7 @@ worker_main <- function(args) {
     write_one(args$result_path, cbind(base, meta))
     return(invisible(NULL))
   }
+  query_recall_details <- NULL
   tryCatch({
     if (identical(method$public_method[[1L]], "grid") && !(ds$p %in% c(2L, 3L))) {
       stop("grid is only applicable to 2D/3D datasets.", call. = FALSE)
@@ -1451,6 +1462,7 @@ worker_main <- function(args) {
       obj, reference, rows, k, data = ds$data, metric = metric,
       bootstrap_seed = seed
     )
+    query_recall_details <- attr(q, "query_recall_details", exact = TRUE)
     base$recall_at_k <- q$recall_at_k
     base$mean_query_recall_at_k <- q$mean_query_recall_at_k
     base$median_recall_at_k <- q$median_recall_at_k
@@ -1458,6 +1470,8 @@ worker_main <- function(args) {
     base$min_recall_at_k <- q$min_recall_at_k
     base$min_query_recall_at_k <- q$min_query_recall_at_k
     base$tie_aware_recall_at_k <- q$tie_aware_recall_at_k
+    base$identifier_query_recall_p05 <- q$identifier_query_recall_p05
+    base$tie_aware_query_recall_p05 <- q$tie_aware_query_recall_p05
     base$identifier_recall_lcb <- q$identifier_recall_lcb
     base$tie_aware_recall_lcb <- q$tie_aware_recall_lcb
     base$tie_substitution_query_fraction <-
@@ -1493,6 +1507,20 @@ worker_main <- function(args) {
     base$gpu_memory_peak_mib <- gpu_memory$peak_mib
     base$gpu_memory_source <- gpu_memory$source
   })
+  if (identical(tolower(Sys.getenv("SAVE_QUERY_RECALL_DETAILS", "false")),
+                "true") && !is.null(query_recall_details)) {
+    detail_path <- sub("[.]csv$", "_query_recall.rds", args$result_path)
+    saveRDS(
+      list(
+        query_rows = rows,
+        identifier_recall = query_recall_details$identifier,
+        tie_aware_recall = query_recall_details$tie_aware,
+        boundary_substitution = query_recall_details$boundary_substitution,
+        boundary_credit = query_recall_details$boundary_credit
+      ),
+      detail_path
+    )
+  }
   write_one(args$result_path, cbind(base, meta))
 }
 
@@ -1860,6 +1888,8 @@ main <- function() {
                 min_recall_at_k = NA_real_,
                 min_query_recall_at_k = NA_real_,
                 tie_aware_recall_at_k = NA_real_,
+                identifier_query_recall_p05 = NA_real_,
+                tie_aware_query_recall_p05 = NA_real_,
                 identifier_recall_lcb = NA_real_,
                 tie_aware_recall_lcb = NA_real_,
                 tie_substitution_query_fraction = NA_real_,
@@ -1868,7 +1898,8 @@ main <- function() {
                 recall_confidence_level = 0.95,
                 recall_bootstrap_resamples = 1000L,
                 recall_uncertainty_method = "query_bootstrap_percentile_lcb",
-                target_recall_statistic = "mean_query_recall_at_k",
+                target_recall_statistic =
+                  "tie_aware_mean_query_recall_at_k_empirical_query_bootstrap_lcb",
                 target_recall_replicate_rule =
                   "all_independent_query_seeds;timing_repeats_not_independent_recall_evidence",
                 min_query_recall_role = "diagnostic_only",

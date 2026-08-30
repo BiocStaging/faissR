@@ -45,7 +45,9 @@ compiled backend path rather than repaired by R-side post-processing. CUDA
 graph routes that do not yet expose compiled include-self output shaping
 require `exclude_self = TRUE` and fail clearly instead of reshaping in R.}
 
-\item{backend}{Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
+\item{backend}{Requested execution device: `"auto"`, `"cpu"`, or `"cuda"`.
+The historical result field `backend_used` instead names the concrete
+resolved provider/route and is retained for API compatibility. `"auto"`
 uses a validated CUDA route only when the requested method/metric
 combination is supported and CUDA/cuVS runtime support is available, and
 otherwise resolves to CPU. Explicit `"cuda"` fails clearly when CUDA
@@ -197,7 +199,10 @@ A list with integer matrix `indices`, `distances`, and stable
   `input_owns_data` so downstream packages can distinguish direct float32
   payload use from one-time row-major conversion. Normalized Euclidean graph
   routes for cosine/correlation record `metric_transform` and
-  `attr(result, "distance_transform")`. Indices are 1-based. The
+  `attr(result, "distance_transform")`. Indices are 1-based signed R
+  integers; CUDA result identifiers are signed int32. The public identifier
+  space is therefore limited to `.Machine$integer.max` reference rows,
+  although provider and memory limits are usually much lower. The
   requested backend/method, tuning policy, resolved
   backend, metric, exact/approximate flag, and self-query flag are stored in
   attributes including `attr(result, "requested_backend")`,
@@ -211,12 +216,11 @@ A list with integer matrix `indices`, `distances`, and stable
   hardware provenance. CPU auto
   records `auto_policy_status =
   "calibration_informed_not_independently_validated"` and
-  `auto_policy_evidence_scope = "cpu_static_policy_experimental"`; these
-  labels distinguish CPU policy evidence from the separately evaluated,
-  experimental CUDA policy. CUDA auto is L40S-calibrated for cold
-  full-self-search, records `auto_policy_status =
-  "experimental_l40s_calibrated_cold_full_self_search"`, and is not a general
-  hardware or query-workload policy.
+  `auto_policy_evidence_scope = "cpu_static_policy_experimental"`. CUDA
+  auto is a separately evaluated but still experimental L40S-calibrated
+  policy for cold full-self-search and records `auto_policy_status =
+  "experimental_l40s_calibrated_cold_full_self_search"`; neither label
+  implies general workload or hardware validation.
   Expected future query batches are not an input; use a
   fitted or cached index when construction will be amortized. A
   capability-compatible machine that differs from

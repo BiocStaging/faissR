@@ -78,14 +78,15 @@ report <- c(
   sprintf("Observed replicate rows: %d.", nrow(rows)),
   sprintf("Planned operating cells: %d.", expected_cells),
   sprintf("Observed operating cells: %d.", nrow(cells)),
-  sprintf("Operating points met: %d.", sum(cells$operating_point_met)),
+  sprintf("Point-screen operating points met: %d.", sum(cells$operating_point_met)),
   sprintf("Exact-audited cells: %d.", sum(cells$exact_audited)),
-  sprintf("Approximate target-met cells: %d.", sum(cells$approximate_target_met)),
+  sprintf("Approximate point-screen cells: %d.", sum(cells$approximate_target_met)),
   sprintf("Cells with stable selected method across successful replicates: %d.",
           sum(cells$selection_stable)),
   sprintf("Timeout replicate rows: %d.", sum(rows$status == "timeout")),
   "",
-  "Target attainment means mean recall@k meets the requested threshold in every prespecified validation replicate.",
+  "This historical CPU-auto audit uses a point-recall screen: mean recall@k must meet the requested threshold in every prespecified replicate.",
+  "It is not the empirical query-bootstrap lower-bound validation-attainment criterion used by the final recall-inference audit.",
   "Exhaustive-family selections are reported separately as exact-audited cells.",
   paste("Design audit:", if (design_pass) "PASS" else "FAIL")
 )

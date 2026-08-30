@@ -1,0 +1,42 @@
+name: Native memory smoke
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '19 3 * * 1'
+
+jobs:
+  valgrind:
+    runs-on: ubuntu-latest
+    env:
+      FAISSR_REQUIRE_FAISS: 1
+      FAISSR_USE_CUDA: 0
+      FAISSR_USE_CUVS: 0
+      FAISSR_USE_CUGRAPH: 0
+      FAISS_HOME: /tmp/faiss
+      LD_LIBRARY_PATH: /tmp/faiss/lib
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          needs: check
+      - name: Build CPU FAISS and install valgrind
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build gfortran git libopenblas-dev liblapack-dev valgrind
+          git clone --depth 1 --branch v1.14.3 https://github.com/facebookresearch/faiss.git /tmp/faiss-src
+          cmake -S /tmp/faiss-src -B /tmp/faiss-build -G Ninja \
+            -DFAISS_ENABLE_GPU=OFF -DFAISS_ENABLE_PYTHON=OFF \
+            -DBUILD_TESTING=OFF -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=/tmp/faiss
+          cmake --build /tmp/faiss-build --parallel 2
+          cmake --install /tmp/faiss-build
+      - name: Install package and run isolated native smoke
+        run: |
+          R CMD INSTALL .
+          valgrind --error-exitcode=42 --leak-check=full \
+            --errors-for-leak-kinds=definite \
+            R --vanilla -f .github/scripts/native-memory-smoke.R

@@ -14,3 +14,8 @@ set -euo pipefail
 Rscript benchmark_scripts/jss_reproduction/analysis/analyze_recall_inference.R \
   --root="${RECALL_INFERENCE_ROOT}" \
   --out_dir="${RECALL_INFERENCE_ROOT}/analysis"
+
+Rscript benchmark_scripts/jss_reproduction/analysis/analyze_recall_sensitivity.R \
+  --root="${RECALL_INFERENCE_ROOT}" \
+  --out_dir="${RECALL_INFERENCE_ROOT}/analysis/recall_sensitivity" \
+  --datasets="${RECALL_SENSITIVITY_DATASETS:-flow18,mass41,imagenet}"

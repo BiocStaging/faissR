@@ -14212,7 +14212,9 @@ grid_self_knn <- function(
 #'   compiled backend path rather than repaired by R-side post-processing. CUDA
 #'   graph routes that do not yet expose compiled include-self output shaping
 #'   require `exclude_self = TRUE` and fail clearly instead of reshaping in R.
-#' @param backend Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
+#' @param backend Requested execution device: `"auto"`, `"cpu"`, or `"cuda"`.
+#'   The historical result field `backend_used` instead names the concrete
+#'   resolved provider/route and is retained for API compatibility. `"auto"`
 #'   uses a validated CUDA route only when the requested method/metric
 #'   combination is supported and CUDA/cuVS runtime support is available, and
 #'   otherwise resolves to CPU. Explicit `"cuda"` fails clearly when CUDA
@@ -14353,7 +14355,10 @@ grid_self_knn <- function(
 #'   `input_owns_data` so downstream packages can distinguish direct float32
 #'   payload use from one-time row-major conversion. Normalized Euclidean graph
 #'   routes for cosine/correlation record `metric_transform` and
-#'   `attr(result, "distance_transform")`. Indices are 1-based. The
+#'   `attr(result, "distance_transform")`. Indices are 1-based signed R
+#'   integers; CUDA result identifiers are signed int32. The public identifier
+#'   space is therefore limited to `.Machine$integer.max` reference rows,
+#'   although provider and memory limits are usually much lower. The
 #'   requested backend/method, tuning policy, resolved
 #'   backend, metric, exact/approximate flag, and self-query flag are stored in
 #'   attributes including `attr(result, "requested_backend")`,
