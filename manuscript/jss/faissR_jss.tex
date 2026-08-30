@@ -484,7 +484,7 @@ and executes
 \pkg{faissR} and the comparator within the same allocation and on the same
 node. The initially executed route is selected reproducibly at random for each
 validation seed and order alternates over five repetitions. Each route
-repetition uses an isolated proglang{R} worker. Dataset and exact-reference
+repetition uses an isolated \proglang{R} worker. Dataset and exact-reference
 loading precede timing, followed by an untimed 128-row API warm-up; the
 \pkg{faissR} fitted-index cache is then cleared. Cold one-shot time,
 reusable-index construction time, and fitted-index query time are recorded
@@ -620,13 +620,18 @@ recall or speed guarantee for arbitrary data distributions or hardware.
 
 \subsection{Matched-cell execution time}
 
-Table~\ref{tab:paired-time} reports dataset-level paired CUDA ratios. CPU HNSW
-provider ratios from separately submitted jobs are excluded because route and
-node effects were not experimentally paired. The controlled same-node CPU
-experiment described above is a required evidence gate: its cold-call,
-reusable-index build, and fitted-query results will be reported only after the
-allocation, order, completeness, and recall-equivalence audit passes. No CPU
-provider speedup is claimed from the analytically matched archive.
+Table~\ref{tab:paired-time} reports dataset-level ratios from the controlled
+CPU experiment and the paired CUDA analysis. The CPU design audit recovered
+all 720 planned route pairs; every pair shared a node and allocation and used
+opposing route positions. Of these, 691 completed successfully. All 29
+failures were time limits in the \pkg{BiocNeighbors} route. Requiring both
+routes to attain mean recall at least 0.99 left 253 cold-call pairs over seven
+datasets for \pkg{BiocNeighbors} and 268 pairs over eight datasets for
+\pkg{RcppHNSW}. The median of dataset-level cold-call ratios was 11.40 against
+\pkg{BiocNeighbors} and 1.85 against \pkg{RcppHNSW}. The latter comparison was
+heterogeneous: \pkg{faissR} was slower on flow18 and mass41, while ratios on
+the other target-equivalent datasets favored \pkg{faissR}. Only phases that
+pass the same recall-equivalence audit are included in performance summaries.
 
 On CUDA, automatic selection and explicit exhaustive routes had similar timing
 because 280 of 324 cells resolved to Flat. The selector carried modest dispatch
@@ -644,7 +649,7 @@ four-dataset estimate of performance on a wider population.
 
 \begin{table}[t]
 \centering
-\caption{Matched-cell CUDA end-to-end speed ratios, defined as
+\caption{Controlled matched-cell end-to-end speed ratios, defined as
 $T_{\mathrm{second\ route}}/T_{\mathrm{first\ route}}$. Values greater than one
 favor the first route. Ratios are summarized within dataset and then across
 datasets.}
@@ -653,6 +658,8 @@ datasets.}
 \toprule
 Comparison & Datasets & Median & IQR & Range \\
 \midrule
+CPU \pkg{faissR} HNSW / \pkg{BiocNeighbors} HNSW, cold & 7 & 11.40 & 3.81--13.42 & 2.72--23.66 \\
+CPU \pkg{faissR} HNSW / \pkg{RcppHNSW}, cold & 8 & 1.85 & 0.79--2.34 & 0.70--4.90 \\
 CUDA automatic / explicit exact & 9 & 0.99 & 0.98--1.00 & 0.94--1.01 \\
 CUDA automatic / brute force & 9 & 0.87 & 0.83--1.18 & 0.70--1.90 \\
 CUDA automatic / CAGRA & 9 & 2.23 & 1.00--2.58 & 0.81--10.96 \\
@@ -672,8 +679,8 @@ selection. Neither establishes cross-collection generalization. CPU
 \method{auto} was not independently evaluated, so selector claims are limited
 to CUDA; CPU results concern explicit HNSW. The CPU partition is
 heterogeneous, and the CUDA results describe an NVIDIA L40S rather than all
-accelerators. CPU provider speed ratios require completion of the controlled
-same-node experiment and are not inferred from the separate-job archive.
+accelerators. CPU provider ratios describe the controlled same-node cold-call
+experiment and are restricted to recall-equivalent pairs.
 GPU-resident output reduces transfer only when downstream code
 can consume the opaque device buffers. Finally, the completed external
 comparison evidence remains incomplete. The controlled HNSW experiment covers

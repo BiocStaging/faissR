@@ -35,7 +35,9 @@ test_that("controlled paired CPU HNSW benchmark preserves experimental pairing",
     c(
       "benchmark_paired_hnsw.R",
       "run_paired_hnsw_cpu12.sh",
-      "audit_paired_hnsw.R"
+      "audit_paired_hnsw.R",
+      "run_paired_hnsw_fitted_cpu12.sh",
+      "run_paired_hnsw_fitted_audit_cpu12.sh"
     )
   )
   if (!all(file.exists(required))) {
@@ -56,6 +58,9 @@ test_that("controlled paired CPU HNSW benchmark preserves experimental pairing",
   expect_match(worker, "cold_call_sec", fixed = TRUE)
   expect_match(worker, "fitted_build_sec", fixed = TRUE)
   expect_match(worker, "fitted_query_sec", fixed = TRUE)
+  expect_match(worker, "k = k + 1L", fixed = TRUE)
+  expect_match(worker, "remove_query_self(out, rows, k)", fixed = TRUE)
+  expect_match(worker, 'phases %in% c("both", "fitted")', fixed = TRUE)
   expect_match(worker, "isolated route worker", fixed = TRUE)
   expect_match(audit, "cold_call_sec_comparator / paired$cold_call_sec_faissR", fixed = TRUE)
   expect_match(audit, "same_allocation", fixed = TRUE)

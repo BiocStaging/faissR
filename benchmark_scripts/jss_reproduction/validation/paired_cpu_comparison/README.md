@@ -22,7 +22,9 @@ Three quantities are kept separate:
 Both routes receive the same R double matrix. This controls representation for
 the paired algorithm/provider comparison; separate system ablations quantify
 faissR's float32 input advantage. Mean recall@k and minimum query recall are
-recorded for both cold and fitted results. A speed ratio is always
+recorded for both cold and fitted results. Fitted searches request one extra
+candidate and remove the validation row's identical copy from the training
+index before quality is calculated. A speed ratio is always
 `T_comparator / T_faissR`, so values above one favor faissR.
 
 Euclidean distance is the primary reusable-index comparison because all three
@@ -47,3 +49,16 @@ sbatch --dependency=afterany:${PAIR_JOB} \
 The audit uses `afterany` deliberately so failures and timeouts remain visible.
 It fails unless all 720 planned pairs are present and each pair proves matching
 hostname/allocation and opposite route positions.
+
+The fitted-only launcher repeats the controlled build/query phase without the
+already completed cold one-shot phase. It is intended for a focused fitted
+index audit and writes to `paired_cpu_fitted` so it cannot overwrite the full
+campaign:
+
+```bash
+PAIR_JOB=$(sbatch --parsable \
+  benchmark_scripts/jss_reproduction/validation/paired_cpu_comparison/run_paired_hnsw_fitted_cpu12.sh)
+
+sbatch --dependency=afterany:${PAIR_JOB} \
+  benchmark_scripts/jss_reproduction/validation/paired_cpu_comparison/run_paired_hnsw_fitted_audit_cpu12.sh
+```

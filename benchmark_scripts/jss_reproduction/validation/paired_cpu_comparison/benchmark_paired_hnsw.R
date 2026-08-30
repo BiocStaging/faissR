@@ -114,11 +114,11 @@ build_reusable <- function(x, route, k, threads, target_recall, algorithm_seed) 
 query_reusable <- function(index, x, route, rows, k, threads, target_recall) {
   if (identical(route, "faissR_hnsw")) {
     out <- faissR:::knn_predict_with_fitted_nn_index(
-      object = index, query = x[rows, , drop = FALSE], k = k,
+      object = index, query = x[rows, , drop = FALSE], k = k + 1L,
       backend = "cpu", tuning = "auto", target_recall = target_recall
     )
     if (is.null(out)) stop("faissR fitted HNSW index was not reused.", call. = FALSE)
-    return(standardize(out))
+    return(remove_query_self(out, rows, k))
   }
   query_index(index, route, x, rows, k, threads, "euclidean")
 }
@@ -160,6 +160,7 @@ base_result <- function(config, n, p) {
     threads = config$threads %||% NA_integer_,
     input_representation = "R_double_matrix_for_both_routes",
     warmup_scope = "untimed_128_row_one_shot_then_faissR_cache_clear",
+    benchmark_phases = config$phases %||% "both",
     cold_call_sec = NA_real_,
     cold_recall_at_k = NA_real_,
     cold_min_query_recall = NA_real_,
@@ -209,36 +210,41 @@ run_worker <- function(config) {
     config$algorithm_seed
   )
   gc()
-  if (identical(config$route, "faissR_hnsw")) clear_faissr_cache()
-  started <- proc.time()[["elapsed"]]
-  cold <- run_one_shot(
-    x, config$route, config$k, config$threads, config$target_recall,
-    config$algorithm_seed
-  )
-  result$cold_call_sec <- proc.time()[["elapsed"]] - started
-  cold_quality <- quality(
-    subset_knn(cold, rows, config$k), reference, config$k
-  )
-  result$cold_recall_at_k <- cold_quality$recall_at_k
-  result$cold_min_query_recall <- cold_quality$min_query_recall
+  phases <- config$phases %||% "both"
+  if (phases %in% c("both", "cold")) {
+    if (identical(config$route, "faissR_hnsw")) clear_faissr_cache()
+    started <- proc.time()[["elapsed"]]
+    cold <- run_one_shot(
+      x, config$route, config$k, config$threads, config$target_recall,
+      config$algorithm_seed
+    )
+    result$cold_call_sec <- proc.time()[["elapsed"]] - started
+    cold_quality <- quality(
+      subset_knn(cold, rows, config$k), reference, config$k
+    )
+    result$cold_recall_at_k <- cold_quality$recall_at_k
+    result$cold_min_query_recall <- cold_quality$min_query_recall
+  }
 
-  if (identical(config$route, "faissR_hnsw")) clear_faissr_cache()
-  gc()
-  started <- proc.time()[["elapsed"]]
-  index <- build_reusable(
-    x, config$route, config$k, config$threads, config$target_recall,
-    config$algorithm_seed
-  )
-  result$fitted_build_sec <- proc.time()[["elapsed"]] - started
-  started <- proc.time()[["elapsed"]]
-  fitted <- query_reusable(
-    index, x, config$route, rows, config$k, config$threads,
-    config$target_recall
-  )
-  result$fitted_query_sec <- proc.time()[["elapsed"]] - started
-  fitted_quality <- quality(fitted, reference, config$k)
-  result$fitted_recall_at_k <- fitted_quality$recall_at_k
-  result$fitted_min_query_recall <- fitted_quality$min_query_recall
+  if (phases %in% c("both", "fitted")) {
+    if (identical(config$route, "faissR_hnsw")) clear_faissr_cache()
+    gc()
+    started <- proc.time()[["elapsed"]]
+    index <- build_reusable(
+      x, config$route, config$k, config$threads, config$target_recall,
+      config$algorithm_seed
+    )
+    result$fitted_build_sec <- proc.time()[["elapsed"]] - started
+    started <- proc.time()[["elapsed"]]
+    fitted <- query_reusable(
+      index, x, config$route, rows, config$k, config$threads,
+      config$target_recall
+    )
+    result$fitted_query_sec <- proc.time()[["elapsed"]] - started
+    fitted_quality <- quality(fitted, reference, config$k)
+    result$fitted_recall_at_k <- fitted_quality$recall_at_k
+    result$fitted_min_query_recall <- fitted_quality$min_query_recall
+  }
   result$status <- "success"
   result
 }
@@ -321,6 +327,10 @@ main <- function() {
   reference_k <- positive_int(args$reference_k, 100L, "reference_k")
   seeds <- as.integer(strsplit(args$seeds %||% "20260706,20260807", ",", fixed = TRUE)[[1L]])
   target_recall <- as.numeric(args$target_recall %||% "0.99")
+  phases <- tolower(args$phases %||% "both")
+  if (!phases %in% c("both", "cold", "fitted")) {
+    stop("`--phases` must be both, cold, or fitted.", call. = FALSE)
+  }
   out_dir <- args$out_dir %||% file.path(getwd(), "paired_cpu_comparison")
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
   results_path <- file.path(out_dir, "jss_paired_hnsw_raw.csv")
@@ -347,7 +357,7 @@ main <- function() {
           repeat_id = repeat_id, pair_seed = pair_seed, pair_id = pair_id,
           order_position = position, algorithm_seed = seed + repeat_id,
           threads = threads, quality_n = quality_n,
-          reference_k = reference_k
+          reference_k = reference_k, phases = phases
         ), timeout, script)
         append_csv(result, results_path)
       }

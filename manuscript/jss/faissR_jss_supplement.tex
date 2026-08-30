@@ -312,6 +312,8 @@ CUDA automatic held-out cells & 324 & 324 \\
 CPU HNSW held-out cells & 304 & 324 \\
 CUDA LOODO operating-point cells & 324 & 324 \\
 CUDA LOODO method-family agreement & 300 & 324 \\
+Controlled CPU HNSW route pairs & 720 & 720 \\
+Successful controlled CPU HNSW pairs & 691 & 720 \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -321,9 +323,38 @@ cells. All IVF-selected cells met the target in every replicate. Dataset-level
 paired speed ratios (first route favored when greater than one) were 0.99 for
 automatic versus explicit exact, 0.87 versus brute force, and 2.23 versus
 CAGRA. In IVF-selected cells the median ratio versus exact was 4.59 across four
-datasets, with a range of 0.14--5.83. CPU provider speed ratios are withheld
-until the controlled same-node HNSW audit is complete; the separate-job archive
-is not used to estimate a software speedup.
+datasets, with a range of 0.14--5.83. CPU provider ratios from non-equivalent
+or separately submitted calls are not used. In the controlled cold-call
+experiment, 253 \pkg{BiocNeighbors} pairs across seven datasets and 268
+\pkg{RcppHNSW} pairs across eight datasets attained mean recall at least 0.99
+for both routes. Median dataset-level ratios were 11.40 and 1.85,
+respectively; all 29 execution failures were \pkg{BiocNeighbors} time limits.
+
+\begin{table}[ht]
+\centering
+\small
+\caption{Controlled CPU HNSW cold-call results by dataset. Entries give
+completed pairs, recall-equivalent pairs, and the median
+$T_{\mathrm{comparator}}/T_{\mathrm{faissR}}$ among recall-equivalent pairs.
+A dash means that no completed pair attained 0.99 for both routes.}
+\label{tab:supp-cpu-paired}
+\begin{tabular}{@{}lrrr|rrr@{}}
+\toprule
+& \multicolumn{3}{c}{\pkg{BiocNeighbors}} & \multicolumn{3}{c}{\pkg{RcppHNSW}} \\
+Dataset & Complete & Target & Ratio & Complete & Target & Ratio \\
+\midrule
+COIL20 & 40 & 40 & 15.27 & 40 & 40 & 2.70 \\
+FashionMNIST & 40 & 40 & 11.40 & 40 & 40 & 2.22 \\
+FR-FCM-ZYRM & 21 & 0 & -- & 40 & 10 & 0.81 \\
+flow18 & 40 & 40 & 2.83 & 40 & 40 & 0.72 \\
+ImageNet features & 30 & 0 & -- & 40 & 0 & -- \\
+mass41 & 40 & 40 & 2.72 & 40 & 40 & 0.70 \\
+MetRef & 40 & 40 & 4.79 & 40 & 40 & 1.82 \\
+MNIST & 40 & 40 & 11.57 & 40 & 40 & 1.87 \\
+USPS & 40 & 13 & 23.66 & 40 & 18 & 4.90 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \begin{table}[ht]
 \centering
