@@ -1274,7 +1274,10 @@ finish_fitted_faiss_prediction <- function(
         metric,
         exact
     )
-    result <- append_nn_tuning_metadata(result, object$nn_index_params %||% list())
+    result <- append_nn_tuning_metadata(
+        result,
+        object$nn_index_params %||% list()
+    )
     finish_float32_direct_result(result, out)
 }
 

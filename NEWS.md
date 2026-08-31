@@ -1,3 +1,10 @@
+# faissR 0.99.33
+
+* Resolves the BiocCheck source-formatting note by keeping R, Rd, NAMESPACE,
+  and vignette source lines within 80 characters.
+* Preserves the 50-line function limit by extracting internal route and
+  metadata helpers without changing the public API.
+
 # faissR 0.99.32
 
 * Fixes Windows ARM64 installation warnings by using the existing C++ exact

@@ -20,7 +20,11 @@ coerce_knn_input <- function(indices, distances = NULL, arg_name = "indices") {
 
 unpack_knn_input <- function(indices, distances, arg_name) {
     if (!is.null(distances)) {
-        return(list(indices = indices, distances = distances, backend = NA_character_))
+        return(list(
+            indices = indices,
+            distances = distances,
+            backend = NA_character_
+        ))
     }
     required <- is.list(indices) &&
         all(c("indices", "distances") %in% names(indices))
@@ -34,7 +38,8 @@ unpack_knn_input <- function(indices, distances, arg_name) {
     list(
         indices = indices$indices,
         distances = indices$distances,
-        backend = attr(indices, "resolved_backend") %||% attr(indices, "backend")
+        backend = attr(indices, "resolved_backend") %||%
+            attr(indices, "backend")
     )
 }
 
@@ -568,7 +573,12 @@ normalized_float32_transform_cached <- function(x, metric, role = "data") {
 }
 
 normalized_float32_cache_key <- function(metric, dims, fingerprint) {
-    paste(metric, paste(as.integer(dims), collapse = "x"), fingerprint, sep = ":")
+    paste(
+        metric,
+        paste(as.integer(dims), collapse = "x"),
+        fingerprint,
+        sep = ":"
+    )
 }
 
 find_normalized_float32_cache_entry <- function(key, enabled) {

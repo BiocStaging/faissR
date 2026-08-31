@@ -32,12 +32,17 @@ nearest-neighbour search and is not a functional platform result.
 
 # Tested combinations
 
-| Purpose | Platform and R | Native providers | Compiler information |
-|---|---|---|---|
-| Functional CPU install and package check | macOS arm64; R 4.6.0 | FAISS 1.14.3; libomp 22.1.x | Homebrew clang 22.1.1; GNU Fortran 12.2.0 |
-| Publication CPU/CUDA campaign | Debian 13; R 4.5.3; NVIDIA L40S, driver 595.58.03 | FAISS 1.14.3; cuVS 26.06; CUDA 13.2 | Compiler executable/version was not retained in the frozen image |
-| Repository CPU CI definition | Ubuntu; current Bioconductor devel R | FAISS 1.14.3 built from source | Hosted GCC/GFortran toolchain recorded by the job |
-| Repository CPU CI definition | macOS; current Bioconductor devel R | Homebrew FAISS and libomp | Hosted clang/GFortran toolchain recorded by the job |
+* **Functional CPU package check:** macOS arm64 with R 4.6.0, FAISS 1.14.3,
+    libomp 22.1.x, Homebrew clang 22.1.1, and GNU Fortran 12.2.0.
+* **Publication CPU/CUDA campaign:** Debian 13 with R 4.5.3, FAISS 1.14.3,
+    cuVS 26.06, CUDA 13.2, and an NVIDIA L40S with driver 595.58.03. The frozen
+    image did not retain the compiler executable and version.
+* **Linux CPU CI definition:** Ubuntu with the current Bioconductor devel R,
+    FAISS 1.14.3 built from source, and the hosted GCC/GFortran toolchain
+    recorded by the job.
+* **macOS CPU CI definition:** macOS with the current Bioconductor devel R,
+    Homebrew FAISS and libomp, and the hosted clang/GFortran toolchain recorded
+    by the job.
 
 The CI rows describe tracked workflows. They become release evidence only
 after the corresponding hosted jobs complete successfully.
@@ -137,14 +142,21 @@ compiled against the provider and the runtime device must also be available.
 
 # Common failures
 
-| Message or symptom | Interpretation | Resolution |
-|---|---|---|
-| FAISS headers/library not found | No compatible FAISS prefix was discovered | Set `FAISS_HOME`; verify `include/faiss/Index.h` and `lib/libfaiss.*`. |
-| `omp.h` not found on macOS | FAISS headers require an OpenMP runtime not visible to clang | Install `libomp` and set `LIBOMP_HOME`. |
-| Package loads but `faiss_available()` is false | This is a diagnostic-only artifact | Install from source with FAISS and `FAISSR_REQUIRE_FAISS=1`. |
-| `libfaiss` or `GLIBCXX_*` load failure | Runtime linker/compiler ABI mismatch | Use one compiler/runtime stack and expose its library directory through the platform linker path. |
-| CUDA requested but `nvcc` is missing | CUDA toolkit was not discovered | Set `CUDA_HOME`/`NVCC` and check `nvcc --version`. |
-| cuVS route unavailable | cuVS was absent at compile time or cannot load at runtime | Set `CUVS_HOME`, use `FAISSR_REQUIRE_CUVS=1`, and repair the runtime library path. |
+* **FAISS headers or library not found:** no compatible prefix was discovered.
+    Set `FAISS_HOME`, then verify `include/faiss/Index.h` and `lib/libfaiss.*`.
+* **`omp.h` not found on macOS:** FAISS headers require an OpenMP runtime that
+    clang cannot see. Install `libomp` and set `LIBOMP_HOME`.
+* **The package loads but `faiss_available()` is false:** this is a
+    diagnostic-only artifact. Install from source with FAISS and set
+    `FAISSR_REQUIRE_FAISS=1`.
+* **`libfaiss` or `GLIBCXX_*` load failure:** the runtime linker and compiler
+    ABI do not match. Use one compiler/runtime stack and expose its library
+    directory through the platform linker path.
+* **CUDA requested but `nvcc` is missing:** the CUDA toolkit was not found.
+    Set `CUDA_HOME` or `NVCC`, then check `nvcc --version`.
+* **cuVS route unavailable:** cuVS was absent at compile time or cannot load at
+    runtime. Set `CUVS_HOME`, use `FAISSR_REQUIRE_CUVS=1`, and repair the
+    runtime library path.
 
 # Checks and licenses
 

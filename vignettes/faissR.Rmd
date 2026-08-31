@@ -213,11 +213,13 @@ provider, `flat` explicitly requests FAISS Flat, and CUDA `bruteforce` prefers
 direct cuVS brute force. They should have the same neighbor quality; timing
 differences measure provider and wrapper overhead.
 
-| Public name | CPU | CUDA capability resolution | Choose it when... |
-|---|---|---|---|
-| `exact` | FAISS Flat | FAISS GPU Flat, otherwise direct cuVS brute force | any exhaustive provider is acceptable |
-| `flat` | FAISS Flat | FAISS GPU Flat; errors when unavailable | FAISS Flat is required explicitly |
-| `bruteforce` | FAISS Flat | direct cuVS brute force, otherwise FAISS GPU Flat | direct cuVS exhaustive search is preferred on CUDA |
+* `exact` uses FAISS Flat on CPU. On CUDA it resolves to FAISS GPU Flat or
+    direct cuVS brute force. Choose it when any exhaustive provider is
+    acceptable.
+* `flat` explicitly requires FAISS Flat on CPU or CUDA and errors when that
+    provider is unavailable.
+* `bruteforce` uses FAISS Flat on CPU. On CUDA it prefers direct cuVS brute
+    force and otherwise uses FAISS GPU Flat.
 
 The metric-specific value in `backend_used` is authoritative for the current
 installation.
