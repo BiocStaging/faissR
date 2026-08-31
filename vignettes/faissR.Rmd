@@ -122,23 +122,23 @@ functional FAISS builds.
 
 # Example data
 
-The examples use the `ALL` acute lymphoblastic leukemia expression dataset
-from Bioconductor. The assay contains patients in columns and probes in rows.
-The code transposes the assay, retains the 128 probes with the largest finite
+The examples use `Biobase::sample.ExpressionSet`, a Bioconductor example
+expression dataset. The assay contains samples in columns and features in rows.
+The code transposes the assay, retains the 128 features with the largest
 variance, and standardizes them. The resulting sample-by-feature matrix follows
-the input convention used by `faissR`, while the leukemia lineage is used as a
-classification response.
+the input convention used by `faissR`, while the bundled case/control `type`
+annotation is used as a classification response.
 
 ```{r data}
 library("faissR")
 
-data("ALL", package = "ALL")
-all_expression <- Biobase::exprs(ALL)
-probe_variance <- apply(all_expression, 1L, stats::var)
-selected_probes <- order(probe_variance, decreasing = TRUE)[seq_len(128L)]
-x <- scale(t(all_expression[selected_probes, , drop = FALSE]))
+data("sample.ExpressionSet", package = "Biobase")
+expression_data <- Biobase::exprs(sample.ExpressionSet)
+feature_variance <- apply(expression_data, 1L, stats::var)
+selected_features <- order(feature_variance, decreasing = TRUE)[seq_len(128L)]
+x <- scale(t(expression_data[selected_features, , drop = FALSE]))
 storage.mode(x) <- "double"
-groups <- droplevels(Biobase::pData(ALL)$BT)
+groups <- droplevels(Biobase::pData(sample.ExpressionSet)$type)
 dim(x)
 table(groups)
 ```

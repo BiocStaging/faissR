@@ -1,4 +1,6 @@
 useDynLib(faissR, .registration = TRUE)
+importFrom(Biobase,exprs)
+importFrom(Biobase,pData)
 importFrom(Rcpp, evalCpp)
 importFrom(methods, as)
 importFrom(stats, dist)

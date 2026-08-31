@@ -1,3 +1,9 @@
+# faissR 0.99.34
+
+* Adds `Biobase` as a Bioconductor dependency and uses its bundled
+  `sample.ExpressionSet` dataset in the vignette and nearest-neighbour
+  reference example.
+
 # faissR 0.99.33
 
 * Resolves the BiocCheck source-formatting note by keeping R, Rd, NAMESPACE,

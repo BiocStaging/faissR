@@ -1,7 +1,7 @@
 Package: faissR
 Type: Package
 Title: FAISS-Backed Nearest Neighbours, kNN Models, and k-Means
-Version: 0.99.33
+Version: 0.99.34
 Authors@R: person(given = "Stefano",
     family = "Cacciatore",
     role = c("aut", "cre"),
@@ -40,11 +40,10 @@ biocViews:
     FunctionalPrediction
 Encoding: UTF-8
 Imports:
+    Biobase,
     methods,
     Rcpp
 Suggests:
-    ALL,
-    Biobase,
     BiocStyle,
     knitr,
     Matrix,

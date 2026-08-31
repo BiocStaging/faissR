@@ -11,9 +11,9 @@ nn(
     exclude_self = FALSE,
     backend = NULL,
     method = c(
-        "auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf",
-        "ivfpq", "vamana_style", "nsg_style", "nndescent_style",
-        "ivfpq_fastscan", "cagra"
+"auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf",
+"ivfpq", "vamana_style", "nsg_style", "nndescent_style",
+"ivfpq_fastscan", "cagra"
     ),
     metric = c("euclidean", "cosine", "correlation"),
     tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
@@ -318,6 +318,20 @@ x <- scale(as.matrix(iris[, 1:4]))
 knn_euclidean <- nn(x, k = 16, metric = "euclidean", backend = "cpu")
 knn_cosine <- nn(x, k = 16, metric = "cosine", backend = "cpu")
 knn_correlation <- nn(x, k = 16, metric = "correlation", backend = "cpu")
+
+if (faiss_available()) {
+data("sample.ExpressionSet", package = "Biobase")
+expression_data <- Biobase::exprs(sample.ExpressionSet)
+x_biobase <- scale(t(expression_data[seq_len(32L), , drop = FALSE]))
+expression_knn <- nn(
+x_biobase,
+k = 3,
+backend = "cpu",
+method = "exact",
+exclude_self = TRUE
+)
+dim(expression_knn$indices)
+}
 }
 \references{
 Johnson J, Douze M, Jegou H. Billion-scale similarity search with GPUs. IEEE
