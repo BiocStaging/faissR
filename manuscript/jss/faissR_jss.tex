@@ -1020,18 +1020,24 @@ and set \code{OMP\_NUM\_THREADS}, \code{OPENBLAS\_NUM\_THREADS}, and
 Linux affinity mask, so equal requested thread limits must not be interpreted
 as verified equal utilization.
 
-Reusable-index and result-residency benefits are not part of the current
-quantitative evidence. Prespecified planned experiments address these systems
-questions separately rather than mixing them into algorithm comparisons. The
-reusable-index protocol will record HNSW construction and fitted-query time independently at the
-provider-specific configuration selected on calibration queries, then audits
-recall on independent queries. Query batches contain 1, 32, and up to 1,024
-rows; amortized totals and the break-even batch count against repeatedly
-rebuilt Flat search will be derived from measured cold and repeated-query times.
-Each planned memory cell runs in an isolated worker, so Linux \code{VmHWM} is scoped to
-one cell rather than inherited from an earlier benchmark. Native external
-pointers do not provide a portable serialized index, and persistence cost is
-therefore reported as unsupported rather than timed.
+Two completed extensions distinguish index reuse from cold search. First, an
+independently tuned CPU HNSW experiment selected a configuration for each
+provider using calibration seed 20260706 and evaluated it on seed 20260807.
+It separately measured cold calls, direct fitted-index construction, and
+fitted-index queries over five validation repetitions. Second, the workload
+experiment evaluated 1, 32, and up to 1,024 external query rows on five
+datasets, recording a cold call and repeated identical queries. Its reported
+construction component is the explicit estimate
+\(\max(0,T_{\mathrm{cold}}-T_{\mathrm{warm}})\), rather than an instrumented
+provider build timer. Amortized totals use
+\(T_{\mathrm{cold}}+(A-1)T_{\mathrm{warm}}\) for \(A\) query batches. Native
+external pointers remain session-local; portable index serialization is
+unsupported and is not timed.
+
+Isolated peak-memory and GPU-residency benefits are not yet part of the
+quantitative evidence. Each planned memory cell will use an isolated worker so
+Linux \code{VmHWM} is scoped to one cell rather than inherited from a prior
+calculation.
 
 The planned CUDA residency protocol will time three phases from the same
 \class{faissR\_gpu\_knn} result: search before materialization, a kernel in a
@@ -1244,6 +1250,26 @@ parameters were prespecified rather than independently tuned and active thread
 use was not observed, neither the conditional medians nor the timeouts estimate
 a general provider-level speed advantage. The supplement reports the
 per-dataset ratios, completion counts, eligibility counts, and timeout marks.
+
+The independently tuned extension provides a stronger but still deliberately
+narrow CPU comparison. It completed all 720 route runs and yielded 63/72
+target-matched provider pairs (31 with \pkg{BiocNeighbors} and 32 with
+\pkg{RcppHNSW}). For cold calls, the median
+\(T_{\mathrm{comparator}}/T_{\mathrm{faissR}}\) was 6.55 for
+\pkg{BiocNeighbors} HNSW (IQR 3.12--10.30) and 1.67 for \pkg{RcppHNSW}
+(IQR 0.88--2.02). Fitted-index construction showed corresponding medians of
+11.50 and 1.63. Fitted-query medians were 0.90 and 1.12, respectively, showing
+that build-time differences do not imply a universal repeated-query advantage.
+These are independently tuned HNSW configurations at the specified 0.99
+point-recall screen, not an all-package or all-workload ranking.
+
+The workload experiment completed all 60 cells on each backend. CPU observed a
+fitted-index cache hit in all 60 cells; HNSW had lower repeated-query time than
+rebuilt Flat in every tested CPU cell, with a median break-even of 13 batches.
+CUDA did not observe a fitted-index cache hit in these calls, so its repeated
+timings do not establish GPU index reuse. These results reinforce the scope of
+the installed selector: it is a cold-search convenience, rather than a policy
+for amortized repeated-query execution.
 
 These medians are explicitly conditional on successful, point-recall-matched
 pairs. They do not assign a favorable runtime to a timeout: the figure reports

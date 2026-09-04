@@ -1,6 +1,6 @@
 # faissR JSS deliverables
 
-Package snapshot: faissR 0.99.28
+Package snapshot: faissR 0.99.34
 
 ## Tracked source
 
@@ -28,12 +28,14 @@ version control:
 ## Evidence boundary
 
 The manuscript and supplement report the version-pinned calibration, held-out,
-leave-one-dataset-out, route-contract, and controlled same-node CPU HNSW
-evidence. The evaluation contains nine real datasets with metric-matched exact
-references. The replication entry point verifies archive and controlled-pair
-checksums before recreating all manuscript tables and the paired log-ratio
-figure.
+leave-one-dataset-out, route-contract, controlled same-node CPU HNSW,
+independently tuned CPU HNSW, and query-workload evidence. The evaluation
+contains nine real datasets with metric-matched exact references. The
+replication entry point verifies archive and controlled-pair checksums before
+recreating all manuscript tables and the paired log-ratio figure. The broad
+seven-package comparison is excluded because the current evidence transfer
+contains 204 of 216 expected task files.
 
-The JSS-layout article is currently 17 pages. Generated PDF and Word reading
+The JSS-layout article is currently 27 pages. Generated PDF and Word reading
 copies, the vignette, and the reference manual must be regenerated from these
 tracked sources for the submission bundle.

@@ -109,6 +109,12 @@ independent-query evaluation, reusable-index
 experiments, auto-versus-oracle analysis, and archive checksums. Only evidence
 that passes the corresponding audit is eligible for a reported result.
 
+The 2026-09-04 evidence transfer additionally contains completed, audited
+independently tuned CPU HNSW and query-workload studies. Their numerical
+summaries are reported in the manuscript and supplement. The broad
+seven-package comparison transfer contains 204 of 216 expected task files and
+is deliberately excluded from numerical claims until its audit is complete.
+
 The current JSS instructions request a commented replication script, rendered
 output, session information, and a feasible reduced path when full experiments
 need special hardware: <https://www.jstatsoft.org/authors>.

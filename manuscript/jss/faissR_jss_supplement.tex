@@ -736,17 +736,17 @@ The comparator settings were fixed before execution:
 prespecified-configuration comparisons rather than provider-optimal Pareto
 comparisons.
 
-The planned, not-yet-run independently tuned HNSW extension will evaluate recall--time Pareto curves for
-each provider. It varies search effort at every dataset--$k$ cell and varies
-construction effort at $k=30$. The fastest configuration attaining mean recall
-of at least 0.99 in all three calibration repetitions is selected separately
-for each provider and will be evaluated over five repetitions on independent queries.
-This is a point-recall calibration screen and is not called validation target
-attainment.
-Validation will record cold-call, direct index-build, and fitted-query times as
-separate measured phases. Fitted queries request $k+1$ neighbors and remove the
-known source row before recall is calculated. No fitted ratio enters the paper
-unless both providers attain the target in every validation repetition.
+The independently tuned HNSW extension is complete. It varied search effort at
+every dataset--$k$ cell and construction effort at $k=30$. The fastest
+configuration attaining mean recall of at least 0.99 in all three calibration
+repetitions was selected separately for each provider and evaluated over five
+repetitions on independent queries. This is a point-recall calibration screen,
+not the empirical query-bootstrap validation-attainment criterion.
+Validation recorded cold-call, direct index-build, and fitted-query times as
+separate measured phases. Fitted queries requested $k+1$ neighbors and removed
+the known source row before recall was calculated. A phase-specific ratio was
+reported only where both providers attained the point-recall screen in every
+validation repetition.
 
 Both routes received the same R double matrix. \pkg{faissR} converted its input
 to the float32 representation required by FAISS inside the timed public call;
@@ -759,14 +759,12 @@ cost, not kernel-only search cost.
 
 Twelve threads were requested through each public API and through
 \code{OMP\_NUM\_THREADS}, \code{OPENBLAS\_NUM\_THREADS}, and
-\code{MKL\_NUM\_THREADS}. The completed run did not retain CPU affinity or
-sample active thread use. Accordingly, the article reports requested threads
-and same-node coexecution but makes no claim that providers used an identical
-number of active workers. The planned independently tuned Pareto protocol will record the
-Slurm allocation, Linux affinity mask, thread-control variables, and observed
-process thread counts before and after each call.
+\code{MKL\_NUM\_THREADS}. The independently tuned run additionally retained
+the Slurm allocation, Linux affinity mask, thread-control variables, and
+observed process-thread counts before and after each call. It still does not
+demonstrate identical internal worker use across providers.
 
-\section{Planned systems experiments (not reported)}
+\section{Completed workload experiments and planned systems experiments}
 
 Evidence status is used literally throughout this supplement:
 \emph{completed and reported} means that raw files passed their audit and
@@ -774,32 +772,63 @@ contribute to a result; \emph{completed but omitted} means an audited result
 was deliberately excluded (none in this release); \emph{ongoing} means that a
 job has started but contributes no evidence (none included here); and
 \emph{planned} means protocol code exists but no analysed result is claimed.
-The experiments in this section are planned. They are registered in the
+The workload and independently tuned HNSW experiments are completed and
+reported below. The remaining systems experiments are registered in the
 replication code but are not part of the analysed evidence archive used for
-the current manuscript. Accordingly, this section presents no
-fitted-index speed ratio, break-even count, isolated-memory estimate,
-device-to-host transfer advantage, or downstream-consumer timing. The current
-evidence for reusable indexes and GPU-resident output is limited to executable
-API, ownership, route, and conversion contract tests.
+this manuscript. No isolated-memory estimate, device-to-host transfer
+advantage, or downstream-consumer timing is claimed. The current evidence for
+GPU-resident output remains limited to executable API, ownership, route, and
+conversion contract tests.
 
-The planned query-workload experiment will evaluate explicit query batches of 1, 32, and
-1,024 rows on five datasets, with full self-search on the smaller datasets.
-The fitted-index cache is cleared before the first call. Subsequent identical
-queries will record whether the persistent index was reused. For each method, the
-audit will report cold time, repeated-query time, the explicit construction
-estimate $\max(0,T_{\mathrm{cold}}-T_{\mathrm{warm}})$, amortized totals for
-1, 10, and 100 batches, and the smallest batch count satisfying
+The completed query-workload experiment evaluated explicit query batches of 1,
+32, and up to 1,024 rows on five datasets. The fitted-index cache was cleared
+before the first call. Subsequent identical queries recorded whether a
+persistent index was reused. The audit reports cold time, repeated-query time,
+the explicit construction estimate
+$\max(0,T_{\mathrm{cold}}-T_{\mathrm{warm}})$, amortized totals for 1, 10,
+and 100 batches, and the smallest batch count satisfying
 \[
 T_{\mathrm{cold,method}}+(A-1)T_{\mathrm{warm,method}}
 \leq A T_{\mathrm{cold,Flat}}.
 \]
-Direct HNSW construction and fitted-query times will additionally be measured in
-the planned independently tuned provider experiment rather than inferred by
-subtraction. The resident-set increase across construction will provide an empirical
-index-memory estimate; the proglang{R} object size will be reported separately
-because it excludes native storage owned through an external pointer. Index
+Direct HNSW construction and fitted-query times were measured in the
+independently tuned provider experiment rather than inferred by subtraction.
+The resident-set increase across construction is retained as an index-memory
+diagnostic, while the \textsf{R} object size excludes native storage owned
+through an external pointer. Index
 external pointers are session-local and have no supported
 portable serialization; consequently, serialization cost is not reported.
+
+All 720 HNSW validation route runs completed. Of 72 provider--dataset--$k$
+pairs, 63 passed the prespecified 0.99 point-recall screen in every validation
+repeat for both providers. Among those pairs, the median
+\(T_{\mathrm{comparator}}/T_{\mathrm{faissR}}\) ratios for cold calls,
+fitted-index construction, and fitted-index queries are summarized in
+Table~\ref{tab:supp-tuned-hnsw}. The fitted-query result is intentionally
+reported separately: it measures a different workload from cold search.
+
+\begin{table}[h]
+\centering
+\caption{Independently tuned CPU HNSW results among pairs passing the
+prespecified 0.99 point-recall screen in every validation repeat. Ratios are
+\(T_{\mathrm{comparator}}/T_{\mathrm{faissR}}\); values above one favor
+\pkg{faissR}.}
+\label{tab:supp-tuned-hnsw}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Comparator & Eligible pairs & Cold median & Build median & Fitted-query median \\
+\midrule
+\pkg{BiocNeighbors} HNSW & 31 & 6.55 & 11.50 & 0.90 \\
+\pkg{RcppHNSW} HNSW & 32 & 1.67 & 1.63 & 1.12 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The query-workload audit completed 60/60 cells on CPU and 60/60 on CUDA.
+CPU observed a fitted-index cache hit in every cell; HNSW had lower warm-query
+time than rebuilt Flat in all 15 HNSW cells, with a median break-even of 13
+batches. CUDA observed no fitted-index cache hit in this experiment. The CUDA
+measurements therefore characterize repeated public calls, not GPU index reuse.
 
 The planned GPU-residency experiment will use 15 isolated cells: five datasets crossed
 with query batches of 1, 32, and up to 1,024 rows. A minimal downstream package
@@ -837,11 +866,12 @@ contracts.
 \toprule
 Experiment & Status and admissible claim \\
 \midrule
-Reusable-index/query workload & Planned, not run or analysed; functional reuse only. \\
-Recall-matched HNSW Pareto and fitted query & Planned, not run or analysed; no fitted speed ratio. \\
+Reusable-index/query workload & Completed: 60/60 CPU and 60/60 CUDA cells; CPU cache reuse and break-even results reported. \\
+Recall-matched HNSW Pareto and fitted query & Completed: 720/720 route runs; phase-specific results reported for 63 target-matched pairs. \\
 Isolated host/device memory & Planned, not run or analysed; no quantitative memory comparison. \\
 GPU-resident consumer and host transfer & Planned, not run or analysed; API ownership and explicit-transfer contract only. \\
 Direct native FAISS/cuVS overhead & Planned, not run or analysed; no R-interface-overhead estimate. \\
+Comprehensive seven-package comparison & Incomplete: 204/216 task files in the transferred archive; no numerical claim is made. \\
 Portable index serialization & Unsupported; no performance experiment is claimed. \\
 \bottomrule
 \end{tabularx}
@@ -870,6 +900,10 @@ CPU LOODO method-family agreement & 292 & 313 evaluable \\
 CPU LOODO abstentions & 4 & 324 \\
 Controlled CPU HNSW route pairs & 720 & 720 \\
 Successful controlled CPU HNSW pairs & 691 & 720 \\
+Independently tuned HNSW route runs & 720 & 720 \\
+Independently tuned HNSW target-matched provider pairs & 63 & 72 \\
+CPU query-workload cells & 60 & 60 \\
+CUDA query-workload cells & 60 & 60 \\
 \bottomrule
 \end{tabularx}
 \end{table}
