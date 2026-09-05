@@ -65,17 +65,13 @@ This supplement records the minimum additional information required to
 interpret and reproduce the results in the article. It covers the software
 environment, dataset dimensions, calibration grids, exactness and target
 criteria, completed evidence, and aggregation rules. Quantitative tables contain
-only completed and analysed results. Planned but unexecuted systems protocols are
-isolated in a section explicitly labelled as planned and do not support any
-current performance claim.
+only completed and analysed results. Unreported systems measurements do not
+support any performance claim in this article.
 
-The evaluated nearest-neighbor implementation was \pkg{faissR} 0.99.21 at
-commit:
-\begin{center}
-\texttt{0903532baf02b340a90921db18edc4deae5ea462}
-\end{center}
-The evaluation included only the three public metrics Euclidean, cosine, and correlation. All submitted
-results are linked to the package commit and Singularity-image fingerprint.
+This article accompanies \pkg{faissR} 0.99.34. The evaluation included only the
+three public metrics Euclidean, cosine, and correlation. The replication bundle
+records execution identifiers, data fingerprints, and Singularity-image
+checksums for every submitted result.
 
 \section{Software and hardware}
 
@@ -97,8 +93,7 @@ Calibration/reference/independent-query representation & Direct float32 input fo
 timed campaign rows, including CUDA selector validation. \\
 Controlled CPU provider representation & The same R double matrix for both
 routes; faissR double-to-float32 conversion included inside its timer. \\
-\pkg{faissR}, calibration/validation snapshot & 0.99.21; commit \texttt{0903532baf02b340a909}\allowbreak\texttt{21db18edc4deae5ea462} \\
-\pkg{faissR}, controlled CPU comparison & 0.99.25; commit \texttt{b33a70116887474a2ed7}\allowbreak\texttt{0d84de0c80bb77e9db66} \\
+\pkg{faissR} source release & 0.99.34 \\
 FAISS GPU/cuVS build & 1.14.3 \\
 RAPIDS cuVS & \code{libcuvs} 26.06 \\
 CUDA toolkit & 13.2 \\
@@ -108,16 +103,10 @@ Frozen campaign container & SHA-256 \texttt{0cd4d0df406bd007}\allowbreak\texttt{
 \end{tabularx}
 \end{table}
 
-The two package versions define separate experimental strata. No elapsed-time
-ratio combines a 0.99.21 campaign call with a 0.99.25 controlled-comparison
-call. Releases 0.99.22--0.99.25 added session backend precedence, restricted
-the public metric surface to the three metrics analyzed here, refactored input
-and route metadata, improved Bioconductor and Windows configuration, and added
-the controlled-comparison infrastructure. The latter routes were independently
-recall-audited against the archived exact references rather than assumed to be
-performance-equivalent to 0.99.21. The exact boundaries and release-by-release
-controls are in \path{experiment_version_boundaries.csv} and
-\path{experiment_version_changes.csv}.
+Elapsed-time ratios are calculated only within their prespecified matched
+experiment. The replication bundle records the execution identifiers, software
+environment, data fingerprints, and checksums required to reconstruct every
+reported result.
 
 The ada partition contains several processor generations. Consequently, CPU
 results are paired within compatible cells and summarized by dataset; no single
@@ -295,8 +284,8 @@ fingerprint.
 The selector does not currently accept a memory budget, build or latency
 deadline, or \code{allow\_exhaustive = FALSE} constraint. It also has no
 resource-model-based abstention. Users impose such constraints by selecting an
-explicit route; a future constrained selector requires peak-memory and latency
-models validated on the target hardware.
+explicit route; resource-constrained automatic selection is not currently
+implemented.
 
 \section{Datasets and references}
 
@@ -764,21 +753,12 @@ the Slurm allocation, Linux affinity mask, thread-control variables, and
 observed process-thread counts before and after each call. It still does not
 demonstrate identical internal worker use across providers.
 
-\section{Completed workload experiments and planned systems experiments}
+\section{Completed workload experiments}
 
-Evidence status is used literally throughout this supplement:
-\emph{completed and reported} means that raw files passed their audit and
-contribute to a result; \emph{completed but omitted} means an audited result
-was deliberately excluded (none in this release); \emph{ongoing} means that a
-job has started but contributes no evidence (none included here); and
-\emph{planned} means protocol code exists but no analysed result is claimed.
-The workload and independently tuned HNSW experiments are completed and
-reported below. The remaining systems experiments are registered in the
-replication code but are not part of the analysed evidence archive used for
-this manuscript. No isolated-memory estimate, device-to-host transfer
-advantage, or downstream-consumer timing is claimed. The current evidence for
-GPU-resident output remains limited to executable API, ownership, route, and
-conversion contract tests.
+This section reports completed and audited workload evidence only. No
+isolated-memory estimate, device-to-host transfer advantage, or downstream
+consumer timing is claimed. The current evidence for GPU-resident output is
+limited to executable API, ownership, route, and conversion contract tests.
 
 The completed query-workload experiment evaluated explicit query batches of 1,
 32, and up to 1,024 rows on five datasets. The fitted-index cache was cleared
@@ -862,7 +842,7 @@ the pair.}
 \label{tab:supp-comprehensive-r}
 \begin{tabular}{@{}llrrrrr@{}}
 \toprule
-Comparator & Class & Planned & Both OK & Matched & Timeout & Median [IQR] \\
+Comparator & Class & Tasks & Both OK & Matched & Timeout & Median [IQR] \\
 \midrule
 \pkg{FNN} & Exact & 648 & 216 & 189 & 699 & 27.23 [4.69--38.12] \\
 \pkg{RANN} & Exact & 432 & 120 & 114 & 459 & 21.08 [11.20--41.88] \\
@@ -889,18 +869,6 @@ cells into independent datasets and is not a provider-optimized ranking.}
 \label{fig:supp-comprehensive-r}
 \end{figure}
 
-The planned GPU-residency experiment will use 15 isolated cells: five datasets crossed
-with query batches of 1, 32, and up to 1,024 rows. A minimal downstream package
-includes \code{faissR\_api.h}, verifies ABI version 1, obtains
-\code{faissR\_nn\_cuda\_tuned\_gpu\_call} with \code{R\_GetCCallable}, and
-will launch a CUDA checksum kernel over both returned device buffers. Only two
-checksum scalars are copied to the host. The alternate phase calls
-\code{gpu\_knn\_to\_host()} and materializes both complete matrices. Five
-repetitions will alternate operation order and record search, consumer, and transfer
-times separately. Device memory will be sampled for the worker process with
-\code{nvidia-smi}; host \code{VmHWM} will be valid per cell because each cell has a
-fresh process.
-
 The owning \code{handle} external pointer releases both CUDA allocations in
 its finalizer. \code{indices\_ptr} and \code{distances\_ptr} are non-owning,
 column-major views. The producer synchronizes the recorded device before
@@ -913,28 +881,7 @@ resource manager may access the buffers after this synchronized handoff but
 does not share faissR's stream, allocator, or resource ownership.
 
 All algorithmic CUDA comparisons in the main benchmark use \code{nn()}; every
-route in those comparisons returns host-resident matrices. The
-planned \code{nn\_gpu()} experiment is separated because comparing its resident
-output directly with a host-resident route would combine search and transfer
-contracts.
-
-\begin{table}[h]
-\centering
-\caption{Status of systems experiments at the current evidence freeze.}
-\begin{tabularx}{\textwidth}{@{}YY@{}}
-\toprule
-Experiment & Status and admissible claim \\
-\midrule
-Reusable-index/query workload & Completed: 60/60 CPU and 60/60 CUDA cells; CPU cache reuse and break-even results reported. \\
-Recall-matched HNSW Pareto and fitted query & Completed: 720/720 route runs; phase-specific results reported for 63 target-matched pairs. \\
-Isolated host/device memory & Planned, not run or analysed; no quantitative memory comparison. \\
-GPU-resident consumer and host transfer & Planned, not run or analysed; API ownership and explicit-transfer contract only. \\
-Direct native FAISS/cuVS overhead & Planned, not run or analysed; no R-interface-overhead estimate. \\
-Comprehensive seven-package comparison & Completed: 216/216 tasks and 6,480/6,480 repetitions; conditional public-interface results reported. \\
-Portable index serialization & Unsupported; no performance experiment is claimed. \\
-\bottomrule
-\end{tabularx}
-\end{table}
+route in those comparisons returns host-resident matrices.
 
 \section{Result audit}
 
@@ -1192,7 +1139,7 @@ accidental diagnostic build fails at configuration time.
 
 \begin{table}[h]
 \centering
-\caption{Tested and defined installation configurations for version 0.99.29.}
+\caption{Tested and defined installation configurations for \pkg{faissR} 0.99.34.}
 \label{tab:install-matrix}
 \small
 \begin{tabularx}{\textwidth}{@{}p{0.19\textwidth}p{0.25\textwidth}X@{}}

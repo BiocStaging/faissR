@@ -119,7 +119,7 @@ candidate and exact result; recall separately penalizes missing exact neighbors.
 ## Experiment 2: comparison with other R packages
 
 The CPU comparison includes exported, task-equivalent routes from
-Rnanoflann, RANN, FNN, nabor, RcppAnnoy, RcppHNSW, rnndescent, and
+Rnanoflann, RANN, FNN, RcppAnnoy, RcppHNSW, rnndescent, and
 BiocNeighbors. `uwot` and `cuda.ml` remain API-audit rows because the frozen
 public APIs do not return an equivalent standalone self-KNN result. Do not time
 namespace internals or supervised prediction as a substitute.

@@ -37,6 +37,6 @@ figure. The complete seven-package public-interface comparison passed its
 216/216-task audit; its separately checksummed paired rows recreate the
 supplementary log-ratio figure and table summaries.
 
-The JSS-layout article is currently 28 pages. Generated PDF and Word reading
+The JSS-layout article is currently 27 pages. Generated PDF and Word reading
 copies, the vignette, and the reference manual must be regenerated from these
 tracked sources for the submission bundle.

@@ -167,7 +167,7 @@ def polish(path: Path) -> None:
         headers = tuple(cell.text.strip() for cell in table.rows[0].cells)
         compact = headers == ("Backend/method", "Metric", "Recall at 15")
         wide_compact = headers == (
-            "Comparator", "Class", "Planned", "Both OK", "Matched",
+            "Comparator", "Class", "Tasks", "Both OK", "Matched",
             "Timeout", "Median [IQR]",
         )
         table.autofit = False
@@ -239,7 +239,7 @@ def polish(path: Path) -> None:
                 [1200, 900, 1200, 6060],
             ("Evidence stream", "Status", "Required action"): [3000, 1800, 4560],
             (
-                "Comparator", "Class", "Planned", "Both OK", "Matched",
+                "Comparator", "Class", "Tasks", "Both OK", "Matched",
                 "Timeout", "Median [IQR]",
             ): [1900, 1050, 850, 900, 900, 900, 2850],
         }

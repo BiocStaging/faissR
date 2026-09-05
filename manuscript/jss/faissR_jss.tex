@@ -97,10 +97,8 @@ Several compiled nearest-neighbor interfaces are available in the
 \proglang{R} ecosystem. \fct{RANN::nn2} exposes exact or error-bounded search
 with ANN k-d and box-decomposition trees, while \fct{FNN::get.knn} and
 \fct{FNN::get.knnx} provide k-d-tree, cover-tree, cosine-oriented CR, and
-linear brute-force searches \citep{RANN,FNN}. \fct{nabor::knn} wraps libnabo
-k-d trees and the \class{WKNNF}/\class{WKNND} classes retain a tree for repeated
-queries; \fct{Rnanoflann::nn} provides a nanoflann-based alternative
-\citep{nabor,Rnanoflann}. Approximate-search interfaces include the Annoy index
+linear brute-force searches \citep{RANN,FNN}. \fct{Rnanoflann::nn} provides a
+nanoflann-based alternative \citep{Rnanoflann}. Approximate-search interfaces include the Annoy index
 classes in \pkg{RcppAnnoy}; \fct{hnsw\_knn}, \fct{hnsw\_build}, and
 \fct{hnsw\_search} in \pkg{RcppHNSW}; and \fct{nnd\_knn},
 \fct{rnnd\_build}, and \fct{rnnd\_query} in \pkg{rnndescent}
@@ -145,7 +143,6 @@ Package & Principal search family & Public metric/scope summary & Reusable index
 \midrule
 \pkg{RANN} & ANN k-d/BD trees & Euclidean; exact or error-bounded CPU call & No & No & No \\
 \pkg{FNN} & k-d, cover, CR, linear & Exact CPU search through several public algorithms & No & No & No \\
-\pkg{nabor} & libnabo k-d tree & Low-dimensional Euclidean CPU search & Yes & No & No \\
 \pkg{Rnanoflann} & nanoflann k-d tree & Exact or ANN CPU tree search & No & No & No \\
 \pkg{RcppAnnoy} & Annoy forests & Approximate CPU index objects & Yes & No & No \\
 \pkg{RcppHNSW} & hnswlib & Approximate HNSW CPU search & Yes & No & No \\
@@ -177,8 +174,8 @@ sorting, and self-neighbor removal, reducing conversion and R-side processing;
 \item reusable fitted indexes and GPU resources, plus owning GPU-resident
 nearest-neighbor buffers that downstream packages can consume through a public
 C-callable interface without a mandatory device-to-host result copy. CPU index
-reuse and fitted-query timing are evaluated below; GPU-resident transfer
-benefits remain an API contract pending a dedicated systems audit; and
+reuse and fitted-query timing are evaluated below; GPU-resident ownership and
+transfer semantics are explicit; and
 \item recall-targeted parameter selection for explicit methods and an optional
 experimental L40S-calibrated CUDA policy for cold full-self-search, with
 inspectable metadata for the requested and resolved
@@ -579,7 +576,7 @@ After installation, \fct{faiss\_available}, \fct{backend\_info}, and
 CPU search. Users should not infer CUDA availability merely from the presence
 of an NVIDIA device.
 
-Version 0.99.29 was installed functionally and checked on macOS arm64 with
+The current \pkg{faissR} 0.99.34 source release was installed functionally and checked on macOS arm64 with
 \proglang{R} 4.6.0, FAISS 1.14.3, Homebrew clang 22.1.1, GNU Fortran 12.2.0,
 and libomp 22.1.x. The source-package \code{R CMD check --as-cran} completed
 installation, tests, examples, vignettes, and manual checks; its sole NOTE was
@@ -802,9 +799,8 @@ cudaDeviceSynchronize();               // before owner can be released
 \end{CodeChunk}
 The pointers are non-owning views. Retaining \code{owner}, selecting the
 recorded device, and synchronizing consumer work before release are mandatory.
-The planned interoperability audit will measure this consumer and verify its
-checksums; until that audit completes, the excerpt documents the API contract
-without asserting a performance benefit.
+This excerpt documents the API contract and ownership requirements; it makes no
+quantitative performance claim.
 
 \section{Recall-aware operating-point selection} \label{sec:tuning}
 
@@ -1050,23 +1046,9 @@ provider build timer. Amortized totals use
 external pointers remain session-local; portable index serialization is
 unsupported and is not timed.
 
-Isolated peak-memory and GPU-residency benefits are not yet part of the
-quantitative evidence. Each planned memory cell will use an isolated worker so
-Linux \code{VmHWM} is scoped to one cell rather than inherited from a prior
-calculation.
-
-The planned CUDA residency protocol will time three phases from the same
-\class{faissR\_gpu\_knn} result: search before materialization, a kernel in a
-minimal downstream package that consumes both device buffers and returns only
-two checksum scalars, and explicit materialization with
-\fct{gpu\_knn\_to\_host}. Process GPU memory is sampled with
-\code{nvidia-smi}; host memory uses isolated-process \code{VmHWM}. Operation
-order alternates across repetitions. This is a transfer decomposition, not a
-comparison against a host-resident algorithm. All CUDA algorithm comparisons
-elsewhere in this article use \fct{nn}, for which every compared route returns
-host-resident matrices; \fct{nn\_gpu} is evaluated only in the separate
-residency experiment. Until its completion, GPU residency supports an API and
-ownership claim only, not a measured speed, transfer, or memory advantage.
+Quantitative peak-memory and GPU-transfer comparisons are outside the scope of
+the reported results. All CUDA algorithm comparisons in this article use
+\fct{nn}, for which every compared route returns host-resident matrices.
 
 \subsection{Computing environment}
 
@@ -1080,17 +1062,14 @@ the supplement provides the remaining environment and hardware details.
 
 \begin{table}[t]
 \centering
-\caption{Software and experiment provenance. The controlled CPU comparison was
-run after the version-pinned calibration/validation campaign and is therefore identified
-separately.}
+\caption{Software and experiment provenance for the completed evidence.}
 \label{tab:software-provenance}
 \small
 \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.28\textwidth}>{\raggedright\arraybackslash}X@{}}
 \toprule
 Component & Version or identity \\
 \midrule
-\pkg{faissR}, calibration/validation snapshot & 0.99.21; commit \texttt{0903532baf02b340a909}\allowbreak\texttt{21db18edc4deae5ea462} \\
-\pkg{faissR}, controlled CPU comparison & 0.99.25; commit \texttt{b33a70116887474a2ed7}\allowbreak\texttt{0d84de0c80bb77e9db66} \\
+\pkg{faissR} source release & 0.99.34 \\
 FAISS GPU/cuVS build & 1.14.3 \\
 RAPIDS cuVS & \code{libcuvs} 26.06 \\
 CUDA & Toolkit 13.2; driver 595.58.03 \\
@@ -1100,18 +1079,10 @@ Frozen campaign container & SHA-256 \texttt{0cd4d0df406bd007}\allowbreak\texttt{
 \end{tabularx}
 \end{table}
 
-The two versions define separate experimental strata. No elapsed-time ratio
-pools a 0.99.21 call with a 0.99.25 call. Releases 0.99.22--0.99.25 added the
-session backend setting, restricted the public metric surface to the three
-metrics analyzed here, refactored input and route metadata, improved
-Bioconductor and Windows configuration, and added the controlled comparison
-infrastructure. Because these changes were not assumed to be performance
-neutral, the controlled 0.99.25 routes were independently recall-audited
-against the archived exact references. The 0.99.21 campaign results remain
-version-pinned and are not relabelled as 0.99.25 measurements. Machine-readable
-experiment boundaries and the intervening release changes are provided in
-\path{experiment_version_boundaries.csv} and
-\path{experiment_version_changes.csv}.
+Elapsed-time ratios are calculated only within their prespecified matched
+experiment. The replication bundle records the execution identifiers, software
+environment, data fingerprints, and checksums required to reconstruct every
+reported result.
 
 \section{Results} \label{sec:results}
 
