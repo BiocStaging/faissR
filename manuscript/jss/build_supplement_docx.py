@@ -9,7 +9,7 @@ from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Pt
+from docx.shared import Inches, Pt
 
 
 HERE = Path(__file__).resolve().parent
@@ -131,6 +131,11 @@ def polish(path: Path) -> None:
     for section in document.sections:
         section.header_distance = Pt(35.4)
         section.footer_distance = Pt(35.4)
+    for shape in document.inline_shapes:
+        if shape.height > Inches(3.5):
+            scale = Inches(3.5) / shape.height
+            shape.width = int(shape.width * scale)
+            shape.height = Inches(3.5)
     for paragraph in document.paragraphs:
         text = paragraph.text.strip()
         if paragraph.style.name in {"First Paragraph", "Body Text"} and (
@@ -161,6 +166,10 @@ def polish(path: Path) -> None:
             continue
         headers = tuple(cell.text.strip() for cell in table.rows[0].cells)
         compact = headers == ("Backend/method", "Metric", "Recall at 15")
+        wide_compact = headers == (
+            "Comparator", "Class", "Planned", "Both OK", "Matched",
+            "Timeout", "Median [IQR]",
+        )
         table.autofit = False
         header_properties = table.rows[0]._tr.get_or_add_trPr()
         if header_properties.find(qn("w:tblHeader")) is None:
@@ -179,7 +188,7 @@ def polish(path: Path) -> None:
                 if margins is None:
                     margins = OxmlElement("w:tcMar")
                     tc_pr.append(margins)
-                vertical_margin = 25 if compact else 80
+                vertical_margin = 25 if compact else (40 if wide_compact else 80)
                 for side, value in (
                     ("top", vertical_margin),
                     ("bottom", vertical_margin),
@@ -192,7 +201,7 @@ def polish(path: Path) -> None:
                         margins.append(node)
                     node.set(qn("w:w"), str(value))
                     node.set(qn("w:type"), "dxa")
-                if compact:
+                if compact or wide_compact:
                     for paragraph in cell.paragraphs:
                         paragraph.paragraph_format.space_before = Pt(0)
                         paragraph.paragraph_format.space_after = Pt(0)
@@ -229,6 +238,10 @@ def polish(path: Path) -> None:
             ("Backend", "Rows", "Datasets", "Covered contrasts"):
                 [1200, 900, 1200, 6060],
             ("Evidence stream", "Status", "Required action"): [3000, 1800, 4560],
+            (
+                "Comparator", "Class", "Planned", "Both OK", "Matched",
+                "Timeout", "Median [IQR]",
+            ): [1900, 1050, 850, 900, 900, 900, 2850],
         }
         widths = table_widths.get(headers)
         if widths is not None:
@@ -262,12 +275,24 @@ def polish(path: Path) -> None:
 
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="faissR-jss-supplement-") as tmp:
-        source = Path(tmp) / "supplement.tex"
-        source.write_text(
-            word_source(SOURCE.read_text(encoding="utf-8")),
-            encoding="utf-8",
-        )
-        intermediate = Path(tmp) / "supplement.docx"
+        temporary_dir = Path(tmp)
+        source = temporary_dir / "supplement.tex"
+        source_text = word_source(SOURCE.read_text(encoding="utf-8"))
+        for figure in (
+            "fig_paired_cpu_log_ratio.pdf",
+            "fig_comprehensive_r_log_ratio.pdf",
+        ):
+            source_figure = HERE / figure
+            if source_figure.exists():
+                output_base = temporary_dir / source_figure.stem
+                subprocess.run(
+                    ["pdftoppm", "-png", "-singlefile", "-r", "180",
+                     str(source_figure), str(output_base)],
+                    check=True,
+                )
+                source_text = source_text.replace(figure, f"{source_figure.stem}.png")
+        source.write_text(source_text, encoding="utf-8")
+        intermediate = temporary_dir / "supplement.docx"
         command = [
             "pandoc",
             str(source),
@@ -278,7 +303,7 @@ def main() -> None:
         ]
         if REFERENCE.exists():
             command.append(f"--reference-doc={REFERENCE}")
-        subprocess.run(command, check=True, cwd=HERE)
+        subprocess.run(command, check=True, cwd=temporary_dir)
         OUTPUT.write_bytes(intermediate.read_bytes())
     polish(OUTPUT)
 

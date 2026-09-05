@@ -102,7 +102,7 @@ routes; faissR double-to-float32 conversion included inside its timer. \\
 FAISS GPU/cuVS build & 1.14.3 \\
 RAPIDS cuVS & \code{libcuvs} 26.06 \\
 CUDA toolkit & 13.2 \\
-External CPU comparators & \pkg{BiocNeighbors} 2.4.0; \pkg{RcppHNSW} 0.7.0 \\
+External CPU comparators & \pkg{BiocNeighbors} 2.4.0; \pkg{FNN} 1.1.4.1; \pkg{RANN} 2.6.2; \pkg{rnndescent} 0.2.0; \pkg{Rnanoflann} 0.0.3; \pkg{RcppAnnoy} 0.0.23; \pkg{RcppHNSW} 0.7.0 \\
 Frozen campaign container & SHA-256 \texttt{0cd4d0df406bd007}\allowbreak\texttt{5046b16d2e8a4d3a}\allowbreak\texttt{e78ee61d98e6d47c}\allowbreak\texttt{639986e28ea6f203} \\
 \bottomrule
 \end{tabularx}
@@ -830,6 +830,65 @@ time than rebuilt Flat in all 15 HNSW cells, with a median break-even of 13
 batches. CUDA observed no fitted-index cache hit in this experiment. The CUDA
 measurements therefore characterize repeated public calls, not GPU index reuse.
 
+\subsection{Complete public-interface CPU comparison}
+
+The complete matched-node CPU comparison covered seven established
+\textsf{R} interfaces. It comprises 216 tasks, 6,480 route repetitions, and
+4,104 external-versus-\pkg{faissR} pairs. All routes in a pair used the same
+dataset, metric, $k$, validation seed, repetition, Slurm allocation, and host;
+the route order was randomized and each timed route used a fresh \textsf{R}
+worker. The point-recall-matched screen in this table is a legacy mean-recall
+criterion and is not the empirical query-bootstrap lower-bound criterion used
+for independent-query selector validation. It is retained only to avoid
+comparing a fast, low-recall route with a high-recall route.
+
+Table~\ref{tab:supp-comprehensive-r} reports every prespecified comparator
+class. Ratios are conditional on successful, point-recall-matched pairs; a
+timeout is not assigned an artificial favorable time. The broad exact routes
+are Euclidean only, and Annoy/HNSW support differs by public interface. Thus,
+the table is evidence about these concrete public configurations and input
+contracts, not a provider-optimized or algorithm-universal ranking. The
+machine-readable paired rows and the grayscale log-ratio summary figure are
+included in the replication bundle.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Complete CPU public-interface comparison. Ratios are
+\(T_{\mathrm{comparator}}/T_{\mathrm{faissR}}\); values above one favor
+\pkg{faissR}. ``Matched'' denotes pairs where both public routes completed and
+each achieved the requested mean-recall tier. Timeouts include either member of
+the pair.}
+\label{tab:supp-comprehensive-r}
+\begin{tabular}{@{}llrrrrr@{}}
+\toprule
+Comparator & Class & Planned & Both OK & Matched & Timeout & Median [IQR] \\
+\midrule
+\pkg{FNN} & Exact & 648 & 216 & 189 & 699 & 27.23 [4.69--38.12] \\
+\pkg{RANN} & Exact & 432 & 120 & 114 & 459 & 21.08 [11.20--41.88] \\
+\pkg{Rnanoflann} & Exact & 216 & 120 & 114 & 192 & 9.31 [8.15--21.15] \\
+\pkg{BiocNeighbors} & Exact & 432 & 250 & 238 & 286 & 4.96 [2.40--15.11] \\
+\pkg{BiocNeighbors} & HNSW & 432 & 336 & 299 & 96 & 7.21 [3.13--10.76] \\
+\pkg{RcppHNSW} & HNSW & 432 & 432 & 317 & 0 & 1.66 [0.83--2.85] \\
+\pkg{BiocNeighbors} & Annoy & 432 & 432 & 96 & 0 & 1.85 [0.94--2.57] \\
+\pkg{RcppAnnoy} & Annoy & 432 & 426 & 89 & 6 & 2.57 [0.73--2.81] \\
+\pkg{rnndescent} & NN-descent & 648 & 534 & 180 & 163 & 0.73 [0.28--1.21] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.94\textwidth]{fig_comprehensive_r_log_ratio.pdf}
+\caption{Complete matched-node public-interface CPU comparison in grayscale.
+Points are conditional medians and bars are interquartile intervals of
+\(T_{\mathrm{comparator}}/T_{\mathrm{faissR}}\) among point-recall-matched
+repetitions. Right labels give matched-pair counts (\code{n}) and total
+timeouts (\code{t}) in each comparator class. The figure does not turn nested
+cells into independent datasets and is not a provider-optimized ranking.}
+\label{fig:supp-comprehensive-r}
+\end{figure}
+
 The planned GPU-residency experiment will use 15 isolated cells: five datasets crossed
 with query batches of 1, 32, and up to 1,024 rows. A minimal downstream package
 includes \code{faissR\_api.h}, verifies ABI version 1, obtains
@@ -871,7 +930,7 @@ Recall-matched HNSW Pareto and fitted query & Completed: 720/720 route runs; pha
 Isolated host/device memory & Planned, not run or analysed; no quantitative memory comparison. \\
 GPU-resident consumer and host transfer & Planned, not run or analysed; API ownership and explicit-transfer contract only. \\
 Direct native FAISS/cuVS overhead & Planned, not run or analysed; no R-interface-overhead estimate. \\
-Comprehensive seven-package comparison & Incomplete: 204/216 task files in the transferred archive; no numerical claim is made. \\
+Comprehensive seven-package comparison & Completed: 216/216 tasks and 6,480/6,480 repetitions; conditional public-interface results reported. \\
 Portable index serialization & Unsupported; no performance experiment is claimed. \\
 \bottomrule
 \end{tabularx}
@@ -904,6 +963,9 @@ Independently tuned HNSW route runs & 720 & 720 \\
 Independently tuned HNSW target-matched provider pairs & 63 & 72 \\
 CPU query-workload cells & 60 & 60 \\
 CUDA query-workload cells & 60 & 60 \\
+Comprehensive CPU comparison tasks & 216 & 216 \\
+Comprehensive CPU route repetitions & 6,480 & 6,480 \\
+Comprehensive point-recall-matched pairs & 1,636 & 4,104 \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -1174,8 +1236,9 @@ The submission material contains:
 \item a single commented article replication script and its HTML output;
 \item a checksummed result snapshot, its SHA-256 ledger, and a pre-analysis checksum
   gate;
-\item machine-readable reconstructions of all 18 article and supplementary
-  tables, with a table checksum manifest;
+\item machine-readable reconstructions of the 18 archive-backed article and
+  supplementary tables, with a table checksum manifest, plus separately
+  checksummed paired rows for the completed seven-package comparison;
 \item software, container, dataset, and result fingerprints; and
 \item a reduced CPU path that reproduces the interface example without a GPU.
 \end{itemize}
@@ -1189,7 +1252,8 @@ failure stops execution. A successful run records archive verification,
 per-table SHA-256 digests, and a fresh \code{sessionInfo.txt}.
 Both \code{compact} and \code{archive} modes completed from clean temporary
 directories on 2026-08-30; the archive run verified its digest and rebuilt all
-18 tracked tables.
+18 archive-backed tables. The separate seven-package paired evidence has its
+own SHA-256 ledger and is verified before its supplementary figure is drawn.
 
 \section{Interpretation}
 

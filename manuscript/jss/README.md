@@ -13,7 +13,13 @@ This directory contains the JSS-format manuscript source:
   and writes a checksum manifest.
 - `build_paired_cpu_figure.R`: verifies the checksummed controlled-pair evidence and
   recreates the main-text dataset-level log-ratio figure.
+- `build_comprehensive_r_figure.R`: verifies the checksummed complete
+  seven-package comparison evidence and recreates its supplementary grayscale
+  log-ratio figure.
 - `paired_cpu_comparison/`: checksummed controlled same-node CPU HNSW pairs.
+- `comprehensive_r_comparison/`: checksummed paired rows from the completed
+  matched-node comparison with FNN, RANN, rnndescent, BiocNeighbors,
+  Rnanoflann, RcppAnnoy, and RcppHNSW.
 - `faissR_jss_evidence_snapshot.tar.gz` and its `.sha256` file: checksummed
   campaign evidence and required pre-analysis digest. This is a version-pinned
   experiment snapshot; the archival frozen release will follow package acceptance.
@@ -51,7 +57,7 @@ Rscript code.R
 Rscript -e 'knitr::spin("code.R", knit = TRUE)'
 ```
 
-Recreate all 18 manuscript and supplement tables from the checksummed snapshot on a
+Recreate the manuscript and supplement tables from the checksummed snapshot on a
 regular computer with:
 
 ```sh
@@ -75,6 +81,12 @@ Recreate the paired CPU figure directly with:
 
 ```sh
 Rscript build_paired_cpu_figure.R
+```
+
+Recreate the complete seven-package comparison figure directly with:
+
+```sh
+Rscript build_comprehensive_r_figure.R
 ```
 
 Run the practical CPU example with the Bioconductor `ALL` and `Biobase`
@@ -110,10 +122,10 @@ experiments, auto-versus-oracle analysis, and archive checksums. Only evidence
 that passes the corresponding audit is eligible for a reported result.
 
 The 2026-09-04 evidence transfer additionally contains completed, audited
-independently tuned CPU HNSW and query-workload studies. Their numerical
-summaries are reported in the manuscript and supplement. The broad
-seven-package comparison transfer contains 204 of 216 expected task files and
-is deliberately excluded from numerical claims until its audit is complete.
+independently tuned CPU HNSW, query-workload, and seven-package public-interface
+studies. The latter completed all 216 design tasks and all 6,480 route
+repetitions; its point-recall-matched timing ratios remain configuration-level
+public-interface evidence rather than a provider-optimized ranking.
 
 The current JSS instructions request a commented replication script, rendered
 output, session information, and a feasible reduced path when full experiments

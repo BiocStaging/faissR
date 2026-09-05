@@ -54,12 +54,17 @@ manuscript/jss/derived/*
 !manuscript/jss/replication_article.R
 !manuscript/jss/build_manuscript_tables.R
 !manuscript/jss/build_paired_cpu_figure.R
+!manuscript/jss/build_comprehensive_r_figure.R
 !manuscript/jss/fig_paired_cpu_log_ratio.pdf
+!manuscript/jss/fig_comprehensive_r_log_ratio.pdf
 !manuscript/jss/faissR_jss_evidence_snapshot.tar.gz
 !manuscript/jss/faissR_jss_evidence_snapshot.tar.gz.sha256
 !manuscript/jss/paired_cpu_comparison/
 !manuscript/jss/paired_cpu_comparison/jss_paired_hnsw_pairs.csv.gz
 !manuscript/jss/paired_cpu_comparison/jss_paired_hnsw_pairs.csv.gz.sha256
+!manuscript/jss/comprehensive_r_comparison/
+!manuscript/jss/comprehensive_r_comparison/jss_comprehensive_r_pairs.csv.gz
+!manuscript/jss/comprehensive_r_comparison/jss_comprehensive_r_pairs.csv.gz.sha256
 !manuscript/jss/cpu_loodo/
 !manuscript/jss/cpu_loodo/README.md
 !manuscript/jss/cpu_loodo/JSS_LEAVE_ONE_DATASET_OUT_REPORT.md

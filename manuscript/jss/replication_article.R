@@ -695,6 +695,30 @@ if (nzchar(results_root)) {
   if (!identical(figure_status, 0L)) {
     stop("Paired CPU figure reconstruction failed with status ", figure_status)
   }
+
+  comprehensive_figure_builder <- file.path(
+    dirname(script_path), "build_comprehensive_r_figure.R"
+  )
+  if (!file.exists(comprehensive_figure_builder)) {
+    stop("Cannot find comprehensive R comparison figure builder: ",
+         comprehensive_figure_builder)
+  }
+  comprehensive_figure_status <- system2(
+    "Rscript",
+    vapply(c(
+      comprehensive_figure_builder,
+      paste0("--output=", file.path(
+        figure_dir, "fig_comprehensive_r_log_ratio.pdf"
+      )),
+      paste0("--summary=", file.path(
+        figure_dir, "jss_comprehensive_r_figure_data.csv"
+      ))
+    ), shQuote, character(1L))
+  )
+  if (!identical(comprehensive_figure_status, 0L)) {
+    stop("Comprehensive R comparison figure reconstruction failed with status ",
+         comprehensive_figure_status)
+  }
 }
 
 writeLines(

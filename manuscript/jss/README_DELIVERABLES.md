@@ -32,10 +32,11 @@ leave-one-dataset-out, route-contract, controlled same-node CPU HNSW,
 independently tuned CPU HNSW, and query-workload evidence. The evaluation
 contains nine real datasets with metric-matched exact references. The
 replication entry point verifies archive and controlled-pair checksums before
-recreating all manuscript tables and the paired log-ratio figure. The broad
-seven-package comparison is excluded because the current evidence transfer
-contains 204 of 216 expected task files.
+recreating the archive-backed manuscript tables and the paired log-ratio
+figure. The complete seven-package public-interface comparison passed its
+216/216-task audit; its separately checksummed paired rows recreate the
+supplementary log-ratio figure and table summaries.
 
-The JSS-layout article is currently 27 pages. Generated PDF and Word reading
+The JSS-layout article is currently 28 pages. Generated PDF and Word reading
 copies, the vignette, and the reference manual must be regenerated from these
 tracked sources for the submission bundle.

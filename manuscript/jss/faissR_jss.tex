@@ -44,12 +44,12 @@ $k$, and a requested recall tier while returning route and evidence metadata.
 Across nine datasets, 100 CPU/CUDA route-contract tests passed, independently
 of the performance benchmark. Timed validation measured complete cold
 self-search, while recall was audited on independently sampled query rows.
-Controlled CPU comparisons and CUDA route evaluation showed substantial
-dataset and workload heterogeneity: approximate search was advantageous in
-some large-data settings, whereas exhaustive search remained competitive or
-faster in others. We describe the metric contract, architecture, practical
-interface, interoperability mechanisms, and reproducible evaluation of
-\pkg{faissR}.
+Matched-node CPU comparisons with seven established \proglang{R} interfaces
+and CUDA route evaluation showed substantial dataset and workload
+heterogeneity: approximate search was advantageous in some large-data settings,
+whereas exhaustive search remained competitive or faster in others. We
+describe the metric contract, architecture, practical interface,
+interoperability mechanisms, and reproducible evaluation of \pkg{faissR}.
 }
 
 \Keywords{nearest neighbors, approximate search, FAISS, CUDA, float32, \proglang{R}}
@@ -176,9 +176,9 @@ inverted-file, product-quantization, HNSW, CAGRA, and graph-refinement routes;
 sorting, and self-neighbor removal, reducing conversion and R-side processing;
 \item reusable fitted indexes and GPU resources, plus owning GPU-resident
 nearest-neighbor buffers that downstream packages can consume through a public
-C-callable interface without a mandatory device-to-host result copy; these are
-contract-tested software capabilities, while their quantitative performance
-benefits remain planned for dedicated systems audits; and
+C-callable interface without a mandatory device-to-host result copy. CPU index
+reuse and fitted-query timing are evaluated below; GPU-resident transfer
+benefits remain an API contract pending a dedicated systems audit; and
 \item recall-targeted parameter selection for explicit methods and an optional
 experimental L40S-calibrated CUDA policy for cold full-self-search, with
 inspectable metadata for the requested and resolved
@@ -969,6 +969,22 @@ The \pkg{RcppHNSW} call used the corresponding \code{M = 16},
 configuration-level public-API comparisons, not estimates of either
 comparator's fastest possible 0.99-recall operating point.
 
+A second completed, comprehensive CPU public-interface experiment broadened
+the fixed-configuration screen to \pkg{FNN}, \pkg{RANN}, \pkg{Rnanoflann},
+\pkg{rnndescent}, \pkg{BiocNeighbors}, \pkg{RcppAnnoy}, and \pkg{RcppHNSW}.
+It covered each interface only for metrics supported by its public call:
+Euclidean for \pkg{FNN}, \pkg{RANN}, and \pkg{Rnanoflann}; Euclidean and
+cosine for the HNSW and Annoy interfaces; and Euclidean, cosine, and
+correlation for \pkg{rnndescent}. Each external route was paired with the
+corresponding \pkg{faissR} public route in the same allocation, node,
+validation seed, repeat, and randomized route order. This is an end-to-end
+interface comparison with prespecified settings, not a separate tuning study
+or an algorithm-family ranking. Its legacy point-recall screen requires both
+routes to attain mean recall at least the requested tier; it is deliberately
+called \emph{point-recall-matched}, rather than target-attaining, because it
+does not use the empirical query-bootstrap lower-bound rule used for the
+independent-query selector validation.
+
 The package-level CPU \method{auto} route was not completely evaluated in the
 independent-query campaign. Consequently, no independent installed-policy
 claim is made for CPU. Backend-specific LOODO analyses use explicit
@@ -1263,6 +1279,22 @@ that build-time differences do not imply a universal repeated-query advantage.
 These are independently tuned HNSW configurations at the specified 0.99
 point-recall screen, not an all-package or all-workload ranking.
 
+The comprehensive study completed all 216 design tasks and all 6,480 planned
+route repetitions. Across the 4,104 external-versus-\pkg{faissR} repetition
+pairs, 1,636 were point-recall-matched; 1,385 route executions timed out and
+22 had another execution failure. The complete denominators are retained in
+the supplement and the machine-readable bundle. Conditional medians of
+\(T_{\mathrm{comparator}}/T_{\mathrm{faissR}}\) were 27.23 for the three
+\pkg{FNN} Euclidean routes, 21.08 for \pkg{RANN}, 9.31 for \pkg{Rnanoflann},
+and 4.96 for \pkg{BiocNeighbors} exhaustive routes. For HNSW, the analogous
+medians were 7.21 for \pkg{BiocNeighbors} and 1.66 for \pkg{RcppHNSW}.
+The Annoy-interface summaries were 1.85 for \pkg{BiocNeighbors} and 2.57 for
+\pkg{RcppAnnoy}. In contrast, \pkg{rnndescent} had a conditional median of
+0.73 against \pkg{faissR}'s experimental NN-descent route. These values are
+not pooled as independent observations, do not reward a timeout, and do not
+establish a universal provider-level ordering; the per-class intervals,
+eligible-pair counts, and timeout counts appear in the supplement.
+
 The workload experiment completed all 60 cells on each backend. CPU observed a
 fitted-index cache hit in all 60 cells; HNSW had lower repeated-query time than
 rebuilt Flat in every tested CPU cell, with a median break-even of 13 batches.
@@ -1354,18 +1386,17 @@ GPU-resident output reduces transfer only when downstream code
 can consume the opaque device buffers. The GPU result is synchronized before
 handoff, but \pkg{faissR} does not export its CUDA stream or provider resource
 object; cross-process use and serialization are unsupported. Quantitative
-fitted-index and residency claims require their dedicated audits and are not
-inferred from the cold algorithm benchmarks. Finally, the completed external
-comparison evidence is deliberately secondary. The controlled HNSW experiment
-covers fixed \pkg{BiocNeighbors} and \pkg{RcppHNSW} configurations;
-independently tuned HNSW Pareto comparisons and the broader exact/graph
-R-interface campaign require their prespecified audits before numerical claims
-are added. Table~\ref{tab:r-ecosystem} therefore makes feature-level, not
-speed, comparisons with the wider R ecosystem. Fitted-index reuse is tested as
-a software contract, but no fitted-query speed ratio is reported without a
-point-recall-matched paired audit. A direct native FAISS/cuVS invocation
-outside \pkg{faissR} was not completed, so the article does not quantify
-conversion, metadata, wrapping, or transfer overhead against a native caller.
+GPU residency claims require their dedicated audits and are not inferred from
+the cold algorithm benchmarks. CPU fitted-index construction and fitted-query
+results are reported only for the independently tuned, point-recall-matched
+HNSW pairs. The completed comprehensive external comparison remains secondary:
+it covers prespecified end-to-end public configurations, not independently
+optimized provider settings. Table~\ref{tab:r-ecosystem} therefore makes
+feature-level comparisons with the wider R ecosystem, while the supplement
+reports conditional timing and failure summaries. A direct native FAISS/cuVS
+invocation outside \pkg{faissR} was not completed, so the article does not
+quantify conversion, metadata, wrapping, or transfer overhead against a native
+caller.
 
 Calibration retained timeout and out-of-memory failures as negative evidence,
 but the completed campaign did not measure a valid isolated-process peak for

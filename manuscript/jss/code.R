@@ -95,6 +95,6 @@ sessionInfo()
 
 #' The generated directory contains the example summary, `sessionInfo.txt`,
 #' and, in archive mode, checksum verification, analysis outputs, all 18
-#' manuscript tables, the paired CPU figure, and their audit summaries. Any
-#' checksum, schema, fingerprint, aggregation, table-audit, or figure-audit
-#' failure stops execution.
+#' manuscript tables, the paired CPU and comprehensive-R comparison figures,
+#' and their audit summaries. Any checksum, schema, fingerprint, aggregation,
+#' table-audit, or figure-audit failure stops execution.
