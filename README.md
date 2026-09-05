@@ -15,32 +15,30 @@
 Numbered citations in this README refer to the bibliography in
 [References](docs/references.md).
 
-The reproducible source bundle for the draft Journal of Statistical Software
-article is tracked under [`manuscript/jss`](manuscript/jss/README.md).
-Performance rankings remain deliberately absent from the draft until the
-independent held-out CPU/CUDA and external-package campaign is frozen.
+The Journal of Statistical Software article and replication sources are in
+[`manuscript/jss`](manuscript/jss/README.md). Reported comparisons include
+completed matched-node experiments with seven R interfaces; timings are
+conditional on the recorded configurations, recall screen, and workload.
 
 `faissR` provides native nearest-neighbour search, kNN models, and k-means for
 R workflows that need mandatory
 [FAISS](https://faiss.ai/index.html) support and optional NVIDIA CUDA/RAPIDS
 acceleration [1-3,13-16]. The package is intended for CRAN-style source
-installation: FAISS is required for all builds, while CUDA and RAPIDS cuVS are
+installation: FAISS is required for functional builds, while CUDA and RAPIDS cuVS are
 optional for CPU-only builds. A machine without CUDA can
 still install the package from source and use the CPU/FAISS functionality. For
 NVIDIA GPU users, the GPU stack should be requested explicitly so missing CUDA
 or RAPIDS libraries are fatal rather than silently producing a CPU-only build.
 
-`target_recall` has a precise publication-benchmark meaning. Approximate recall
-is tie-aware at the kth-neighbor boundary: strictly closer reference neighbors
-must match by identifier, while exactly rescored candidates can receive credit
-for an equivalent boundary tie. For each independently sampled query seed, a
-one-sided 95% lower confidence bound is computed from 1,000 deterministic
-query-bootstrap resamples. A calibrated cell passes only when this bound is at
-least `tau` for every query seed. Timing repeats reuse the same queries and
-measure runtime dispersion; they are not independent recall evidence. Minimum
-query recall remains a diagnostic. The argument selects a calibrated operating
-point and is not a guarantee for an unseen dataset. Tuning metadata records the
-statistic, confidence level, bootstrap count, and independent-seed rule.
+`target_recall` selects one of three calibration-informed tiers: 0.90,
+0.95, or 0.99. The reported calibration and independent-query experiments use
+mean identifier-overlap recall@k across sampled queries, with the tier required
+in every recorded validation repeat. Timing repeats do not constitute new
+query samples. Comparator pairs are called point-recall-matched when both
+routes pass their prespecified mean-recall screen. These are empirical
+operating points, not guarantees for unseen datasets. The optional benchmark
+inference utilities also support tie-aware query-bootstrap bounds; those
+bounds must not be inferred for archived rows that contain only point recall.
 
 Exact-family routes use a separate `exact-audited` classification. Their audit
 accepts identical neighbor identifiers or an equivalent sorted distance
@@ -197,21 +195,12 @@ headers and libraries discovered by `configure`.
   `Sys.setenv(FAISSR_BACKEND = "cuda")`. An explicit function argument always
   takes precedence. faissR supports CPU and CUDA; a `"metal"` setting is
   rejected clearly.
-- Benchmark #1 comparison launchers for Euclidean speed tests are split into
-  CPU and CUDA runs:
-  `benchmark_scripts/run_benchmark1_compare_cpu_euclidean.sh` compares faissR
-  CPU methods with CPU external R KNN packages, including `RcppHNSW`, `FNN`,
-  `nabor`, and `rnndescent`,
-  while
-  `benchmark_scripts/run_benchmark1_compare_cuda_euclidean.sh` compares faissR
-  CUDA/FAISS-GPU/cuVS methods. `cuda.ml` is recorded as non-standalone because
-  its public KNN API fits supervised models rather than returning self-KNN
-  index and distance matrices. HPC/SLURM equivalents are
-  `benchmark_scripts/run_hpc_benchmark1_compare_cpu12_euclidean.sh` and
-  `benchmark_scripts/run_hpc_benchmark1_compare_cuda_euclidean.sh`; both force
-  Euclidean distance and write `benchmark1_faissr_vs_external_speed.csv`.
-  External comparator packages are required by the benchmark image only; they
-  are not faissR runtime dependencies or fallback providers.
+- Publication comparison scripts are organized under
+  `benchmark_scripts/jss_reproduction/validation/`. The completed
+  `comprehensive_r_comparison` study includes FNN, RANN, rnndescent,
+  BiocNeighbors, Rnanoflann, RcppAnnoy, and RcppHNSW.
+  Comparator packages are benchmark dependencies, not runtime dependencies
+  or fallback providers for faissR.
 
 ## Available Functions
 
@@ -422,14 +411,14 @@ tarball:
 
 ```sh
 R CMD build .
-R CMD check --as-cran faissR_0.99.29.tar.gz
+R CMD check --as-cran faissR_0.99.34.tar.gz
 ```
 
 and then:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.29.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.34.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA and cuVS are

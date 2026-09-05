@@ -29,17 +29,20 @@ For every KNN method record:
 - downstream sanity checks such as openTSNE/UMAP plots when KNN is used for
   embeddings.
 
-For target attainment, approximate routes use a one-sided 95% lower confidence
-bound for mean tie-aware query recall@k, based on 1,000 deterministic
-query-bootstrap resamples. Strictly closer neighbors must match by identifier;
-exact rescoring can credit an equivalent candidate at a tied kth-distance
-boundary. A cell reaches `target_recall = tau` only when the lower bound is at
-least `tau` for every independent validation query seed and all required seeds
-complete successfully. Timing repeats reuse the seed's queries and measure
-runtime only; they are collapsed within seed for recall inference. Raw
-identifier overlap, point tie-aware recall, minimum query recall, and boundary
-substitution frequency are reported separately as diagnostics. Shape-group
-calibration additionally requires the condition for every represented dataset.
+The reported calibration and validation evidence uses mean identifier-overlap
+recall@k across sampled queries. Calibration screens candidate configurations;
+validation requires the requested tier in every recorded repeat on separately
+sampled query rows. Timing repeats reuse the same queries and are not new
+recall samples. Point-recall-matched comparator pairs require both routes to
+pass their prespecified screen.
+
+The optional inference utilities can compute tie-aware recall and empirical
+query-bootstrap lower bounds when per-query data are available. These are
+different statistics: a row containing only point recall does not establish
+confidence-bound attainment. The published selector counts use point recall,
+and do not quantify the effect of tied alternative approximate neighbors.
+A requested tier is a calibration-informed operating point, not a guarantee
+on unseen data.
 
 Exact-family routes are not classified by the ANN target-attainment rule.
 They are `exact-audited` when the exhaustive route and reference audit pass.
@@ -347,8 +350,8 @@ for example
 
 Exact references are metric specific and are saved in each dataset folder as
 `faissR_exact_reference_<metric>_k<K>_q<QUALITY_N>_seed<SEED>.RData`.
-The command-line parser accepts only `euclidean`, `cosine`, `correlation`, and
-In particular, legacy aliases are rejected before benchmark execution.
+The command-line parser accepts only `euclidean`, `cosine`, and `correlation`;
+legacy aliases are rejected before benchmark execution.
 The file `benchmark_scripts/euclidean_tuning_settings_from_uploaded_results.csv`
 collects the fastest Euclidean settings from the uploaded tuning results, and
 `benchmark_scripts/previous_tuning_timeouts.csv` prevents the all-metric rerun
@@ -366,8 +369,8 @@ do not start a large cuVS grid unintentionally.
 benchmark that includes faissR implementation labels, external R KNN packages,
 and selected KNN consumers. It defaults to `k = 5, 10, 15, 50, 100` and the
 three public metrics Euclidean, cosine, and correlation.
-product, so benchmark rows for these metrics are not interchangeable. Flat
-rather than duplicate Flat-IP rows. Implementation-specific faissR rows,
+Benchmark rows for these metrics are not interchangeable.
+Implementation-specific faissR rows,
 such as FAISS GPU IVF and direct cuVS rows, are timed through faissR's internal
 benchmark route so the table can distinguish FAISS GPU indexes that use NVIDIA
 cuVS internally from direct RAPIDS cuVS API calls.
@@ -375,8 +378,8 @@ cuVS internally from direct RAPIDS cuVS API calls.
 For Euclidean speed comparisons against external R packages, run CPU and CUDA
 separately. The CPU launcher selects CPU faissR methods plus CPU external KNN
 packages, including `RcppHNSW` HNSW, `FNN`
-kd-tree/cover-tree/brute-force, `nabor` automatic/brute-force, and
-`rnndescent` routes. The CUDA launcher selects CUDA
+kd-tree/cover-tree/brute-force, `RANN`, `Rnanoflann`, `RcppAnnoy`,
+`BiocNeighbors`, and `rnndescent` routes. The CUDA launcher selects CUDA
 faissR/FAISS-GPU/cuVS methods. `cuda.ml` is retained as an explicit
 non-standalone audit row because its current public KNN interface fits
 supervised prediction models and does not return self-KNN index and distance
@@ -394,7 +397,7 @@ faissR package dependencies and are never used as hidden runtime fallbacks.
 The final publication image is checked before timing: route QA records the
 installed version of `faissR` and every comparator package (`float`,
 `Rnanoflann`, `RANN`, `RcppAnnoy`, `RcppHNSW`, `rnndescent`,
-`BiocNeighbors`, `FNN`, `nabor`, and `uwot`). The CUDA check requires all
+`BiocNeighbors`, and `FNN`). The CUDA check requires all
 three publication providers, CUDA, FAISS-GPU, and cuVS. It also calls
 `nn_gpu()` with a `float::fl()` matrix and rejects the image unless the result
 owns CUDA device pointers, reports `result_residency = "cuda"`, reports zero

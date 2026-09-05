@@ -12,6 +12,9 @@ Package snapshot: faissR 0.99.34
 - `build_paired_cpu_figure.R` and `paired_cpu_comparison/`: reproducible
   dataset-level controlled HNSW comparison and checksummed source evidence.
 - `build_docx.py` and `build_supplement_docx.py`: Word reading-copy builders.
+- `build_architecture_figures.R`: architecture figure source.
+- `analyze_completed_systems.R` and `completed_systems/`: checksummed tuned
+  HNSW and query-workload results and their executable audits.
 - `jss.cls`, `jss.bst`, and `jsslogo.jpg`: JSS template files.
 
 ## Generated submission files
@@ -37,6 +40,6 @@ figure. The complete seven-package public-interface comparison passed its
 216/216-task audit; its separately checksummed paired rows recreate the
 supplementary log-ratio figure and table summaries.
 
-The JSS-layout article is currently 27 pages. Generated PDF and Word reading
+The JSS-layout article is currently 19 pages. Generated PDF and Word reading
 copies, the vignette, and the reference manual must be regenerated from these
 tracked sources for the submission bundle.

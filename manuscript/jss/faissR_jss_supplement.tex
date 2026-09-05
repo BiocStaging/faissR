@@ -33,7 +33,7 @@ Dalia Ahmed$^{1}$, Dupe Ojo$^{1}$\\
 Alessia Vignoli$^{3,4}$, Leonardo Tenori$^{3,4}$\\
 Dinesh Gupta$^{5}$, Silvano Piazza$^{6,7}$\\
 Stefano Cacciatore$^{1,2,\ast}$}
-\date{30 August 2026}
+\date{5 September 2026}
 
 \begin{document}
 \raggedbottom
@@ -291,7 +291,9 @@ implemented.
 
 Table~\ref{tab:dataset-provenance} records where every benchmark matrix came
 from and the transformation that produced the input seen by \pkg{faissR}.
-All final matrices were stored as float32. Labels were retained only for source
+The calibration/reference matrices were stored as float32; controlled CPU
+comparisons supplied ordinary R double matrices to each public interface.
+Labels were retained only for source
 identity checks and were not used by nearest-neighbor timing, tuning, or recall
 calculations.
 
@@ -502,11 +504,10 @@ principal independent-query performance claim. \\
 For approximate calibration candidate $s$, \emph{calibration feasibility}
 requires point-estimate mean query recall $R_s\geq\tau$. Each candidate was timed once and the eligible candidate
 with minimum elapsed time was selected, with deterministic tie-breaking by
-higher recall and candidate identifier. During independent validation, target
-attainment instead requires the one-sided 95\% empirical query-bootstrap lower
-bound for tie-aware mean recall to reach $\tau$ for every independent query
-seed. These are different criteria with different names: the broad calibration
-grid is a point-estimate screen, while validation adds an uncertainty margin.
+higher recall and candidate identifier. During independent-query validation,
+the mean-recall threshold is applied to every recorded validation repeat.
+Calibration and validation differ in query sample, not in confidence level;
+neither eligibility rule adds a statistical uncertainty margin.
 The controlled comparator experiment uses a third label,
 \emph{point-recall-matched}, when both routes have mean recall at least 0.99 in
 every included replicate. Exact-audited candidates form a separate eligibility
@@ -650,34 +651,24 @@ results are therefore not inferred from these cells.
 \section{Validation and aggregation}
 
 Validation used two query seeds and three timing repeats for each dataset,
-metric, $k$, and target. Calibration and validation query samples were
-independent, but both were drawn from the same named dataset. The query seeds
-are the independent recall units; timing repeats reuse a seed's queries and
-measure runtime dispersion rather than additional recall evidence. Approximate
-recall is tie-aware: identifiers strictly inside the archived $k$th boundary
-must match, while unmatched candidates are exactly rescored and can receive
-credit at a tied boundary within tolerance. Boundary credit is capped by the
-number of boundary slots. For each seed, 1,000 deterministic query-level
-bootstrap resamples provide a one-sided 95\% empirical lower bound for mean
-tie-aware recall. A validation cell passes only when every seed completes and
-its lower bound is at least the requested target. The value 1,000 was
-prespecified as a computational compromise that gives 0.001 resolution in the
-empirical bootstrap distribution. The sensitivity analysis compares 1,000 with
-5,000 resamples and audited-query counts of 128, 256, 512, and up to 1,024 on
-flow18, mass41, and ImageNet. Identifier-overlap and tie-aware point estimates,
-lower bounds, boundary-substitution frequencies, the 5th percentile, and
-minimum query recall remain in the machine-readable outputs.
-Exact-audited cells are evaluated by exhaustive-reference identity or
-tie-equivalent distances and are not reclassified by approximate recall.
+metric, $k$, and target. Queries were sampled uniformly without replacement:
+each seed audited $\min(n,1024)$ rows, including all 873 rows for MetRef.
+Timing covered full self-search, while recall was computed on those audit
+rows. Samples came from the same named dataset and shared the reference
+matrix; timing repeats reused the sampled identifiers.
 
-Rows were sampled uniformly without replacement, using $\min(n,1024)$ rows;
-MetRef therefore contributed all 873 rows. Query-seed results are independent
-sampling replicates conditional on the same reference matrix, but query-level
-outcomes need not be mutually independent. The empirical query bootstrap is
-accordingly interpreted as a finite audit-sample diagnostic, not a
-distribution-free or cross-dataset guarantee. Dataset-wide labels suitable for
-a common stratified design were unavailable, so no rare-population claim is
-made for the cytometry collections.
+For approximate routes, each execution repeat reruns the route and recomputes
+mean identifier-overlap recall against the exact reference fixed by its query
+seed. Eligibility requires every recorded repeat under both seeds to reach the
+tier. Timing is summarized across the three repeats within seed; those repeats
+measure runtime dispersion and execution stability but do not add independent
+query samples. No empirical query-bootstrap lower bound was available for the
+archived selector rows. The optional inference utilities are therefore not
+used to reinterpret these counts as confidence-bound successes.
+Alternative identifiers at a tied boundary can reduce approximate overlap;
+the size of this effect is not quantified here. Exact-family routes retain
+the separate exhaustive/reference audit classification. No rare-population,
+distribution-free, or cross-dataset recall guarantee is inferred.
 
 A separate backend-specific leave-one-dataset-out analysis removed every row associated
 with the held-out named dataset before selecting a method family. It used the
@@ -715,7 +706,7 @@ $T_{\mathrm{comparator}}/T_{\mathrm{faissR}}$; values above one favor
 does not verify a common hostname, allocation, and opposing route positions.
 Point-recall-matched summaries require both routes to have mean recall at least
 0.99 in each included validation replicate. This comparator-matching rule is
-not the empirical query-bootstrap validation-attainment criterion.
+not a confidence-bound criterion.
 
 The comparator settings were fixed before execution:
 \pkg{BiocNeighbors} used \code{nlinks = 16},
@@ -730,7 +721,7 @@ every dataset--$k$ cell and construction effort at $k=30$. The fastest
 configuration attaining mean recall of at least 0.99 in all three calibration
 repetitions was selected separately for each provider and evaluated over five
 repetitions on independent queries. This is a point-recall calibration screen,
-not the empirical query-bootstrap validation-attainment criterion.
+not a confidence-bound criterion.
 Validation recorded cold-call, direct index-build, and fitted-query times as
 separate measured phases. Fitted queries requested $k+1$ neighbors and removed
 the known source row before recall was calculated. A phase-specific ratio was
@@ -755,10 +746,10 @@ demonstrate identical internal worker use across providers.
 
 \section{Completed workload experiments}
 
-This section reports completed and audited workload evidence only. No
-isolated-memory estimate, device-to-host transfer advantage, or downstream
-consumer timing is claimed. The current evidence for GPU-resident output is
-limited to executable API, ownership, route, and conversion contract tests.
+This section reports completed and audited workload evidence. Resource-memory
+and device-transfer speed are not estimands in this article; GPU-resident
+output is evaluated through executable API, ownership, route, and conversion
+contract tests.
 
 The completed query-workload experiment evaluated explicit query batches of 1,
 32, and up to 1,024 rows on five datasets. The fitted-index cache was cleared
@@ -799,7 +790,7 @@ prespecified 0.99 point-recall screen in every validation repeat. Ratios are
 Comparator & Eligible pairs & Cold median & Build median & Fitted-query median \\
 \midrule
 \pkg{BiocNeighbors} HNSW & 31 & 6.55 & 11.50 & 0.90 \\
-\pkg{RcppHNSW} HNSW & 32 & 1.67 & 1.63 & 1.12 \\
+\pkg{RcppHNSW} HNSW & 32 & 1.67 & 1.63 & 1.09 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -817,9 +808,8 @@ The complete matched-node CPU comparison covered seven established
 4,104 external-versus-\pkg{faissR} pairs. All routes in a pair used the same
 dataset, metric, $k$, validation seed, repetition, Slurm allocation, and host;
 the route order was randomized and each timed route used a fresh \textsf{R}
-worker. The point-recall-matched screen in this table is a legacy mean-recall
-criterion and is not the empirical query-bootstrap lower-bound criterion used
-for independent-query selector validation. It is retained only to avoid
+worker. The point-recall-matched screen in this table uses mean identifier-overlap recall,
+not a bootstrap lower-confidence-bound criterion. It is retained only to avoid
 comparing a fast, low-recall route with a high-recall route.
 
 Table~\ref{tab:supp-comprehensive-r} reports every prespecified comparator
@@ -837,12 +827,13 @@ included in the replication bundle.
 \caption{Complete CPU public-interface comparison. Ratios are
 \(T_{\mathrm{comparator}}/T_{\mathrm{faissR}}\); values above one favor
 \pkg{faissR}. ``Matched'' denotes pairs where both public routes completed and
-each achieved the requested mean-recall tier. Timeouts include either member of
-the pair.}
+each achieved the requested mean-recall tier. Timeout counts sum route calls
+across both members and can exceed the number of pairs; a shared reference-route
+timeout can contribute to more than one comparator class.}
 \label{tab:supp-comprehensive-r}
 \begin{tabular}{@{}llrrrrr@{}}
 \toprule
-Comparator & Class & Tasks & Both OK & Matched & Timeout & Median [IQR] \\
+Comparator & Class & Pairs & Both OK & Matched & Timeout & Median [IQR] \\
 \midrule
 \pkg{FNN} & Exact & 648 & 216 & 189 & 699 & 27.23 [4.69--38.12] \\
 \pkg{RANN} & Exact & 432 & 120 & 114 & 459 & 21.08 [11.20--41.88] \\
@@ -911,7 +902,7 @@ Independently tuned HNSW target-matched provider pairs & 63 & 72 \\
 CPU query-workload cells & 60 & 60 \\
 CUDA query-workload cells & 60 & 60 \\
 Comprehensive CPU comparison tasks & 216 & 216 \\
-Comprehensive CPU route repetitions & 6,480 & 6,480 \\
+Comprehensive CPU route outcomes recorded & 6,480 & 6,480 \\
 Comprehensive point-recall-matched pairs & 1,636 & 4,104 \\
 \bottomrule
 \end{tabularx}
@@ -930,6 +921,25 @@ experiment, 253 \pkg{BiocNeighbors} pairs across seven datasets and 268
 for both routes. Median dataset-level ratios were 11.40 and 1.85,
 respectively; all 29 execution failures were \pkg{BiocNeighbors} time limits.
 These ratios must not be interpreted as general provider-level advantages.
+
+\begin{table}[ht]
+\centering
+\small
+\caption{Secondary matched CUDA end-to-end ratios. Each ratio is
+\(T_{\mathrm{second\ route}}/T_{\mathrm{automatic}}\), so values above one
+favor automatic selection. Dataset medians are summarized across datasets.}
+\label{tab:supp-cuda-paired}
+\begin{tabularx}{\textwidth}{@{}Xlrrr@{}}
+\toprule
+Comparison & Datasets & Median & IQR & Range \\
+\midrule
+Automatic / explicit exact & 9 & 0.99 & 0.98--1.00 & 0.94--1.01 \\
+Automatic / brute force & 9 & 0.87 & 0.83--1.18 & 0.70--1.90 \\
+Automatic / CAGRA & 9 & 2.23 & 1.00--2.58 & 0.81--10.96 \\
+IVF-selected / explicit exact & 4 & 4.59 & 2.80--5.58 & 0.14--5.83 \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 \begin{table}[ht]
 \centering
@@ -1128,7 +1138,7 @@ in 98. These frequencies delimit the empirical contribution of recall-aware
 selection: it adapts the evaluated large Euclidean cases, while exhaustive
 search remains the stable choice elsewhere.
 
-\section{Installation, portability, and release gates}
+\section{Installation and portability}
 
 Table~\ref{tab:install-matrix} separates functional execution evidence from
 diagnostic-only portability artifacts. A diagnostic-only artifact can load and
@@ -1139,16 +1149,15 @@ accidental diagnostic build fails at configuration time.
 
 \begin{table}[h]
 \centering
-\caption{Tested and defined installation configurations for \pkg{faissR} 0.99.34.}
+\caption{Recorded installation environments and diagnostic-build boundaries.}
 \label{tab:install-matrix}
 \small
 \begin{tabularx}{\textwidth}{@{}p{0.19\textwidth}p{0.25\textwidth}X@{}}
 \toprule
 Status & Platform and providers & Evidence or boundary \\
 \midrule
-Functional, completed & macOS arm64; R 4.6.0; FAISS 1.14.3; libomp 22.1.x; Homebrew clang 22.1.1; GNU Fortran 12.2.0 & Strict source install and CPU exact-search smoke passed. \code{R CMD check --as-cran} completed with one incoming-check NOTE for a new submission and no package warning or error. \\
+Functional, completed & macOS arm64; R 4.6.0; FAISS 1.14.3; libomp 22.1.x; Homebrew clang 22.1.1; GNU Fortran 12.2.0 & Strict source install and CPU search smoke passed. The retained package-check log reports no errors or warnings; manual rendering is checked separately. \\
 Functional, completed & Debian 13; R 4.5.3; FAISS 1.14.3; cuVS 26.06; CUDA 13.2; NVIDIA L40S, driver 595.58.03 & Frozen publication route-contract and benchmark environment. The compiler executable/version used to construct the image was not retained and is therefore not inferred. \\
-Functional, defined & Hosted Ubuntu and macOS CPU workflows & Linux builds FAISS 1.14.3 from source; macOS installs Homebrew FAISS/libomp. Both require FAISS, run package checks and a compact replication smoke. Status becomes evidence only after hosted completion. \\
 Diagnostic only & Recognized Windows, macOS staging, or WebAssembly builders without compatible FAISS & Package can load and report the missing provider; nearest-neighbor calls are unavailable. This is portability diagnostics, not functional support. \\
 \bottomrule
 \end{tabularx}
@@ -1168,11 +1177,8 @@ NVIDIA's CUDA SDK terms. They are user/system-supplied native dependencies and
 are not copied into the package source. The installed
 \path{THIRD_PARTY_LICENSES.md} records the links and distribution boundary.
 
-The review bundle contains a checksummed snapshot rather than an archival DOI.
-Minting an immutable source/article/replication release with a persistent
-identifier, inserting that identifier in the article, and rerunning both clean
-replication modes are explicit pre-publication gates. The package repository is
-not described as a substitute for that future archive.
+The replication bundle contains a checksummed snapshot rather than an archival DOI.
+No persistent archival identifier is currently available.
 
 \section{Replication}
 
@@ -1183,8 +1189,7 @@ The submission material contains:
 \item a single commented article replication script and its HTML output;
 \item a checksummed result snapshot, its SHA-256 ledger, and a pre-analysis checksum
   gate;
-\item machine-readable reconstructions of the 18 archive-backed article and
-  supplementary tables, with a table checksum manifest, plus separately
+\item machine-readable reconstructions of 18 numerical summaries from the calibration/validation archive, with a table checksum manifest, plus separately
   checksummed paired rows for the completed seven-package comparison;
 \item software, container, dataset, and result fingerprints; and
 \item a reduced CPU path that reproduces the interface example without a GPU.
@@ -1193,14 +1198,16 @@ The full CUDA evaluation requires a compatible NVIDIA GPU and the recorded
 FAISS/cuVS build. Reanalysis of the checksummed output does not require a GPU. The
 standalone script has three explicit modes: \code{compact} runs interface
 examples on an ordinary CPU computer, \code{archive} verifies the checksummed
-archive before extraction and recreates every reported table, and \code{all}
+archive before extraction and reconstructs the archive-backed numerical summaries, and \code{all}
 runs both. Any digest, schema, dataset-fingerprint, aggregation, or table-audit
 failure stops execution. A successful run records archive verification,
 per-table SHA-256 digests, and a fresh \code{sessionInfo.txt}.
-Both \code{compact} and \code{archive} modes completed from clean temporary
-directories on 2026-08-30; the archive run verified its digest and rebuilt all
-18 archive-backed tables. The separate seven-package paired evidence has its
-own SHA-256 ledger and is verified before its supplementary figure is drawn.
+The archive-backed table builder produces 18 numerical summaries with stable
+file identifiers; these identifiers are not article table numbers.
+Separate checksum-verified inputs reconstruct the controlled-pair figures,
+the seven-package comparison, and the completed tuned-HNSW and query-workload
+results. Software-interface and installation tables are descriptive source
+tables rather than estimated benchmark quantities.
 
 \section{Interpretation}
 

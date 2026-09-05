@@ -57,6 +57,7 @@ summarize_group <- function(x) {
 
 args <- parse_args(commandArgs(trailingOnly = TRUE))
 script_path <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE)[[1L]])
+script_path <- gsub("~+~", " ", script_path, fixed = TRUE)
 script_dir <- dirname(normalizePath(script_path, mustWork = TRUE))
 input <- args$input %||% file.path(
   script_dir, "comprehensive_r_comparison", "jss_comprehensive_r_pairs.csv.gz"

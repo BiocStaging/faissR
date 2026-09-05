@@ -1,138 +1,80 @@
-# faissR manuscript for the Journal of Statistical Software
+# faissR Journal of Statistical Software materials
 
-This directory contains the JSS-format manuscript source:
+## Sources and evidence
 
-- `faissR_jss.tex`: article source in the official JSS LaTeX class.
-- `faissR_jss.bib`: references used by the article.
-- `faissR_jss_supplement.tex`: supplementary-material source.
-- `code.R` and `code.html`: commented standalone replication entry point and
-  freshly executed output.
-- `replication_article.R`: compact examples, pre-analysis archive verification,
-  checksummed-result validation, and analysis orchestration.
-- `build_manuscript_tables.R`: recreates every article and supplement table
-  and writes a checksum manifest.
-- `build_paired_cpu_figure.R`: verifies the checksummed controlled-pair evidence and
-  recreates the main-text dataset-level log-ratio figure.
-- `build_comprehensive_r_figure.R`: verifies the checksummed complete
-  seven-package comparison evidence and recreates its supplementary grayscale
-  log-ratio figure.
-- `paired_cpu_comparison/`: checksummed controlled same-node CPU HNSW pairs.
-- `comprehensive_r_comparison/`: checksummed paired rows from the completed
-  matched-node comparison with FNN, RANN, rnndescent, BiocNeighbors,
-  Rnanoflann, RcppAnnoy, and RcppHNSW.
-- `faissR_jss_evidence_snapshot.tar.gz` and its `.sha256` file: checksummed
-  campaign evidence and required pre-analysis digest. This is a version-pinned
-  experiment snapshot; the archival frozen release will follow package acceptance.
-- `cpu_loodo/`: checksummed machine-readable CPU leave-one-dataset-out results
-  reconstructed from the explicit independent-query routes in the latest HPC transfer.
-- `practical_cpu_example.R`: executable Bioconductor `ALL` example covering
-  exact search, three recall-targeted HNSW calls, observed recall, returned
-  evidence, and fitted-index reuse.
-- `build_docx.py`: reproducibly converts the JSS source to the Word reading
-  copy while preserving package names, code blocks, tables, and workflow
-  figures.
-- `build_supplement_docx.py`: converts the supplementary source to an editable
-  Word reading copy.
-- `jss.cls`, `jss.bst`, `jsslogo.jpg`: official JSS template files.
+- `faissR_jss.tex`, `faissR_jss_supplement.tex`, and `faissR_jss.bib`:
+  authoritative article, supplement, and bibliography.
+- `code.R` and `replication_article.R`: single commented entry point and
+  analysis orchestration. `code.html` is executed compact-mode output.
+- `build_manuscript_tables.R`: 18 archive-backed numerical summaries.
+  Their stable identifiers do not equal the typeset table numbers.
+- `build_paired_cpu_figure.R` and `build_comprehensive_r_figure.R`:
+  checksum-verified controlled-pair and seven-package comparison figures.
+- `build_architecture_figures.R`: software architecture diagrams.
+- `analyze_completed_systems.R` and `completed_systems/`: checksum-verified
+  raw tuned-HNSW and CPU/CUDA query-workload results and their reanalysis.
+- `paired_cpu_comparison/`, `comprehensive_r_comparison/`, `cpu_loodo/`,
+  and `faissR_jss_evidence_snapshot.tar.gz`: recorded experiment evidence,
+  retaining original execution identities and accompanying checksum ledgers.
+- `practical_cpu_example.R`: Biobase sample.ExpressionSet example.
+  Biobase is a package import; no external dataset package is needed.
+  It reports fresh observed recall and fitted-index reuse. Its small timings
+  illustrate the API and are not cross-package benchmark measurements.
+- `build_docx.py` and `build_supplement_docx.py`: editable reading copies.
+  The official JSS-class PDF, not Word pagination, is the submission format.
 
-Build the article and supplementary PDFs with:
+## Reproduction
 
-```sh
-latexmk -pdf faissR_jss.tex
-latexmk -pdf faissR_jss_supplement.tex
-```
-
-Regenerate the editable Word reading copies with:
-
-```sh
-python3 build_docx.py
-python3 build_supplement_docx.py
-```
-
-Run the compact CPU replication and regenerate its executed HTML report from
-this directory with:
+From this directory, with a functional CPU installation of faissR:
 
 ```sh
 Rscript code.R
 Rscript -e 'knitr::spin("code.R", knit = TRUE)'
 ```
 
-Recreate the manuscript and supplement tables from the checksummed snapshot on a
-regular computer with:
+To reanalyze the supplied evidence without a GPU:
 
 ```sh
-FAISSR_JSS_MODE=archive \
-FAISSR_JSS_DERIVED_DIR=derived \
-Rscript code.R
+FAISSR_JSS_MODE=archive FAISSR_JSS_DERIVED_DIR=derived Rscript code.R
 ```
 
-The archive digest is checked before extraction. A mismatch stops the script
-before any result is read. Successful execution writes
-`archive_verification.csv`, `manuscript_tables/manuscript_table_manifest.csv`,
-`manuscript_tables/MANUSCRIPT_TABLE_AUDIT.txt`, a fresh `sessionInfo.txt`, and
-the consistency artifacts `reference_record_dimensions.csv`,
-`calibration_candidate_grid_manifest.csv`,
-`calibration_candidate_grid_public.csv.gz`,
-`experiment_version_boundaries.csv`, and `experiment_version_changes.csv`.
-Use `FAISSR_JSS_MODE=all` to run the compact package examples and archive
-reconstruction in one process.
+Use `FAISSR_JSS_MODE=all` for both modes. Digests are checked before analysis.
+Outputs include verification records, numerical-summary manifests,
+completed-systems tables, paired figures, and session information. Exact
+execution versions remain in the machine-readable provenance; they must not
+be replaced by the current package version.
 
-Recreate the paired CPU figure directly with:
+Build the manuscript and supplement:
 
 ```sh
-Rscript build_paired_cpu_figure.R
+Rscript build_architecture_figures.R
+latexmk -pdf -halt-on-error faissR_jss.tex
+latexmk -pdf -halt-on-error faissR_jss_supplement.tex
+python3 build_docx.py
+python3 build_supplement_docx.py
 ```
 
-Recreate the complete seven-package comparison figure directly with:
+Set `FAISSR_JSS_EXAMPLE_OUT` to a destination when running
+`practical_cpu_example.R` to retain CSVs, session information, and freshly
+renderable `practical_cpu_output.tex`. Example timings vary across executions.
 
-```sh
-Rscript build_comprehensive_r_figure.R
-```
+## Submission boundaries
 
-Run the practical CPU example with the Bioconductor `ALL` and `Biobase`
-packages listed in the package `Suggests` field:
+The article includes only analyzed evidence. The seven-package comparison
+contains 216 tasks and 6,480 route repetitions, including failures and
+timeouts. Reported approximate-recall eligibility is the recorded mean-recall
+screen, not an uncomputed confidence bound. Descriptive interface tables are
+maintained in LaTeX; empirical summaries are rebuilt by the scripts above.
 
-```sh
-Rscript practical_cpu_example.R
-```
+Full experiment launchers are under `benchmark_scripts/jss_reproduction/`.
+They need the recorded data, container, hardware, and scheduler. Historical
+run identifiers and paths are provenance, not instructions to rerun old jobs.
+Internal planning/review files are not part of the submission materials.
 
-Set `FAISSR_JSS_EXAMPLE_OUT` to retain its CSV summaries and provenance file.
-The example timings explain the public API and are not treated as formal
-cross-package benchmark evidence.
+A persistent archival identifier is not yet available. The checksummed
+repository bundle does not substitute for such a deposit. The source package
+excludes manuscript, benchmark scripts, and internal review files via
+`.Rbuildignore`. See `SUBMISSION_AUDIT.md` for verification and remaining
+submission requirements.
 
-The full special-hardware experiment uses
-`benchmark_scripts/jss_reproduction/final_campaign/submit_campaign.R`.
-That single commented entry point validates the version-pinned image and submits the
-existing independent CPU/CUDA launchers one phase at a time; it does not hide
-their resource headers or advance past an unchecked evidence gate. Its ledger
-is updated after every submission so a partial Slurm phase remains auditable.
-The companion `sync_publication_suite.sh` utility verifies that a user-supplied
-HPC mirror contains the same submitter and all 203 launchers before QA begins.
-
-Generated PDFs, DOCX files, LaTeX intermediates, and internal review-cycle
-reports are intentionally excluded from version control. The LaTeX, BibTeX,
-replication, and document-builder sources are tracked. The package
-`.Rbuildignore` excludes this directory from the Bioconductor source tarball.
-
-The manuscript distinguishes metric correctness, desired-recall attainment,
-independent-query within-dataset validation, and dataset-withholding analyses.
-The replication workflow includes route QA, exact-reference and calibration audits,
-independent-query evaluation, reusable-index
-experiments, auto-versus-oracle analysis, and archive checksums. Only evidence
-that passes the corresponding audit is eligible for a reported result.
-
-The 2026-09-04 evidence transfer additionally contains completed, audited
-independently tuned CPU HNSW, query-workload, and seven-package public-interface
-studies. The latter completed all 216 design tasks and all 6,480 route
-repetitions; its point-recall-matched timing ratios remain configuration-level
-public-interface evidence rather than a provider-optimized ranking.
-
-The current JSS instructions request a commented replication script, rendered
-output, session information, and a feasible reduced path when full experiments
-need special hardware: <https://www.jstatsoft.org/authors>.
-
-The publication campaign must use a container containing the exact package
-version and commit named by the route-QA launchers. After any executable
-package change, rebuild the image and run both route-QA jobs before submitting
-timed work; earlier containers are not valid substitutes even when their CUDA
-libraries are unchanged.
+JSS requirements: https://www.jstatsoft.org/authors

@@ -61,11 +61,11 @@ jobs:
         run: |
           R CMD build .
           tarball=$(find . -maxdepth 1 -name 'faissR_*.tar.gz' -print -quit)
-          Rscript -e 'rcmdcheck::rcmdcheck(command_args="--as-cran", error_on="warning")'
+          Rscript -e 'rcmdcheck::rcmdcheck(path=commandArgs(TRUE)[[1]], args="--as-cran", error_on="warning")' "$tarball"
           R CMD INSTALL "$tarball"
       - name: Functional smoke and compact replication
         run: |
-          Rscript -e 'library(faissR); stopifnot(faiss_available()); x <- matrix(rnorm(240), 40); z <- nn(x, 3, method="exact", backend="cpu"); stopifnot(identical(dim(z$indices), c(40L, 3L)))'
+          Rscript -e 'library(faissR); stopifnot(faiss_available()); x <- matrix(rnorm(240), 40); z <- nn(x, k=3, method="exact", backend="cpu"); stopifnot(identical(dim(z$indices), c(40L, 3L)))'
           FAISSR_JSS_MODE=compact \
           FAISSR_JSS_DERIVED_DIR="$RUNNER_TEMP/jss-compact" \
           Rscript manuscript/jss/replication_article.R

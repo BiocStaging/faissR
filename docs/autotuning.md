@@ -167,20 +167,20 @@ The target recall tiers have different roles:
 
 ### Target-recall contract
 
-The statistic compared with `target_recall` is a **one-sided 95% lower
-confidence bound for mean tie-aware query recall@k**. Strictly closer reference
-neighbors must match by identifier. An unmatched returned neighbor can receive
-credit only when exact metric rescoring places it at an equivalent kth-distance
-boundary, and boundary credit cannot exceed the number of boundary slots. The
-bound uses 1,000 deterministic query-level bootstrap resamples. A candidate
-attains target `tau` only when the bound is at least `tau` for every independent
-validation query seed, with no missing or failed seed. Repeated timings of one
-query set are collapsed within seed and do not count as independent recall
-evidence. For a shape-group policy, the same condition must hold for every
-represented dataset. Identifier-overlap recall, point tie-aware recall, median
-and minimum query recall, and boundary-substitution frequency are diagnostics.
-The public value requests a calibrated operating point, not a statistical
-guarantee on unseen data.
+The reported calibration and validation evidence uses mean identifier-overlap
+recall@k across sampled queries. Calibration screens candidate configurations;
+validation requires the requested tier in every recorded repeat on separately
+sampled query rows. Timing repeats reuse the same queries and are not new
+recall samples. Point-recall-matched comparator pairs require both routes to
+pass their prespecified screen.
+
+The optional inference utilities can compute tie-aware recall and empirical
+query-bootstrap lower bounds when per-query data are available. These are
+different statistics: a row containing only point recall does not establish
+confidence-bound attainment. The published selector counts use point recall,
+and do not quantify the effect of tied alternative approximate neighbors.
+A requested tier is a calibration-informed operating point, not a guarantee
+on unseen data.
 
 Method-specific interpretation of the tuning files:
 

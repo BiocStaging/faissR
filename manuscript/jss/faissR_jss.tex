@@ -6,6 +6,7 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{lmodern}
+\usepackage{float}
 
 \hypersetup{hypertexnames=false}
 \setlength{\emergencystretch}{2em}
@@ -36,14 +37,14 @@ open-source, Python-free interface to the FAISS \proglang{C++} library and,
 optionally, NVIDIA CUDA and RAPIDS cuVS. A common interface provides exact,
 inverted-file, product-quantization, graph, and low-dimensional searches for
 Euclidean, cosine, and correlation distance. It accepts double and \pkg{float}
-matrices, supports reusable indexes, performs batching and self-neighbor
+matrices, supports reusable CPU indexes, performs batching and self-neighbor
 removal in compiled code, and can keep nearest-neighbor buffers on an NVIDIA
 GPU. An optional experimental CUDA policy, calibrated on an NVIDIA L40S for
 cold full-self-search, selects a method and parameters from data shape, metric,
 $k$, and a requested recall tier while returning route and evidence metadata.
-Across nine datasets, 100 CPU/CUDA route-contract tests passed, independently
-of the performance benchmark. Timed validation measured complete cold
-self-search, while recall was audited on independently sampled query rows.
+The package route-contract suite comprised 100 CPU/CUDA cells and passed in
+full. Separately, evaluation across nine datasets timed complete cold
+self-search while auditing recall on independently sampled query rows.
 Matched-node CPU comparisons with seven established \proglang{R} interfaces
 and CUDA route evaluation showed substantial dataset and workload
 heterogeneity: approximate search was advantageous in some large-data settings,
@@ -117,15 +118,9 @@ packages. Consequently, CPU algorithm families can be compared through their
 public interfaces, whereas there is no like-for-like external
 GPU-resident-\proglang{R} comparator for \fct{nn\_gpu}.
 
-Table~\ref{tab:r-ecosystem} compares software scope rather than speed. The
-survey covers the principal maintained CRAN and Bioconductor interfaces named
-above; it is not evidence that one implementation is uniformly faster. Among
-these interfaces, \pkg{faissR} is the only one that directly combines FAISS
-CPU, optional FAISS GPU/cuVS routes, and an owning device-resident result
-contract. We did not identify a maintained CRAN or Bioconductor package that
-otherwise exposes cuVS nearest-neighbor search or GPU-resident neighbor buffers
-through an R API. Several packages provide reusable CPU indexes, so reuse alone
-is not claimed as unique.
+Table~\ref{tab:r-ecosystem} summarizes software scope, not speed. Reusable
+CPU indexes are available in several packages; the distinguishing feature here
+is their integration with FAISS/cuVS and explicit device-resident results.
 
 \begin{table}[t]
 \centering
@@ -162,35 +157,15 @@ with predominantly row-major float32 libraries, define consistent metric and
 ordering semantics, avoid rebuilding indexes for repeated queries, and make
 device transfers explicit.
 
-\pkg{faissR} addresses these integration problems. It is not a new ANN
-algorithm; it is a common execution and evidence layer for FAISS CPU, optional
-FAISS GPU, and optional direct CUDA/cuVS providers. Relative to existing
-\proglang{R} nearest-neighbor interfaces, the package combines:
-\begin{itemize}
-\item one metric, ordering, and result contract across exhaustive Flat,
-inverted-file, product-quantization, HNSW, CAGRA, and graph-refinement routes;
-\item direct \pkg{float} input and compiled metric transformation, batching,
-sorting, and self-neighbor removal, reducing conversion and R-side processing;
-\item reusable fitted indexes and GPU resources, plus owning GPU-resident
-nearest-neighbor buffers that downstream packages can consume through a public
-C-callable interface without a mandatory device-to-host result copy. CPU index
-reuse and fitted-query timing are evaluated below; GPU-resident ownership and
-transfer semantics are explicit; and
-\item recall-targeted parameter selection for explicit methods and an optional
-experimental L40S-calibrated CUDA policy for cold full-self-search, with
-inspectable metadata for the requested and resolved
-route, backend, data conversion, result residency, device transfers, and
-calibration-hardware provenance.
-\end{itemize}
-The distinguishing contribution is this combination of FAISS/cuVS method
-breadth, representation-aware execution, reusable CPU/GPU state, and auditable
-routing through one \proglang{R} API. The automatic policy is an experimental
-convenience rather than the principal contribution. Installed-policy evidence
-in this article concerns CUDA; CPU evidence includes explicit HNSW, while CPU
-and CUDA cross-fitted reconstructions are post hoc candidate-set sensitivity
-analyses rather than validation of either installed policy.
-The remainder of the article defines these contracts, illustrates their use,
-and evaluates correctness, recall attainment, and paired execution time.
+\pkg{faissR} integrates these providers rather than proposing a new ANN
+algorithm. It combines a common metric and result contract, direct \pkg{float}
+input, compiled preprocessing, reusable indexes, and owning GPU-resident buffers.
+A public C-callable interface lets downstream packages consume device results
+without a mandatory host copy. Route, conversion, residency, and calibration
+metadata make execution inspectable. Automatic selection is an optional
+experimental convenience, not the principal contribution.
+The following sections explain the interface and evaluate correctness, recall,
+and execution time against existing R implementations.
 
 \section{Statistical and software design} \label{sec:design}
 
@@ -264,36 +239,25 @@ r_i(k)=\frac{|N_i(k)\cap N_i^{\star}(k)|}{k},
 \bar r(k)=\frac{1}{m}\sum_{i=1}^{m}r_i(k).
 \label{eq:recall}
 \end{equation}
-Identifier overlap alone can penalize an equally valid neighbor at a tied
-$k$th boundary. We therefore also compute tie-aware query recall. Neighbors
-strictly closer than the archived $k$th reference distance must match by
-identifier. An unmatched returned neighbor receives boundary credit only when
-exact metric rescoring places it at that boundary within the prespecified
-float32 tolerance; total boundary credit is capped by the number of non-strict
-reference slots. For an approximate route, \emph{validation attainment} of
-tier $\tau$ requires a one-sided 95\% empirical query-bootstrap lower bound for
-mean tie-aware query recall to be at least $\tau$ for every independent query
-seed. The bound is the deterministic percentile from 1,000 query-level
-bootstrap resamples. It quantifies uncertainty among the uniformly sampled
-audited rows; because query outcomes share a reference matrix and the audited
-rows are not a probability sample of future datasets, it is neither a
-distribution-free guarantee nor a cross-dataset confidence statement.
-Identifier-overlap recall, point tie-aware recall, the 5th percentile, median,
-and minimum query-level recall, and the frequency of boundary substitutions
-are retained as diagnostics. Exhaustive routes are assessed separately by a tie-aware
-exactness audit and are labeled \emph{exact-audited}, not as ANN target
-successes.
+Reported approximate-route validation uses mean identifier-overlap recall
+$\bar r(k)$, required to reach $\tau$ in every recorded validation repeat.
+The two query seeds sample rows from the same reference dataset; the three
+timing repeats reuse those samples and are not additional independent recall
+evidence. The result is an empirical operating point, not a guarantee for
+future queries or datasets. Identifier overlap can penalize a different but
+equally valid neighbor at a tied boundary; no tie-adjusted approximate-recall
+or bootstrap confidence claim is made for these archived results.
+Exact-family routes are classified separately as \emph{exact-audited}
+using the exhaustive/reference audit rather than ANN recall eligibility.
 
-The public argument \code{target\_recall} accepts exactly the three requested
-recall tiers 0.90, 0.95, and 0.99. Other numeric values fail validation; the
-software neither rounds to the nearest tier nor interpolates parameters. Three
-different labels are used. \emph{Calibration-feasible} means that a candidate
-passed the point-estimate recall screen used by the archived broad grid.
-\emph{Validation-attained} means that the empirical query-bootstrap lower bound
-passed for every independent query seed. \emph{Point-recall-matched} means that
-both routes in a controlled comparator pair had mean recall at least 0.99 in
-every included replicate. Only the second is called target attainment without
-qualification.
+The public argument \code{target\_recall} accepts the three tiers 0.90, 0.95,
+and 0.99; it neither rounds other values nor interpolates parameters.
+\emph{Calibration-feasible} denotes a candidate passing the mean-recall screen
+on calibration queries. \emph{Validation-attained} denotes the same point-recall
+threshold on the separately sampled validation queries in every repeat.
+\emph{Point-recall-matched} denotes a comparator pair for which both routes
+pass the prespecified mean-recall screen. These labels distinguish experiment
+roles, not different confidence guarantees.
 
 \subsection{Methods and providers}
 
@@ -320,28 +284,9 @@ on CUDA when available. More than one policy can therefore resolve to the same
 provider on a particular installation. The requested name and concrete
 \code{backend\_used} are both retained in result metadata.
 
-Table~\ref{tab:exact-dispatch} makes the exhaustive dispatch policy explicit.
-Metric preprocessing can change the provider's internal metric, but not the
-public Euclidean, cosine, or correlation contract. If a provider required by
-an explicit policy is unavailable, the call errors rather than changing
-device or mathematical family.
-
-\begin{table}[t]
-\centering
-\caption{Resolution of the three exhaustive public method names. Arrows show
-capability precedence, not runtime fallback after a provider failure.}
-\label{tab:exact-dispatch}
-\small
-\begin{tabularx}{\textwidth}{@{}lXXX@{}}
-\toprule
-Public name & CPU resolution & CUDA resolution & When to request it \\
-\midrule
-\method{exact} & FAISS Flat & FAISS GPU Flat when available; otherwise direct cuVS brute force & Portable exhaustive request when the concrete provider is unimportant. \\
-\method{flat} & FAISS Flat & Explicit FAISS GPU Flat; unavailable capability is an error & Require FAISS Flat for provider-specific reproducibility or fitted-index use. \\
-\method{bruteforce} & FAISS Flat & Direct cuVS brute force when available; otherwise FAISS GPU Flat & Prefer the direct cuVS exhaustive CUDA route or compare exhaustive providers. \\
-\bottomrule
-\end{tabularx}
-\end{table}
+The supplement gives exhaustive-provider precedence. Missing explicitly
+requested capabilities produce an error; metric preprocessing preserves the
+public distance contract.
 
 \begin{table}[t]
 \centering
@@ -476,36 +421,13 @@ Interface & Return & Purpose and lifecycle \\
 convenience interface. It is not part of the nearest-neighbor performance
 claims evaluated in this article.
 
-\subsection{Choosing a route}
+\subsection{Choosing and reusing a route}
 
-Table~\ref{tab:user-decision} gives practical defaults. Exact search is the
-reference choice and is often competitive for one-off searches. HNSW is the
-general CPU choice when an index will be reused. IVF is most useful for large
-collections when training cost can be amortized and recall is checked. CAGRA
-is the principal CUDA graph route. \method{auto} is convenient only within its
-explicitly reported calibration scope; it does not replace capability checks
-or application-specific recall validation.
-
-\begin{table}[t]
-\centering
-\caption{User-oriented route selection. Memory cost is qualitative because
-valid per-route peak-memory measurements have not yet been completed.}
-\label{tab:user-decision}
-\scriptsize
-\begin{tabularx}{\textwidth}{@{}lXXXX@{}}
-\toprule
-Route & Suitable use & Build and reuse & Accuracy and memory & Backend/status \\
-\midrule
-Exact/Flat & Reference search, small or moderate data, one-off batches & No approximate graph; fitted Flat can retain provider state & Exact-audited; stores data and output/workspace & CPU/CUDA, supported \\
-HNSW & Repeated general-purpose queries, especially CPU & Non-trivial graph build; strong reuse case & Approximate; graph memory grows with degree & CPU/CUDA, supported \\
-IVF & Large collections with repeated or large query batches & Trains coarse lists; reuse recommended & Approximate; tune \code{nprobe}; list/index storage & CPU/CUDA, supported \\
-CAGRA & High-throughput NVIDIA GPU graph search & GPU graph construction; reuse recommended & Approximate; substantial device graph/workspace & CUDA, supported \\
-Grid & Exact search in two or three dimensions & Spatial index can be reused & Exact-audited; occupancy-dependent cells & CPU/CUDA, supported \\
-\method{auto} & Experimental cold full-self-search convenience on a matched workload & Chooses route and parameters; not reuse-aware & Inspect target and hardware-extrapolation metadata & CPU/CUDA, experimental \\
-Derived graph routes & Method-development and explicit experimentation & Route-specific construction & Approximate; inspect implementation scope & CPU/CUDA, experimental \\
-\bottomrule
-\end{tabularx}
-\end{table}
+Exact search is a reference choice and is often competitive for a one-off call.
+HNSW is a useful CPU starting point for repeated queries; IVF offers a
+training/search tradeoff on large collections, and CAGRA provides CUDA graph
+search. The method table lists controls and availability. Experimental
+automatic selection should be used within its documented calibration scope.
 
 Every host result has one row per query and one column per returned neighbor.
 Duplicate observations remain distinct row identifiers, so a non-self
@@ -560,7 +482,7 @@ A typical macOS CPU installation is:
 \begin{CodeChunk}
 \begin{CodeInput}
 brew install faiss libomp
-R> BiocManager::install("faissR")
+R> install.packages("faissR_0.99.34.tar.gz", repos = NULL, type = "source")
 R> backend_info()
 R> subset(nn_capabilities(runtime = TRUE), available)
 \end{CodeInput}
@@ -576,16 +498,9 @@ After installation, \fct{faiss\_available}, \fct{backend\_info}, and
 CPU search. Users should not infer CUDA availability merely from the presence
 of an NVIDIA device.
 
-The current \pkg{faissR} 0.99.34 source release was installed functionally and checked on macOS arm64 with
-\proglang{R} 4.6.0, FAISS 1.14.3, Homebrew clang 22.1.1, GNU Fortran 12.2.0,
-and libomp 22.1.x. The source-package \code{R CMD check --as-cran} completed
-installation, tests, examples, vignettes, and manual checks; its sole NOTE was
-the CRAN incoming ``new submission'' notice. The publication environment in
-Table~\ref{tab:software-provenance} is the separately recorded Linux/CUDA
-combination. Repository workflows define functional Linux and macOS CPU checks,
-a clean compact/archive replication check, and a scheduled Valgrind native
-smoke test. Workflow definitions are not reported as successful release
-evidence until their hosted jobs have completed.
+Tested environments and their compiler, FAISS, CUDA, and cuVS versions
+are listed in the supplement; execution identities and check records are
+retained in the replication archive.
 
 \pkg{faissR} is MIT-licensed. It neither vendors nor redistributes FAISS
 (MIT), cuVS (Apache-2.0), or the CUDA toolkit/driver (NVIDIA CUDA SDK terms).
@@ -630,124 +545,49 @@ environment.
 
 \subsection{A practical CPU workflow}
 
-The following example uses the Bioconductor \pkg{ALL} leukemia expression data
-\citep{ALL,Bioconductor}. Treating 12,625 probes as observations and 128
-patients as features gives a moderately sized biological neighbor-search
-problem. It compares recall-targeted HNSW operating points with exact
-neighbors and then reuses a fitted index for prediction.
-
+The example uses \code{sample.ExpressionSet}, distributed with Bioconductor
+\pkg{Biobase} \citep{Bioconductor}. Its 500 probes and 26 samples provide a
+small, reproducible illustration, not an additional performance benchmark.
+Using probes as observations, compare exact neighbors with three HNSW tiers:
 \begin{CodeChunk}
 \begin{CodeInput}
 R> library("faissR")
-R> data("ALL", package = "ALL")
-R> expression <- Biobase::exprs(ALL)
-R> x <- scale(expression)
-R> exact <- nn(x, k = 15, exclude_self = TRUE,
-+             method = "exact", metric = "euclidean")
-R> recall_at_k <- function(reference, candidate) {
-+   mean(vapply(seq_len(nrow(reference)), function(i)
-+     length(intersect(reference[i, ], candidate[i, ])) /
-+       ncol(reference), numeric(1)))
-+ }
-R> targets <- c(0.90, 0.95, 0.99)
-R> observed <- vapply(targets, function(tau) {
-+   z <- nn(x, k = 15, exclude_self = TRUE,
-+           method = "hnsw", metric = "euclidean",
-+           tuning = "auto", target_recall = tau)
-+   recall_at_k(exact$indices, z$indices)
-+ }, numeric(1))
-R> round(observed, 3)
+R> data("sample.ExpressionSet", package = "Biobase")
+R> expression_data <- Biobase::exprs(sample.ExpressionSet)
+R> x <- scale(expression_data)
+R> exact <- nn(x, k = 15, exclude_self = TRUE, backend = "cpu",
++             method = "exact", n_threads = 1)
+R> candidate <- nn(x, k = 15, exclude_self = TRUE, backend = "cpu",
++                 method = "hnsw", target_recall = 0.99, n_threads = 1)
+R> evidence <- attr(candidate, "approximation")
+R> attr(candidate, "backend_used")
 \end{CodeInput}
 \begin{CodeOutput}
-  0.90  0.95  0.99
- 0.827 0.914 0.965
-\end{CodeOutput}
-\begin{CodeInput}
-R> z99 <- nn(x, k = 15, exclude_self = TRUE,
-+           method = "hnsw", metric = "euclidean",
-+           tuning = "auto", target_recall = 0.99)
-R> evidence <- attr(z99, "approximation")
-R> list(resolved_backend = attr(z99, "resolved_backend"),
-+      requested_recall_tier = attr(z99, "target_recall"),
-+      tuning_rule = evidence$tuning_rule,
-+      evidence_source = evidence$tuning_benchmark_source,
-+      calibration_target_met = evidence$tuning_benchmark_target_met,
-+      input_type = attr(z99, "input_type"),
-+      index_reused = FALSE,
-+      device_to_host_result_copies = 0L)
-\end{CodeInput}
-\begin{CodeOutput}
-$resolved_backend
 [1] "faiss_hnsw"
-$requested_recall_tier
-[1] 0.99
-$tuning_rule
-[1] "hpc_cpu_hnsw_small_n_k15_recall99"
-$evidence_source
-[1] "hpc_hnsw_cpu12_euclidean_20260630_161409"
-$calibration_target_met
-[1] TRUE
-$input_type
-[1] "float32"
-$index_reused
-[1] FALSE
-$device_to_host_result_copies
-[1] 0
 \end{CodeOutput}
 \end{CodeChunk}
-
-This example deliberately retains an application-relevant negative result:
-the calibration metadata describe the source operating point, whereas observed
-recall is computed on \pkg{ALL} and remains below the requested tiers. A user
-requiring 0.99 should therefore increase explicit HNSW search effort after a
-pilot audit or use exact search. This is how route metadata and application
-validation are intended to work together.
-For \code{method = "auto"}, the analogous
-\code{attr(result, "auto\_selection")} record prints the selected route,
-policy identifier, requested tier, and \code{hardware\_evidence}; the latter is
-\code{hardware\_extrapolated\_unvalidated} when the runtime cannot be matched
-to the calibration system.
-
-For train/test prediction, index construction is separated from query time:
+The complete \code{practical_cpu_example.R} computes identifier-overlap
+recall against \code{exact} for each tier. It then treats samples as
+observations, splits training and test samples, and selects and standardizes
+128 probes using training data only. Construction and prediction use:
 \begin{CodeChunk}
 \begin{CodeInput}
-R> keep <- order(apply(expression, 1, var), decreasing = TRUE)[1:128]
-R> patient_x <- scale(t(expression[keep, ]))
-R> y <- droplevels(Biobase::pData(ALL)$BT)
-R> test <- seq(4, nrow(patient_x), by = 4)
-R> train <- setdiff(seq_len(nrow(patient_x)), test)
-R> build <- system.time(model <- knn(
-+   patient_x[train, ], y[train], k = 5,
-+   method = "hnsw", metric = "euclidean",
-+   tuning = "auto", target_recall = 0.99))["elapsed"]
-R> first <- system.time(
-+   prediction <- predict(model, patient_x[test, ]))["elapsed"]
-R> repeated <- system.time(
-+   prediction <- predict(model, patient_x[test, ]))["elapsed"]
-R> route <- attr(prediction, "faissR_nn")
-R> list(seconds = round(c(build = build, first = first,
-+                        repeated = repeated), 3),
-+      query_source = route$query_source,
-+      resolved_backend = route$resolved_backend,
-+      input_type = route$input_type)
+R> model <- knn(training, y[train], k = 5, backend = "cpu",
++              method = "hnsw", n_threads = 1)
+R> prediction <- predict(model, queries)
+R> attr(prediction, "faissR_nn")$query_source
 \end{CodeInput}
 \begin{CodeOutput}
-$seconds
-   build.elapsed    first.elapsed repeated.elapsed
-           0.021            0.003            0.001
-$query_source
 [1] "fitted_index"
-$resolved_backend
-[1] "faiss_hnsw"
-$input_type
-[1] "float32"
 \end{CodeOutput}
 \end{CodeChunk}
-These machine-dependent values are one ordinary CPU execution, included to
-make construction and reuse visible rather than as comparative timing evidence.
-The replication script records the same fields afresh. The important contract
-is \code{query\_source = "fitted\_index"}; the first and repeated calls use the
-model's retained native index rather than rebuilding it.
+Representative output from the complete script is:
+\input{practical_cpu_output.tex}
+Timings depend on the machine and timer resolution; they are not comparative
+benchmark evidence. The reuse field verifies the retained native index.
+The calibration evidence in \code{approximation} describes the source
+operating point, whereas observed recall is measured on these queries.
+Application-specific validation remains necessary when recall is critical.
 
 \subsection{GPU-resident output}
 
@@ -776,106 +616,34 @@ serialization or interprocess sharing is supported. A consumer selects the
 recorded device, may use its own CUDA stream after the synchronized handoff,
 and must complete that work before releasing the owning handle.
 
-The companion package under
-\path{validation/gpu_resident_interoperability/consumer/faissRGpuConsumer}
-shows the complete contract. Its central C++ pattern is:
-\begin{CodeChunk}
-\begin{CodeInput}
-#include <faissR_api.h>
-if (faissR_c_api_version() != 1)
-    Rcpp::stop("Unsupported faissR C ABI version");
-Rcpp::List g(result);
-SEXP owner = g["handle"];              // keep alive during CUDA work
-SEXP indices_ptr = g["indices_ptr"];
-SEXP distances_ptr = g["distances_ptr"];
-const int *id = static_cast<const int *>(
-    R_ExternalPtrAddr(indices_ptr));
-const float *distance = static_cast<const float *>(
-    R_ExternalPtrAddr(distances_ptr));
-cudaSetDevice(Rcpp::as<int>(g["device"]));
-checksum_kernel<<<blocks, threads>>>(id, distance, n, ...);
-cudaDeviceSynchronize();               // before owner can be released
-\end{CodeInput}
-\end{CodeChunk}
-The pointers are non-owning views. Retaining \code{owner}, selecting the
-recorded device, and synchronizing consumer work before release are mandatory.
-This excerpt documents the API contract and ownership requirements; it makes no
-quantitative performance claim.
+A minimal compiled consumer is supplied in the replication repository under
+\path{validation/gpu_resident_interoperability/consumer/faissRGpuConsumer}.
+It checks the C-callable ABI, retains the owning handle, selects the producing
+device, and synchronizes its work before releasing the owner. The supplement
+documents buffer layout and lifetime; no transfer-speed advantage is inferred
+from this interface example.
 
-\section{Recall-aware operating-point selection} \label{sec:tuning}
+\subsection{Automatic routing and tuning} \label{sec:tuning}
 
-Figure~\ref{fig:selector-flow} separates three choices that are easy to
-conflate. \code{backend = "auto"} resolves the execution device from session
-configuration and capabilities. \code{method = "auto"} invokes the
-experimental cross-method policy. \code{tuning = "auto"} selects parameters
-within whichever method has already been resolved. Unsupported combinations
-and missing explicitly requested providers are errors; an execution failure
-does not trigger silent fallback to another route.
+Three arguments control different decisions. \code{backend = "auto"} resolves
+the execution device, \code{method = "auto"} invokes the experimental
+method-family policy, and \code{tuning = "auto"} selects parameters within the
+resolved method. An unsupported explicit request fails before execution.
+The requested \code{target_recall} is one of 0.90, 0.95, or 0.99.
 
-\begin{table}[t]
-\centering
-\caption{Distinct automatic decisions in the public interface. The argument
-name \code{target\_recall} is retained for API compatibility but denotes a
-discrete requested recall tier; no interpolation is performed.}
-\label{tab:auto-arguments}
-\small
-\begin{tabularx}{\textwidth}{@{}lXXX@{}}
-\toprule
-Argument & Decision & Scope & Example interpretation \\
-\midrule
-\code{backend = "auto"} & Execution device & CPU versus CUDA capability and session precedence & Choose a device, not an ANN algorithm. \\
-\code{method = "auto"} & Method family and route & Experimental cross-method policy & Choose Flat, IVF, or another policy-supported family. \\
-\code{tuning = "auto"} & Parameters within a resolved method & Deterministic method-specific rule lookup & Choose HNSW search effort after HNSW is fixed. \\
-\code{target\_recall} & Requested recall tier & Exactly 0.90, 0.95, or 0.99 & Select a calibrated tier; other values error. \\
-\bottomrule
-\end{tabularx}
-\end{table}
+Broad-grid calibration selects the fastest completed candidate whose observed
+mean recall reaches the requested tier, with deterministic ties resolved by
+higher recall and candidate identifier. Exact-audited candidates are eligible
+separately; a below-target approximate choice retains that status in metadata.
+Candidate grids and the distinct validation and comparator criteria are given
+in the supplement.
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.94\textwidth]{fig_selector_flow.pdf}
-\caption{Backend, method, and tuning resolution. Returned metadata preserve
-the requested and resolved choices, target status, and hardware-extrapolation
-status.}
-\label{fig:selector-flow}
-\end{figure}
-
-The calibration framework applies to parameter selection for explicit CPU and
-CUDA methods. Automatic method-family selection is independently evaluated
-only for CUDA in this article; CPU \method{auto} remains an available software
-policy without a selector-generalization claim.
-
-Let $s$ index candidate settings for a fixed dataset, method, metric, backend,
-$k$, and target $\tau$. The archived broad-grid calibration records one elapsed
-time $T_s$ and one mean query recall $R_s$ from Equation~\ref{eq:recall} for
-each candidate. Its point-estimate screening set is
-\begin{equation}
-\mathcal{F}_{\tau}=\{s: R_s\geq\tau,
-\quad s\text{ completed without failure}\}.
-\end{equation}
-The selected setting minimizes $T_s$ over $\mathcal{F}_{\tau}$, with
-deterministic tie-breaking by higher recall and candidate identifier.
-Exact-audited candidates form a separate eligible class. If no approximate
-candidate reaches $\tau$, metadata label the returned choice as below target;
-this preserves the measured status of the selected operating point.
-This screen is not called validation attainment. Independent validation uses
-the empirical query-bootstrap criterion defined above; controlled provider
-comparisons use the separately named point-recall-matching rule.
-
-Method-specific grids cover search effort and representation parameters rather
-than applying one generic knob. Examples include \code{ef\_search} for HNSW,
-\code{nlist}/\code{nprobe} for IVF, product-quantizer dimensions for IVF-PQ,
-and graph degree/search width for CAGRA. At dispatch, the resulting policy uses
-the reference-set dimensions $(n,p)$, query count $m$ (reported as
-\code{n\_points}), self-search versus explicit-query mode, the work estimate
-$nmp$, metric, $k$, backend, target tier, and runtime capabilities. It does not
-currently accept an expected number of future query batches, so it cannot
-optimize explicitly for an index-construction amortization horizon.
-Because data geometry and hardware are not fully described by these variables,
-the selection metadata state whether a rule is directly measured or
-extrapolated. On hardware unlike the calibration system, \method{auto} remains
-available but should be treated as a calibration-informed default, not a
-machine-specific optimum.
+Rules use shape, query count, self/external-query mode, metric, $k$, tier, and
+capabilities. The bundled CUDA method policy is experimental and informed by
+L40S cold full-self-search measurements. It does not optimize for future index
+reuse or a memory budget. CPU automatic selection is available but was not
+independently validated. Users should inspect the returned rule, calibration
+evidence, and hardware-extrapolation fields and audit recall on their own data.
 
 \section{Evaluation} \label{sec:evaluation}
 
@@ -909,9 +677,12 @@ rows were audited; consequently, MetRef used all 873 rows and no query was
 sampled with replacement. The targets were
 $\{0.90,0.95,0.99\}$, with two validation seeds and three timing repeats.
 Each validation seed defines one independently sampled query set and one
-recall-inference unit. The three timing repeats reuse that query set and inform
-runtime dispersion and execution stability; they are collapsed within seed
-and are not counted as three independent recall samples. Validation audit rows
+recall-inference unit. For each repeat the route was rerun and mean recall was
+recomputed from its returned neighbor identifiers against that seed's fixed
+exact reference. Approximate eligibility required every recorded repeat for
+both seeds to reach the tier. Elapsed time was summarized across the three
+repeats within seed; these repeats measure runtime dispersion and execution
+stability, not three independent recall samples. Validation audit rows
 were sampled independently from calibration audit rows, but both came from the
 same named datasets. We therefore distinguish this query-replication
 experiment from a leave-one-dataset-out (LOODO) analysis. For
@@ -975,15 +746,14 @@ correlation for \pkg{rnndescent}. Each external route was paired with the
 corresponding \pkg{faissR} public route in the same allocation, node,
 validation seed, repeat, and randomized route order. This is an end-to-end
 interface comparison with prespecified settings, not a separate tuning study
-or an algorithm-family ranking. Its legacy point-recall screen requires both
-routes to attain mean recall at least the requested tier; it is deliberately
-called \emph{point-recall-matched}, rather than target-attaining, because it
-does not use the empirical query-bootstrap lower-bound rule used for the
-independent-query selector validation.
+or an algorithm-family ranking. Its point-recall screen requires both
+routes to attain mean recall at least the requested tier. The term
+\emph{point-recall-matched} emphasizes that both members of the comparison
+pass this screen; it does not mean that their recalls are numerically equal.
 
-The package-level CPU \method{auto} route was not completely evaluated in the
-independent-query campaign. Consequently, no independent installed-policy
-claim is made for CPU. Backend-specific LOODO analyses use explicit
+CPU \method{auto} is outside the installed-policy evaluation and is presented
+as an experimental, calibration-informed convenience. Backend-specific LOODO
+analyses use explicit
 independent-query route
 measurements to evaluate cross-fitted selectors;
 the installed package's compiled \method{auto} policy, which was calibrated on
@@ -1005,32 +775,16 @@ across-dataset median and interquartile range were calculated. This preserves
 the dataset as the primary unit and avoids pooling incomparable absolute
 times.
 
-The replacement primary CPU provider comparison is prespecified as controlled
-experimental pairs. One Slurm array task fixes the dataset, $k$, and comparator,
-and executes
-\pkg{faissR} and the comparator within the same allocation and on the same
-node. The initially executed route is selected reproducibly at random for each
-validation seed and order alternates over five repetitions. Each route
-repetition uses an isolated \proglang{R} worker. Dataset and exact-reference
-loading precede timing, followed by an untimed 128-row API warm-up; the
-\pkg{faissR} fitted-index cache is then cleared. The formal provider comparison
-in this article reports cold one-shot time only. Reusable-index construction
-and fitted-index query benchmarking are excluded from quantitative comparisons
-unless both routes pass the same fitted-query recall audit. Fitted-index reuse
-is therefore demonstrated functionally in Section~\ref{sec:interface}, not
-claimed as a comparative speed result. Both routes receive the same
-double-precision matrix; \pkg{faissR}'s conversion to the float32
-representation required by FAISS is included in its timed public call. This
-controlled CPU comparison therefore measures user-visible API time, not a
-float32-conditional search kernel.
-The primary audit rejects any pair whose allocation, node, or opposing order
-cannot be verified. GPU kernels are synchronized before timing ends. The
-supplement records the software environment and complete aggregation rules.
-The completed experiment passed 12 as the thread request to every public API
-and set \code{OMP\_NUM\_THREADS}, \code{OPENBLAS\_NUM\_THREADS}, and
-\code{MKL\_NUM\_THREADS} to 12. It did not sample active threads or retain the
-Linux affinity mask, so equal requested thread limits must not be interpreted
-as verified equal utilization.
+The controlled CPU comparison runs each pair within one Slurm allocation and
+node, randomizes the initial route, and alternates order across five repeats.
+Each timed route uses a fresh R worker after data loading and an untimed
+128-row warm-up; the fitted-index cache is cleared before the cold call. Both
+routes receive the same double matrix, so conversion and output construction
+are included in public-interface time. Twelve threads are requested through
+the APIs and environment variables. The audit verifies allocation, node, and
+order; requested threads do not prove equal utilization. All CUDA timers end
+after synchronization. Full settings and experimental controls are recorded
+in the supplement.
 
 Two completed extensions distinguish index reuse from cold search. First, an
 independently tuned CPU HNSW experiment selected a configuration for each
@@ -1046,9 +800,10 @@ provider build timer. Amortized totals use
 external pointers remain session-local; portable index serialization is
 unsupported and is not timed.
 
-Quantitative peak-memory and GPU-transfer comparisons are outside the scope of
-the reported results. All CUDA algorithm comparisons in this article use
-\fct{nn}, for which every compared route returns host-resident matrices.
+GPU residency is evaluated here as an ownership, lifetime, and explicit-transfer
+interface contract rather than as a performance estimand. All CUDA algorithm
+comparisons use \fct{nn}, for which every route returns host-resident matrices;
+therefore no timing advantage is attributed to device residency.
 
 \subsection{Computing environment}
 
@@ -1057,32 +812,14 @@ within-cell CPU ratios use only routes coexecuted on the same node. CUDA jobs
 used one NVIDIA L40S (46,068 MiB,
 compute capability 8.9) with driver 595.58.03. Both used \proglang{R} 4.5.3 on
 Debian 13, OpenBLAS 0.3.33, and a checksummed Singularity image.
-Table~\ref{tab:software-provenance} records the principal software identities;
+the supplementary environment table records the principal software identities;
 the supplement provides the remaining environment and hardware details.
 
-\begin{table}[t]
-\centering
-\caption{Software and experiment provenance for the completed evidence.}
-\label{tab:software-provenance}
-\small
-\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.28\textwidth}>{\raggedright\arraybackslash}X@{}}
-\toprule
-Component & Version or identity \\
-\midrule
-\pkg{faissR} source release & 0.99.34 \\
-FAISS GPU/cuVS build & 1.14.3 \\
-RAPIDS cuVS & \code{libcuvs} 26.06 \\
-CUDA & Toolkit 13.2; driver 595.58.03 \\
-CPU comparators & \pkg{BiocNeighbors} 2.4.0; \pkg{RcppHNSW} 0.7.0 \\
-Frozen campaign container & SHA-256 \texttt{0cd4d0df406bd007}\allowbreak\texttt{5046b16d2e8a4d3a}\allowbreak\texttt{e78ee61d98e6d47c}\allowbreak\texttt{639986e28ea6f203} \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-Elapsed-time ratios are calculated only within their prespecified matched
-experiment. The replication bundle records the execution identifiers, software
-environment, data fingerprints, and checksums required to reconstruct every
-reported result.
+The article accompanies \pkg{faissR} 0.99.34. Experiment-specific package,
+provider, container, and data fingerprints are retained in the replication
+archive and are analyzed under their recorded identities rather than relabelled
+as the current build. Timing ratios are computed within their matched
+experiment. The supplement supplies the complete environment table.
 
 \section{Results} \label{sec:results}
 
@@ -1108,324 +845,149 @@ margins and calibration-to-validation changes are reported in the supplement;
 they show that recall transferred more reliably than single-run timing,
 especially for CUDA IVF.
 
-\subsection{Selector correctness and feasible-route regret}
+\subsection{Tuned CPU HNSW and query workload}
 
-Target attainment is a prerequisite for comparing feasible routes, not the
-primary selector-performance result. For cell $c$, we define feasible-route
-regret as
-\begin{equation}
-  G_c = \frac{T_{c,\mathrm{selected}}}
-  {\min(T_{c,\mathrm{selected}}, T_{c,\mathrm{fastest\ eligible\ explicit}})}.
-  \label{eq:selector-regret}
-\end{equation}
-The denominator includes the selected route itself, so $G_c\geq 1$. Eligibility
-requires either an exact-audited route or an approximate route that attains the
-requested tier under the empirical query-bootstrap lower-bound criterion in
-every independent-query seed.
+The independently tuned HNSW experiment completed all 720 route runs. Of 36
+provider--dataset--$k$ pairs per comparator, 31 \pkg{BiocNeighbors} and 32
+\pkg{RcppHNSW} pairs passed the 0.99 point-recall screen for both providers.
+Table~\ref{tab:tuned-hnsw} separates cold calls, direct index construction, and
+fitted queries. The large construction ratios do not imply a universal
+fitted-query advantage: the fitted-query medians were 0.90 and 1.09.
 
-Table~\ref{tab:selector-regret} shows that the experimental installed CUDA
-policy attained all 324 operating points largely by selecting exhaustive Flat,
-but had median regret 1.10, 90th-percentile regret 3.38, and maximum regret
-9.49. Only 42.6\% of cells were within 5\% of the empirical optimum. Thus,
-recall attainment alone does not establish useful route selection. A post hoc
-cross-fitted reconstruction had lower regret within a different explicit
-exact/CAGRA candidate universe. Because explicit IVF was absent from that
-universe, it is not a validation or corrected evaluation of the installed
-Flat/IVF policy. These are cold full-self-search results and do not establish
-regret for small query batches or reused indexes.
-
-The 324 cells are nested combinations of three metrics, four values of $k$,
-and three recall tiers within nine datasets. They are descriptive operating
-points, not 324 independent experimental units; datasets are the primary
-grouping unit. Table~\ref{tab:selector-dataset-main} therefore promotes the
-installed-policy decomposition by dataset.
-
-\begin{table}[t]
+\begin{table}[H]
 \centering
-\caption{Installed CUDA policy by dataset. Each dataset contributes 36 nested
-metric--$k$--tier cells. Regret and elapsed-time totals are descriptive within
-dataset; they are not independent-sample estimates.}
-\label{tab:selector-dataset-main}
-\small
+\caption{Independently tuned CPU HNSW comparison. Entries are medians of
+$T_{\mathrm{comparator}}/T_{\mathrm{faissR}}$ among pairs passing the
+prespecified 0.99 point-recall screen in every validation repeat; values above
+one favor \pkg{faissR}.}
+\label{tab:tuned-hnsw}
 \begin{tabular}{@{}lrrrr@{}}
 \toprule
-Dataset & Exact cells & IVF cells & Median regret & Net seconds saved \\
+Comparator & Matched & Cold call & Build & Fitted query \\
 \midrule
-COIL20 & 36 & 0 & 1.14 & -0.6 \\
-FashionMNIST & 36 & 0 & 1.02 & -0.7 \\
-FR-FCM-ZYRM & 24 & 12 & 1.63 & 3317.7 \\
-MNIST & 36 & 0 & 1.01 & -0.4 \\
-MetRef & 36 & 0 & 1.48 & -0.7 \\
-USPS & 36 & 0 & 1.33 & -0.5 \\
-flow18 & 24 & 12 & 1.88 & 141.2 \\
-ImageNet features & 28 & 8 & 1.00 & -8001.1 \\
-mass41 & 24 & 12 & 1.88 & 128.8 \\
+\pkg{BiocNeighbors} & 31/36 & 6.55 & 11.50 & 0.90 \\
+\pkg{RcppHNSW} & 32/36 & 1.67 & 1.63 & 1.09 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\begin{table}[t]
+The query-workload audit completed 60/60 cells on each backend. CPU calls
+recorded a fitted-index cache hit in all 60 cells. In the 15 HNSW cells, warm
+HNSW queries were faster than one-shot Flat calls, and the median smallest
+integer satisfying
+\(T_{\mathrm{cold,HNSW}}+(A-1)T_{\mathrm{warm,HNSW}}
+\leq A T_{\mathrm{cold,Flat}}\) was \(A=13\) batches. Flat was rebuilt for
+each batch, so this estimand answers when HNSW reuse overtakes repeated
+one-shot exhaustive calls; it is not a comparison with a reusable exact
+index. CUDA recorded no fitted-index cache hit, and its results characterize
+repeated public calls rather than GPU index reuse.
+
+\subsection{Comprehensive public-interface comparison}
+
+The broad CPU study recorded outcomes for all 216 design tasks and 6,480
+planned route repetitions. Among 4,104 external-versus-\pkg{faissR} pairs,
+1,636 completed and passed the point-recall screen for both routes; 1,385 route
+calls timed out and 22 failed otherwise. Table~\ref{tab:comprehensive-r}
+therefore reports conditional configuration-level comparisons with their
+denominators. It neither assigns a favorable time to failures nor estimates a
+universal provider ranking. Per-dataset distributions and a
+prespecified-configuration HNSW experiment are reported in the supplement.
+
+\begin{table}[H]
 \centering
-\caption{CUDA selector regret relative to the fastest target-eligible empirical
-route in each cold full-self-search cell. Threshold columns give the percentage
-of cells at or below the stated regret. The post hoc cross-fitted sensitivity
-row uses a different exact/CAGRA candidate universe and is not installed-policy
-validation.}
-\label{tab:selector-regret}
 \scriptsize
-\begin{tabular}{@{}lrrrrrrrrr@{}}
+\caption{Matched-node CPU public-interface comparison. Ratios are
+$T_{\mathrm{comparator}}/T_{\mathrm{faissR}}$ among point-recall-matched
+pairs. Timeout counts sum route calls across both pair members and can exceed
+the pair count.}
+\label{tab:comprehensive-r}
+\begin{tabular}{@{}llrrrr@{}}
 \toprule
-Policy & Median & P75 & P90 & P95 & Maximum & $\leq1.05$ & $\leq1.10$ & $\leq1.25$ & $\leq2$ \\
+Comparator & Class & Matched/pairs & Timeout & Median & IQR \\
 \midrule
-Experimental installed & 1.10 & 1.52 & 3.38 & 3.96 & 9.49 & 42.6\% & 50.3\% & 59.9\% & 80.9\% \\
-Post hoc sensitivity & 1.00 & 1.00 & 1.00 & 1.46 & 2.24 & 92.0\% & 94.4\% & 94.4\% & 99.1\% \\
+\pkg{FNN} & Exact & 189/648 & 699 & 27.23 & 4.69--38.12 \\
+\pkg{RANN} & Exact & 114/432 & 459 & 21.08 & 11.20--41.88 \\
+\pkg{Rnanoflann} & Exact & 114/216 & 192 & 9.31 & 8.15--21.15 \\
+\pkg{BiocNeighbors} & Exact & 238/432 & 286 & 4.96 & 2.40--15.11 \\
+\pkg{BiocNeighbors} & HNSW & 299/432 & 96 & 7.21 & 3.13--10.76 \\
+\pkg{RcppHNSW} & HNSW & 317/432 & 0 & 1.66 & 0.83--2.85 \\
+\pkg{BiocNeighbors} & Annoy & 96/432 & 0 & 1.85 & 0.94--2.57 \\
+\pkg{RcppAnnoy} & Annoy & 89/432 & 6 & 2.57 & 0.73--2.81 \\
+\pkg{rnndescent} & NN-descent & 180/648 & 163 & 0.73 & 0.28--1.21 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The installed policy selected exact-audited Flat in 280 cells (86.4\%) and
-approximate IVF in 44. IVF was faster than explicit exact search in 36/44
-cells (81.8\%), or 11.1\% of all cells. The post hoc cross-fitted reconstruction selected an
-exact-audited family in 288 cells (88.9\%) and CAGRA in 36; CAGRA was faster
-than explicit exact search in 33/36 cells (91.7\%). Across the 324 equally
-weighted benchmark cells, installed selection accumulated 3,662.6 seconds of
-savings and 8,078.9 seconds of penalties relative to explicit exact search,
-for a net penalty of 4,416.2 seconds. The corresponding cross-fitted totals
-were 7,160.5 seconds saved, 3.5 seconds lost, and 7,157.0 seconds net saved,
-but this contrast cannot be attributed to cross-fitting because its candidate
-universe differed.
-These totals describe the benchmark workload rather than a population-weighted
-deployment estimate. All 1,944 selected-route validation runs for each policy
-completed; neither policy recorded a failure, timeout, or memory kill. CPU HNSW
-attained 304/324 operating points, but installed CPU \method{auto} is not
-included in this selector-regret claim.
+The results were heterogeneous: \pkg{faissR} was faster in many matched
+configurations, whereas the \pkg{rnndescent} median favored that comparator.
+Only the narrower HNSW experiment independently tuned both providers; the
+other rows evaluate the recorded public configurations and supported metrics.
 
-\subsection{Selector route interpretation}
+\subsection{CUDA routes and experimental selection}
 
-The installed CUDA policy selected Flat in 280/324 cells and IVF in 44
-Euclidean cells. Requested recall changed the method or its parameters in only
-10/108 dataset--metric--$k$ strata. IVF was beneficial for three large
-low-dimensional datasets but was about 7.1 times slower than explicit exact
-search for ImageNet features. The complete metric-, target-, $k$-, dataset-,
-and parameter-level decomposition is therefore retained in the supplement;
-the main point is that this experimental policy is conservative, selectively
-adaptive, and workload dependent.
+The experimental installed policy selected exact-audited Flat in 280/324 cells
+and IVF in 44/324. All cells passed the recorded validation criterion, but the
+requested tier changed the route or parameters in only 10/108
+dataset--metric--$k$ strata. Median feasible-route regret was 1.10, its 90th
+percentile was 3.38, and its maximum was 9.49. IVF was faster than explicit
+exact search in 36/44 selected cells, but the ImageNet penalty outweighed the
+accumulated savings. These nested cells describe nine datasets, not 324
+independent experimental units.
 
-\subsection{Post hoc candidate-set sensitivity analyses}
+Aggregate and per-dataset CUDA ratios, route frequencies, and post hoc dataset
+and domain holdouts are confined to the supplement. The holdouts use a
+different exact/CAGRA candidate set and are candidate-set sensitivity analyses,
+not validation of the installed Flat/IVF policy. CPU \method{auto} was not
+independently validated. The installed selector is consequently presented as
+an experimental convenience for cold full-self-search, while explicit route
+selection and fitted-index reuse remain the primary interfaces.
 
-Named-dataset and grouped-domain reconstructions were used only as post hoc
-sensitivity analyses because their explicit exact/CAGRA candidate universe
-differs from the installed Flat/IVF policy. Named-dataset CUDA holdout had
-median regret 1.00 within that alternative universe, whereas grouped cytometry
-holdout increased median regret to 3.08. CPU reconstruction attained 301/324
-cells but does not validate installed CPU \method{auto}. Route-confusion
-tables, upper-tail regret, abstention, and domain-level results are moved to
-the supplement. These analyses establish neither cross-collection nor
-hardware-independent generalization.
+\section{Discussion and limitations} \label{sec:limitations}
+\label{sec:conclusion}
 
-\subsection{Matched-cell execution time}
+\pkg{faissR} combines FAISS and optional CUDA/cuVS search with a common R
+interface, explicit metric semantics, float32 input, reusable CPU indexes, and
+owning GPU results. The completed experiments demonstrate broad route
+correctness, substantial variation among public R implementations, and the
+importance of separating index construction from repeated queries. In the
+independently tuned HNSW comparison, build-time advantages were larger than
+fitted-query advantages. Users should select a route for their query workload
+and verify the observed recall and reuse metadata.
 
-Table~\ref{tab:paired-time} reports the primary matched CUDA ratios. The
-controlled CPU experiment is retained as secondary configuration-level
-evidence in the supplement. Its design audit recovered all 720 planned route
-pairs; 691 completed, and all 29 execution failures were
-\pkg{BiocNeighbors} time limits. Point-recall matching left 253 cold-call pairs
-over seven datasets for \pkg{BiocNeighbors} and 268 pairs over eight datasets
-for \pkg{RcppHNSW}. Results were heterogeneous, including datasets on which
-\pkg{faissR} was slower and datasets with no eligible pair. Because comparator
-parameters were prespecified rather than independently tuned and active thread
-use was not observed, neither the conditional medians nor the timeouts estimate
-a general provider-level speed advantage. The supplement reports the
-per-dataset ratios, completion counts, eligibility counts, and timeout marks.
+The results describe the measured datasets and hardware. CUDA evidence concerns
+an NVIDIA L40S; CPU comparisons share an allocation and node within each pair.
+Requested thread limits do not establish equal internal utilization. The broad
+seven-package ratios are conditional on successful, point-recall-matched
+configurations; timeouts and failures remain visible. Only the narrower HNSW
+experiment independently tunes competing providers.
 
-The independently tuned extension provides a stronger but still deliberately
-narrow CPU comparison. It completed all 720 route runs and yielded 63/72
-target-matched provider pairs (31 with \pkg{BiocNeighbors} and 32 with
-\pkg{RcppHNSW}). For cold calls, the median
-\(T_{\mathrm{comparator}}/T_{\mathrm{faissR}}\) was 6.55 for
-\pkg{BiocNeighbors} HNSW (IQR 3.12--10.30) and 1.67 for \pkg{RcppHNSW}
-(IQR 0.88--2.02). Fitted-index construction showed corresponding medians of
-11.50 and 1.63. Fitted-query medians were 0.90 and 1.12, respectively, showing
-that build-time differences do not imply a universal repeated-query advantage.
-These are independently tuned HNSW configurations at the specified 0.99
-point-recall screen, not an all-package or all-workload ranking.
+The optional automatic policy is experimental and calibrated for cold full
+self-search. It has no memory budget or expected-reuse input, and CPU automatic
+selection has not been independently validated. Shape descriptors omit data
+geometry, and one timing per broad-grid candidate permits selection noise.
+Hardware extrapolation is reported in metadata; neither the installed policy
+nor the post hoc sensitivity analyses establish generalization to new domains
+or hardware. Exact search remains an important practical baseline.
 
-The comprehensive study completed all 216 design tasks and all 6,480 planned
-route repetitions. Across the 4,104 external-versus-\pkg{faissR} repetition
-pairs, 1,636 were point-recall-matched; 1,385 route executions timed out and
-22 had another execution failure. The complete denominators are retained in
-the supplement and the machine-readable bundle. Conditional medians of
-\(T_{\mathrm{comparator}}/T_{\mathrm{faissR}}\) were 27.23 for the three
-\pkg{FNN} Euclidean routes, 21.08 for \pkg{RANN}, 9.31 for \pkg{Rnanoflann},
-and 4.96 for \pkg{BiocNeighbors} exhaustive routes. For HNSW, the analogous
-medians were 7.21 for \pkg{BiocNeighbors} and 1.66 for \pkg{RcppHNSW}.
-The Annoy-interface summaries were 1.85 for \pkg{BiocNeighbors} and 2.57 for
-\pkg{RcppAnnoy}. In contrast, \pkg{rnndescent} had a conditional median of
-0.73 against \pkg{faissR}'s experimental NN-descent route. These values are
-not pooled as independent observations, do not reward a timeout, and do not
-establish a universal provider-level ordering; the per-class intervals,
-eligible-pair counts, and timeout counts appear in the supplement.
-
-The workload experiment completed all 60 cells on each backend. CPU observed a
-fitted-index cache hit in all 60 cells; HNSW had lower repeated-query time than
-rebuilt Flat in every tested CPU cell, with a median break-even of 13 batches.
-CUDA did not observe a fitted-index cache hit in these calls, so its repeated
-timings do not establish GPU index reuse. These results reinforce the scope of
-the installed selector: it is a cold-search convenience, rather than a policy
-for amortized repeated-query execution.
-
-These medians are explicitly conditional on successful, point-recall-matched
-pairs. They do not assign a favorable runtime to a timeout: the figure reports
-all timeout counts and the text reports completion denominators. A formal
-failure-aware performance profile or capped-runtime estimand was not
-prespecified for this campaign and is therefore not reconstructed after seeing
-the outcomes.
-
-On CUDA, automatic selection and explicit exhaustive routes had similar timing
-because 280 of 324 cells resolved to Flat. The selector carried modest dispatch
-overhead relative to explicit exact or brute-force calls. Against CAGRA, the
-median dataset-level ratio favored automatic selection by 2.23. In the 44 cells
-where the selector used IVF, its median dataset-level speedup over exhaustive
-search was 4.59 across four datasets, but ImageNet features were a clear
-counterexample: explicit exhaustive search was 7.36 times faster. This
-heterogeneity is precisely why the selected method and calibration evidence are
-returned to the user. The supplementary per-dataset CUDA table reports all
-nine datasets. The
-IVF-selected result is descriptive evidence from only four datasets:
-FR-FCM-ZYRM, flow18, and mass41 favored IVF by factors of 3.69, 5.83, and 5.49,
-whereas ImageNet favored exhaustive search. It should not be interpreted as a
-four-dataset estimate of performance on a wider population.
-
-\begin{table}[t]
-\centering
-\caption{Matched CUDA end-to-end speed ratios, defined as
-$T_{\mathrm{second\ route}}/T_{\mathrm{first\ route}}$. Values greater than one
-favor the first route. Ratios are summarized within dataset and then across
-datasets.}
-\label{tab:paired-time}
-\begin{tabularx}{\textwidth}{@{}Xlrrr@{}}
-\toprule
-Comparison & Datasets & Median & IQR & Range \\
-\midrule
-CUDA automatic / explicit exact & 9 & 0.99 & 0.98--1.00 & 0.94--1.01 \\
-CUDA automatic / brute force & 9 & 0.87 & 0.83--1.18 & 0.70--1.90 \\
-CUDA automatic / CAGRA & 9 & 2.23 & 1.00--2.58 & 0.81--10.96 \\
-CUDA IVF-selected cells / explicit exact & 4 & 4.59 & 2.80--5.58 & 0.14--5.83 \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-\section{Limitations} \label{sec:limitations}
-
-The calibration policy is empirical. Shape descriptors do not capture
-intrinsic dimension, clustering, density imbalance, duplicated observations,
-ties, or anisotropy, and timing depends on
-hardware and provider versions. Same-dataset recall-audit replication and CUDA
-LOODO address different questions: the former tests independent audit-row
-samples from the same matrices, while the
-latter tests sensitivity to withholding one named dataset from method-family
-selection. Related domains remain represented after several individual
-holdouts, and the CUDA cross-fitted candidate set omitted explicit IVF.
-Neither analysis establishes cross-domain or cross-collection generalization.
-CPU
-\method{auto} was not independently evaluated, so selector claims are limited
-to CUDA; CPU results concern explicit HNSW. The CPU partition is
-heterogeneous, and the CUDA results describe an NVIDIA L40S rather than all
-accelerators. CPU provider ratios describe the controlled same-node cold-call
-experiment, are restricted to point-recall-matched pairs, and compare
-prespecified rather than provider-optimized HNSW configurations. Requested
-thread limits were equal, but active thread use was not measured in that
-completed experiment.
-On unmatched CUDA hardware, \method{auto} warns visibly and labels the returned
-evidence as extrapolated; metadata are not presented as local recalibration.
-The pilot/cache modes optimize parameters within a method and do not learn or
-persist a new route policy.
-The automatic selector currently has no public memory budget, latency or build
-deadline, or prohibition on exhaustive search. Users with such constraints
-must request an explicit method after inspecting \fct{nn\_capabilities} and
-route metadata. Thus a Flat choice can be recall-safe yet operationally
-infeasible on a smaller device; resource-constrained abstention requires
-validated resource models rather than an undocumented heuristic.
-Although runtime dispatch accounts for query count and distinguishes self-search
-from an explicit query matrix, the calibrated evidence in this article concerns
-one-shot full self-search. The policy has no expected-reuse input and has not
-been validated as an optimizer of build-amortized repeated-query workloads.
-For repeated queries, users should fit or reuse an index and inspect the
-reported cache and route metadata rather than interpreting the one-shot policy
-as an amortized optimum.
-GPU-resident output reduces transfer only when downstream code
-can consume the opaque device buffers. The GPU result is synchronized before
-handoff, but \pkg{faissR} does not export its CUDA stream or provider resource
-object; cross-process use and serialization are unsupported. Quantitative
-GPU residency claims require their dedicated audits and are not inferred from
-the cold algorithm benchmarks. CPU fitted-index construction and fitted-query
-results are reported only for the independently tuned, point-recall-matched
-HNSW pairs. The completed comprehensive external comparison remains secondary:
-it covers prespecified end-to-end public configurations, not independently
-optimized provider settings. Table~\ref{tab:r-ecosystem} therefore makes
-feature-level comparisons with the wider R ecosystem, while the supplement
-reports conditional timing and failure summaries. A direct native FAISS/cuVS
-invocation outside \pkg{faissR} was not completed, so the article does not
-quantify conversion, metadata, wrapping, or transfer overhead against a native
-caller.
-
-Calibration retained timeout and out-of-memory failures as negative evidence,
-but the completed campaign did not measure a valid isolated-process peak for
-every candidate or provider index size systematically. Quantitative memory
-comparisons are therefore omitted. Likewise, the three requested recall tiers
-summarize calibrated operating points rather than full recall--time frontiers;
-the prespecified Pareto and isolated-memory protocols in the supplement require
-their dedicated runs before curves or memory claims enter the article.
-
-These limits motivate conservative use: inspect \code{auto\_selection} and
-\code{approximation} metadata, validate recall against an exact subsample when
-the application is sensitive, and fit a persistent index when queries repeat.
-
-\section{Discussion and conclusion} \label{sec:conclusion}
-
-\pkg{faissR} provides a single nearest-neighbor interface across CPU and
-NVIDIA GPU providers while preserving the distinctions that matter for
-statistical computing: metric semantics, exact versus approximate evidence,
-data representation, backend identity, and result residency. Requested-recall-
-tier policies make the speed--accuracy choice visible rather than
-embedding it in undocumented defaults. The optional experimental CUDA policy
-extends this evidence to a narrowly scoped method-family convenience, but is
-not a central performance claim of the package.
-
-The evaluation supports three conclusions. First, route and metric semantics,
-including the documented backend-dependent handling of undefined normalized
-rows, are explicit and contract-tested across the evaluated CPU and CUDA paths.
-Second, many approximate operating points do not reach ambitious recall tiers,
-so negative calibration evidence is scientifically useful. Third, under the
-evaluated cold full-self-search workload, the installed CUDA policy was
-conservative and usually exact. Approximate selection produced substantial
-gains in several large Euclidean cases but a large ImageNet penalty.
-The post hoc cross-fitted sensitivity analysis had lower feasible-route regret
-within its different candidate universe, but it does not validate or repair the
-installed selector. Hardware-, workload-, and dataset-dependent exceptions
-must remain visible; grouped domain holdout showed materially larger regret
-than named-dataset LOODO. The package is
-therefore best understood as auditable computational infrastructure, not as a
-universal claim that one nearest-neighbor method dominates.
+GPU-resident buffers contribute an audited ownership and explicit-transfer
+contract, rather than a runtime comparison: all algorithmic timing routes
+materialize host results. Native indexes and GPU handles are session-local.
+Together with the metric and route contracts, this gives R users access to
+multiple compiled search providers through a documented statistical-software
+interface.
 
 \section*{Data and code availability}
 
 Package source, documentation, tests, manuscript source, and replication code
 are available at \url{https://github.com/tkcaccia/faissR}. The replication
-bundle includes a checksummed result snapshot and SHA-256 ledger; its standalone
-script verifies the archive before extraction and recreates every article and
-supplementary table with a machine-readable table manifest. A reduced CPU mode
-runs the interface examples without CUDA. Dataset acquisition
-and preprocessing scripts record source identifiers and fingerprints. Data
-whose redistribution terms do not permit inclusion are obtained from their
-original sources by the replication script; no substitute datasets are used.
-The current review bundle is checksum-immutable but does not yet have a
-persistent identifier. Before publication, the corresponding source release,
-article source, replication snapshot, and checksum ledger will be deposited as
-one versioned DOI-bearing archive and the identifier inserted here. Until that
-deposit is minted and independently resolvable, the Git repository is the
-development and review location and this article does not claim persistent
-archival availability.
+bundle provides checksummed benchmark outputs, analysis scripts, and a
+machine-readable evidence manifest. Archive reanalysis requires no GPU; the
+compact CPU mode executes the Biobase interface example. Raw execution
+identities are retained in the manifests. Dataset sources, preprocessing,
+fingerprints, and acquisition or access requirements are documented in the
+supplement. Restricted data are not redistributed. The repository and
+checksum ledgers identify the supplied material; a persistent archival
+identifier is not currently available.
 
 \section*{Acknowledgments}
 

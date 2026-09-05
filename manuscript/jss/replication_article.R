@@ -23,6 +23,11 @@ out_dir <- Sys.getenv(
   unset = file.path(getwd(), "derived")
 )
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+if (run_compact) {
+  Sys.setenv(FAISSR_JSS_EXAMPLE_OUT = file.path(out_dir, "practical_cpu"))
+  source(file.path(dirname(script_path), "practical_cpu_example.R"),
+         local = new.env(parent = globalenv()))
+}
 
 sha256_files <- function(paths) {
   paths <- normalizePath(paths, mustWork = TRUE)
@@ -656,6 +661,11 @@ if (nzchar(results_root)) {
   }
 
   table_builder <- file.path(dirname(script_path), "build_manuscript_tables.R")
+  Sys.setenv(FAISSR_JSS_SYSTEMS_OUT = file.path(out_dir, "completed_systems"))
+  systems_status <- system2("Rscript", shQuote(file.path(
+    dirname(script_path), "analyze_completed_systems.R"
+  )))
+  if (!identical(systems_status, 0L)) stop("Completed systems audit failed.")
   if (!file.exists(table_builder)) {
     stop("Cannot find manuscript table builder: ", table_builder)
   }

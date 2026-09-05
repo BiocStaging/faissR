@@ -161,6 +161,14 @@ Sys.setenv(FAISSR_JSS_REPLICATION_SCRIPT = normalizePath(replication_script))
 requires no GPU and performs analysis only; <code>all</code> runs both paths.</p>
 <pre><code class="language-r">source(replication_script, chdir = TRUE)
 </code></pre>
+<pre><code>## Probe-by-sample matrix: 500 x 26
+##  requested_tier observed_recall   provider
+##            0.90           0.972 faiss_hnsw
+##            0.95           0.991 faiss_hnsw
+##            0.99           0.998 faiss_hnsw
+##  build_sec first_sec median_reused_sec query_source
+##      0.001     0.002             0.001 fitted_index
+</code></pre>
 <p>The compact example results and the complete software session are printed in
 the rendered report so reviewers can compare an executed <code>code.html</code> with
 the article examples.</p>
@@ -187,17 +195,7 @@ if (file.exists(verification_file)) {
   )
   print(archive_verification, row.names = FALSE)
 }
-</code></pre>
-<pre><code>##                           archive
-##  faissR_jss_frozen_results.tar.gz
-##                                                   expected_sha256
-##  506bdff17572acb383b635c4490024ed29ff44a2c90c887bc8d57fbb7d7aaa53
-##                                                   observed_sha256
-##  506bdff17572acb383b635c4490024ed29ff44a2c90c887bc8d57fbb7d7aaa53
-##     bytes verification_pass
-##  10191995              TRUE
-</code></pre>
-<pre><code class="language-r">cpu_loodo_file &lt;- file.path(derived_dir, &quot;cpu_loodo_verification.csv&quot;)
+cpu_loodo_file &lt;- file.path(derived_dir, &quot;cpu_loodo_verification.csv&quot;)
 if (file.exists(cpu_loodo_file)) {
   cpu_loodo_verification &lt;- utils::read.csv(
     cpu_loodo_file, stringsAsFactors = FALSE
@@ -234,47 +232,7 @@ if (file.exists(manifest_file)) {
   print(table_manifest[, c(&quot;table_number&quot;, &quot;file&quot;, &quot;rows&quot;, &quot;sha256&quot;)],
         row.names = FALSE)
 }
-</code></pre>
-<pre><code>##  table_number                                        file rows
-##             1                table_01_method_families.csv    9
-##             2                       table_02_datasets.csv    9
-##             3      table_03_heldout_target_attainment.csv   18
-##             4            table_04_cuda_auto_selection.csv   12
-##             5            table_05_paired_speed_ratios.csv    6
-##             6      table_06_computational_environment.csv   14
-##             7         table_07_calibration_parameters.csv    9
-##             8        table_08_unavailable_calibration.csv    9
-##             9            table_09_selection_stability.csv    6
-##            10         table_10_calibration_validation.csv    4
-##            11                 table_11_evidence_audit.csv    8
-##            12                table_12_cpu_per_dataset.csv    9
-##            13               table_13_cuda_per_dataset.csv    9
-##            14           table_14_cuda_auto_by_dataset.csv    9
-##            15             table_15_cuda_ivf_decisions.csv    8
-##            16 table_16_selector_feasible_route_regret.csv    2
-##            17       table_17_selector_route_confusion.csv   12
-##            18       table_18_grouped_leave_domain_out.csv    3
-##                                                            sha256
-##  428f0309fe355816efd1d24d9c2c4f6a15e101aa59d2a5725e230e9095dd6c36
-##  3d5dde5c07562c6be494f3b15c461083f2277e3b98066c816ecb7ad9d610005a
-##  b041a28c4d937224b2c9f46be8a22a04ce4a590de3e356666085b3fb46dcb37b
-##  4291a44501470b993dfe3df73d16c6d71d154d3c7c5e3a1c14fc0f177ed75dbe
-##  36897a09fac8f00335eac6d2bf3ca09ef054debc6109697603574e24f7eb2eea
-##  58ac8379eee02f28f6f808c7673d0946627cfebd699280fe25765be5936e24d7
-##  629f95608862b04729122c1bf73069748daad09d713f9cfc3fec7be65f4a1080
-##  898c3b119c69236dd79f44a74f641d0635619f92aaf73747a0e5a1344380759f
-##  11f05a97d552d5e20f7b9bab1b58a761ecf9afec9ca5f487bc7443d5abd08acf
-##  0d2a23d670128ba6f973bf6799de417222692f960cc4b3c67fe4abc65280c2fa
-##  388adc622d5b4b6199271c779502db7f0f90713cee68ca370fe243a1c8ecd988
-##  47d588d3ce78c6474c3d79be13770daa2b416debe07d1a9d02f04854f08099f4
-##  38ce7012d5a6469df7fbb6c0b6fdb6f1db5aa8346cb003bfddeb63b9efdcb4f5
-##  dea2dd4ae9c2937619ea49e06c4b1d5524a7061f6921fd962a1f7fee5ba6abc8
-##  a90e996cd42b332c6c84c067a0dc76e10f3a332969f707ee9a5adaad07279cdb
-##  5917f610b43103ec15fbab40dc388d1b734a96ea92cff2635154137aef34f895
-##  f14ddbffb662576cb30e1754af0e850d22c1534dc065e99828a4d95784638a06
-##  00db75c4f4909d3422fd1da12956adde3b2a8cb974c01fb1de852584380c8682
-</code></pre>
-<pre><code class="language-r">sessionInfo()
+sessionInfo()
 </code></pre>
 <pre><code>## R version 4.6.0 (2026-04-24)
 ## Platform: aarch64-apple-darwin23
@@ -294,17 +252,21 @@ if (file.exists(manifest_file)) {
 ## [1] stats     graphics  grDevices utils     datasets  methods
 ## [7] base
 ##
+## other attached packages:
+## [1] faissR_0.99.34
+##
 ## loaded via a namespace (and not attached):
-##  [1] compiler_4.6.0 cli_3.6.6      tools_4.6.0    otel_0.2.0
-##  [5] faissR_0.99.28 yaml_2.3.12    float_0.3-3    Rcpp_1.1.2
-##  [9] knitr_1.51     xfun_0.60      openssl_2.4.2  rlang_1.3.0
-## [13] evaluate_1.0.5 askpass_1.2.1
+##  [1] compiler_4.6.0       generics_0.1.4       cli_3.6.6
+##  [4] tools_4.6.0          otel_0.2.0           yaml_2.3.12
+##  [7] float_0.3-3          Rcpp_1.1.2           Biobase_2.73.2
+## [10] knitr_1.51           BiocGenerics_0.59.12 xfun_0.60
+## [13] openssl_2.4.2        rlang_1.3.0          evaluate_1.0.5
+## [16] askpass_1.2.1
 </code></pre>
 <p>The generated directory contains the example summary, <code>sessionInfo.txt</code>,
-and, in archive mode, checksum verification, analysis outputs, all 18
-manuscript tables, the paired CPU figure, and their audit summaries. Any
-checksum, schema, fingerprint, aggregation, table-audit, or figure-audit
-failure stops execution.</p>
+and, in archive mode, checksum verification, analysis outputs, 18 archive-backed numerical summaries, the paired CPU and comprehensive-R comparison figures,
+and their audit summaries. Any checksum, schema, fingerprint, aggregation,
+table-audit, or figure-audit failure stops execution.</p>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" defer></script>

@@ -105,6 +105,10 @@ def word_source(source: str) -> str:
         r"\begin{tabular}{@{}p{0.42\textwidth}rrrr@{}}",
     )
     source = source.replace(
+        r"\begin{tabularx}{\textwidth}{@{}Xlrrr@{}}",
+        r"\begin{tabular}{@{}p{0.34\textwidth}lrrr@{}}",
+    )
+    source = source.replace(
         r"\begin{longtable}{P{0.22\linewidth}P{0.31\linewidth}P{0.37\linewidth}}",
         r"\begin{longtable}{p{0.22\linewidth}p{0.31\linewidth}p{0.37\linewidth}}",
     )
@@ -167,7 +171,7 @@ def polish(path: Path) -> None:
         headers = tuple(cell.text.strip() for cell in table.rows[0].cells)
         compact = headers == ("Backend/method", "Metric", "Recall at 15")
         wide_compact = headers == (
-            "Comparator", "Class", "Tasks", "Both OK", "Matched",
+            "Comparator", "Class", "Pairs", "Both OK", "Matched",
             "Timeout", "Median [IQR]",
         )
         table.autofit = False
@@ -239,9 +243,11 @@ def polish(path: Path) -> None:
                 [1200, 900, 1200, 6060],
             ("Evidence stream", "Status", "Required action"): [3000, 1800, 4560],
             (
-                "Comparator", "Class", "Tasks", "Both OK", "Matched",
+                "Comparator", "Class", "Pairs", "Both OK", "Matched",
                 "Timeout", "Median [IQR]",
             ): [1900, 1050, 850, 900, 900, 900, 2850],
+            ("Comparison", "Datasets", "Median", "IQR", "Range"):
+                [3900, 1100, 1200, 1580, 1580],
         }
         widths = table_widths.get(headers)
         if widths is not None:

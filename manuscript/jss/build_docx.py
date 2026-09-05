@@ -11,7 +11,7 @@ from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Pt
+from docx.shared import Inches, Pt
 from PIL import Image, ImageDraw, ImageFont
 
 
@@ -38,23 +38,20 @@ def extract_braced_command(text: str, command: str) -> str:
 
 
 def normalize_body(body: str) -> str:
-    cross_references = {
-        "tab:methods": ("Table", "1"),
-        "tab:exact-dispatch": ("Table", "2"),
-        "tab:api": ("Table", "3"),
-        "tab:datasets": ("Table", "4"),
-        "tab:software-provenance": ("Table", "5"),
-        "tab:selector-regret": ("Table", "6"),
-        "tab:auto-selection": ("Table", "7"),
-        "tab:route-confusion": ("Table", "8"),
-        "tab:paired-time": ("Table", "9"),
-        "sec:evaluation": ("Section", "7"),
-    }
-    for label, (kind, number) in cross_references.items():
-        body = body.replace(
-            f"{kind}~\\ref{{{label}}}",
-            f"{kind} {number}",
-        )
+    body = re.sub(r"\\input\{([^}]+)\}",
+                  lambda m: (HERE / m.group(1)).read_text(), body)
+    for name in re.findall(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]+\.pdf)\}", body):
+        source = HERE / name
+        png = source.with_suffix(".png")
+        subprocess.run(["pdftoppm", "-png", "-singlefile", "-scale-to", "1800",
+                        str(source), str(png.with_suffix(""))], check=True)
+        body = body.replace("{" + name + "}", "{" + png.as_posix() + "}")
+    aux = SOURCE.with_suffix(".aux").read_text()
+    cross_references = dict(re.findall(
+        r"\\newlabel\{([^}]+)\}\{\{([^}]+)\}", aux
+    ))
+    for label, number in cross_references.items():
+        body = body.replace(f"\\ref{{{label}}}", number)
 
     def replace_path(match: re.Match[str]) -> str:
         path = match.group(1).replace("_", r"\_")
@@ -226,8 +223,16 @@ Project: \\url{{https://github.com/tkcaccia/faissR}}.
 
 def polish_docx(path: Path) -> None:
     document = Document(path)
+    for shape in document.inline_shapes:
+        if shape.height > Inches(3.5):
+            ratio = Inches(3.5) / shape.height
+            shape.width = int(shape.width * ratio)
+            shape.height = Inches(3.5)
     in_correspondence = False
     for paragraph in document.paragraphs:
+        if paragraph._p.xpath(".//w:drawing"):
+            paragraph.paragraph_format.line_spacing = 1.0
+            paragraph.paragraph_format.keep_with_next = True
         stripped = paragraph.text.strip()
         if stripped == "Correspondence and affiliations":
             in_correspondence = True
@@ -260,6 +265,10 @@ def polish_docx(path: Path) -> None:
             ("Backend", "Method", "Metric", "Data", "Cells",
              "Quality status", "Median (s)"):
                 [1100, 1550, 1550, 1100, 700, 2200, 1000],
+            ("Comparator", "Matched", "Cold call", "Build", "Fitted query"):
+                [2800, 1400, 1700, 1500, 1960],
+            ("Comparator", "Class", "Matched/pairs", "Timeout", "Median", "IQR"):
+                [2350, 1400, 1550, 1100, 1100, 1860],
         }
         widths = table_widths.get(tuple(headers))
         if widths is not None:

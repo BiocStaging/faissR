@@ -37,6 +37,5 @@ jobs:
       - name: Install package and run isolated native smoke
         run: |
           R CMD INSTALL .
-          valgrind --error-exitcode=42 --leak-check=full \
-            --errors-for-leak-kinds=definite \
-            R --vanilla -f .github/scripts/native-memory-smoke.R
+          R --debugger="valgrind --error-exitcode=42 --leak-check=full --errors-for-leak-kinds=definite" \
+            --vanilla -f .github/scripts/native-memory-smoke.R

@@ -55,6 +55,15 @@ manuscript/jss/derived/*
 !manuscript/jss/build_manuscript_tables.R
 !manuscript/jss/build_paired_cpu_figure.R
 !manuscript/jss/build_comprehensive_r_figure.R
+!manuscript/jss/build_architecture_figures.R
+!manuscript/jss/fig_architecture.pdf
+!manuscript/jss/practical_cpu_output.tex
+!manuscript/jss/audit_submission.py
+!manuscript/jss/SUBMISSION_AUDIT.md
+!manuscript/jss/completed_systems/
+!manuscript/jss/completed_systems/results.tar.gz
+!manuscript/jss/completed_systems/checksums.sha256
+!manuscript/jss/analyze_completed_systems.R
 !manuscript/jss/fig_paired_cpu_log_ratio.pdf
 !manuscript/jss/fig_comprehensive_r_log_ratio.pdf
 !manuscript/jss/faissR_jss_evidence_snapshot.tar.gz

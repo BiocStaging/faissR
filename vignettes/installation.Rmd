@@ -70,7 +70,7 @@ sudo cmake --install faiss-1.14.3/build
 FAISS_HOME=/opt/faiss \
 FAISSR_REQUIRE_FAISS=1 \
 FAISSR_USE_CUDA=0 FAISSR_USE_CUVS=0 FAISSR_USE_CUGRAPH=0 \
-R CMD INSTALL faissR_0.99.29.tar.gz
+R CMD INSTALL faissR_0.99.34.tar.gz
 ```
 
 When the distribution supplies compatible development files, installing
@@ -86,7 +86,7 @@ brew install faiss libomp gcc
 FAISS_HOME="$(brew --prefix faiss)" \
 LIBOMP_HOME="$(brew --prefix libomp)" \
 FAISSR_REQUIRE_FAISS=1 \
-R CMD INSTALL faissR_0.99.29.tar.gz
+R CMD INSTALL faissR_0.99.34.tar.gz
 ```
 
 An already active conda/mamba environment is also accepted when it contains
@@ -107,11 +107,10 @@ CUVS_HOME=/opt/rapids \
 FAISSR_REQUIRE_FAISS=1 \
 FAISSR_REQUIRE_CUDA=1 \
 FAISSR_REQUIRE_CUVS=1 \
-R CMD INSTALL faissR_0.99.29.tar.gz
+R CMD INSTALL faissR_0.99.34.tar.gz
 ```
 
-Use `FAISSR_REQUIRE_CUGRAPH=1` as well only when graph-clustering support is
-required. Native RAPIDS builds are Linux-oriented; WSL2 is the documented
+Native RAPIDS builds are Linux-oriented; WSL2 is the documented
 Windows route for CUDA/cuVS.
 
 # Audit the installed capability
@@ -166,8 +165,8 @@ installation:
 ```{bash, eval=FALSE}
 R CMD build .
 FAISS_HOME=/opt/faiss FAISSR_REQUIRE_FAISS=1 \
-    R CMD check --as-cran faissR_0.99.29.tar.gz
-Rscript -e 'BiocCheck::BiocCheck("faissR_0.99.29.tar.gz", `new-package`=TRUE)'
+    R CMD check --as-cran faissR_0.99.34.tar.gz
+Rscript -e 'BiocCheck::BiocCheck("faissR_0.99.34.tar.gz", `new-package`=TRUE)'
 ```
 
 `faissR` is MIT-licensed. FAISS is MIT-licensed, cuVS is Apache-2.0-licensed,
