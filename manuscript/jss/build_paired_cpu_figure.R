@@ -109,11 +109,11 @@ symbols <- c(BiocNeighbors = 16L, RcppHNSW = 17L)
 offsets <- c(BiocNeighbors = 0.14, RcppHNSW = -0.14)
 
 grDevices::pdf(output, width = 7.2, height = 5.2, useDingbats = FALSE)
-graphics::par(mar = c(4.2, 9.2, 0.8, 4.5), las = 1, xpd = NA)
+graphics::par(mar = c(4.2, 9.2, 0.8, 1.0), las = 1, xpd = FALSE)
 y <- rev(seq_along(dataset_order))
 graphics::plot(
-  NA, NA, log = "x", xlim = c(0.45, 48), ylim = c(0.45, 9.55),
-  axes = FALSE, xlab = expression(T[comparator] / T[faissR]), ylab = ""
+  NA, NA, log = "x", xlim = c(0.45, 90), ylim = c(0.45, 9.55),
+  axes = FALSE, xlab = "", ylab = ""
 )
 graphics::abline(v = 1, lty = 2, col = "#777777")
 graphics::abline(h = seq(1.5, 8.5, by = 1), col = "#EEEEEE", lwd = 0.7)
@@ -146,22 +146,22 @@ for (comparator in comparators) {
       graphics::text(48, yi, labels = "n=0", col = "#777777", cex = 0.62, adj = 0)
     }
     if (z$comparator_timeouts > 0L) {
-      graphics::points(39, yi, pch = 4, col = "#111111", cex = 0.9, lwd = 1.4)
-      graphics::text(43, yi, labels = paste0("t=", z$comparator_timeouts),
-                     col = "#111111", cex = 0.62)
+      graphics::text(68, yi, labels = paste0("t=", z$comparator_timeouts),
+                     col = "#111111", cex = 0.62, adj = 0)
     }
   }
 }
 
 graphics::legend(
   "topleft",
-  legend = c("BiocNeighbors", "RcppHNSW", "No eligible pair", "Timeout (t)"),
-  col = c(colors, "#888888", "#111111"), pch = c(symbols, 4, 4),
+  legend = c("BiocNeighbors", "RcppHNSW", "No eligible pair"),
+  col = c(colors, "#888888"), pch = c(symbols, 4),
   bty = "n", cex = 0.78, inset = 0.01
 )
-graphics::mtext("Comparator faster", side = 1, at = 0.6, line = 2.7,
+graphics::mtext("Comparator faster", side = 1, at = 0.6, line = 2.0,
                 cex = 0.72, col = "#555555")
-graphics::mtext("faissR faster", side = 1, at = 17, line = 2.7,
+graphics::mtext("faissR faster", side = 1, at = 17, line = 2.0,
                 cex = 0.72, col = "#555555")
+graphics::mtext(expression(T[comparator] / T[faissR]), side = 1, line = 3.1)
 grDevices::dev.off()
 cat("Wrote ", output, " and ", summary_output, "\n", sep = "")

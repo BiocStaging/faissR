@@ -1,3 +1,8 @@
+# faissR 0.99.35
+
+* Increments the Bioconductor development version after the JSS manuscript and
+  supplementary figure-layout corrections.
+
 # faissR 0.99.34
 
 * Adds `Biobase` as a Bioconductor dependency and uses its bundled

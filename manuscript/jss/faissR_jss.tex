@@ -355,19 +355,9 @@ interfaces in this article: they reuse the same compiled infrastructure, but
 the empirical claims below concern nearest-neighbor search rather than
 classification, regression, or clustering quality.
 
-Figure~\ref{fig:architecture} summarizes the execution path. Provider-specific
-details are confined behind dispatch; host and device-resident results retain
-the same requested/resolved-route metadata even though their ownership and
-materialization contracts differ.
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=\textwidth]{fig_architecture.pdf}
-\caption{Software architecture from an ordinary or \pkg{float} matrix through
-metric preprocessing, provider dispatch, index construction or reuse, query
-execution, and host or GPU-resident output.}
-\label{fig:architecture}
-\end{figure}
+Provider-specific details are confined behind dispatch; host and
+device-resident results retain the same requested/resolved-route metadata even
+though their ownership and materialization contracts differ.
 
 \section[The R interface]{The \proglang{R} interface} \label{sec:interface}
 
@@ -482,7 +472,7 @@ A typical macOS CPU installation is:
 \begin{CodeChunk}
 \begin{CodeInput}
 brew install faiss libomp
-R> install.packages("faissR_0.99.34.tar.gz", repos = NULL, type = "source")
+R> install.packages("faissR_0.99.35.tar.gz", repos = NULL, type = "source")
 R> backend_info()
 R> subset(nn_capabilities(runtime = TRUE), available)
 \end{CodeInput}
@@ -815,7 +805,7 @@ Debian 13, OpenBLAS 0.3.33, and a checksummed Singularity image.
 the supplementary environment table records the principal software identities;
 the supplement provides the remaining environment and hardware details.
 
-The article accompanies \pkg{faissR} 0.99.34. Experiment-specific package,
+The article accompanies \pkg{faissR} 0.99.35. Experiment-specific package,
 provider, container, and data fingerprints are retained in the replication
 archive and are analyzed under their recorded identities rather than relabelled
 as the current build. Timing ratios are computed within their matched

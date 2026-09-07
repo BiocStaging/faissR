@@ -1,7 +1,7 @@
 Package: faissR
 Type: Package
 Title: FAISS-Backed Nearest Neighbours, kNN Models, and k-Means
-Version: 0.99.34
+Version: 0.99.35
 Authors@R: person(given = "Stefano",
     family = "Cacciatore",
     role = c("aut", "cre"),

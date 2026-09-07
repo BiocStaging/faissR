@@ -97,11 +97,11 @@ dir.create(dirname(output), recursive = TRUE, showWarnings = FALSE)
 utils::write.csv(summary, summary_output, row.names = FALSE, na = "")
 
 grDevices::pdf(output, width = 7.2, height = 4.8, useDingbats = FALSE)
-graphics::par(mar = c(4.2, 11.4, 0.7, 4.6), las = 1, xpd = NA)
+graphics::par(mar = c(4.2, 11.4, 0.7, 1.0), las = 1, xpd = FALSE)
 y <- rev(seq_len(nrow(summary)))
 graphics::plot(
-  NA, NA, log = "x", xlim = c(0.18, 70), ylim = c(0.45, nrow(summary) + 0.55),
-  axes = FALSE, xlab = expression(T[comparator] / T[faissR]), ylab = ""
+  NA, NA, log = "x", xlim = c(0.18, 150), ylim = c(0.45, nrow(summary) + 0.55),
+  axes = FALSE, xlab = "", ylab = ""
 )
 graphics::abline(v = 1, lty = 2, col = "#666666")
 graphics::abline(h = seq(1.5, nrow(summary) - 0.5, by = 1), col = "#E5E5E5", lwd = 0.7)
@@ -115,13 +115,16 @@ for (i in seq_len(nrow(summary))) {
                      col = "#333333", lwd = 1.6)
   graphics::points(summary$median_ratio[[i]], y[[i]], pch = 16, cex = 0.75)
   graphics::text(
-    70, y[[i]],
+    61, y[[i]],
     labels = paste0("n=", summary$point_recall_matched[[i]],
                     "; t=", summary$comparator_timeouts[[i]] + summary$faissR_timeouts[[i]]),
     adj = 0, cex = 0.62
   )
 }
-graphics::mtext("Comparator faster", side = 1, at = 0.32, line = 2.7, cex = 0.72, col = "#555555")
-graphics::mtext("faissR faster", side = 1, at = 18, line = 2.7, cex = 0.72, col = "#555555")
+graphics::mtext("Comparator faster", side = 1, at = 0.32, line = 2.0,
+                cex = 0.72, col = "#555555")
+graphics::mtext("faissR faster", side = 1, at = 18, line = 2.0,
+                cex = 0.72, col = "#555555")
+graphics::mtext(expression(T[comparator] / T[faissR]), side = 1, line = 3.1)
 grDevices::dev.off()
 cat("Wrote ", output, " and ", summary_output, "\n", sep = "")

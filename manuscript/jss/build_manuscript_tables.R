@@ -140,7 +140,7 @@ environment <- data.frame(
     "NVIDIA L40S; 46,068 MiB; compute capability 8.9", "595.58.03",
     "Direct float32 input for timed calibration, reference, held-out, and CUDA selector rows",
     "Same R double matrix for both routes; faissR conversion included inside its timer",
-    "0.99.34",
+    "0.99.35",
     "1.14.3", "libcuvs 26.06", "13.2",
     "BiocNeighbors 2.4.0; RcppHNSW 0.7.0",
     "SHA-256 0cd4d0df406bd0075046b16d2e8a4d3ae78ee61d98e6d47c639986e28ea6f203"
