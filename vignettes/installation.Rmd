@@ -72,7 +72,7 @@ sudo cmake --install faiss-1.14.3/build
 FAISS_HOME=/opt/faiss \
 FAISSR_REQUIRE_FAISS=1 \
 FAISSR_USE_CUDA=0 FAISSR_USE_CUVS=0 \
-R CMD INSTALL faissR_0.99.36.tar.gz
+R CMD INSTALL faissR_0.99.37.tar.gz
 ```
 
 When the distribution supplies compatible development files, installing
@@ -88,7 +88,7 @@ brew install faiss libomp gcc
 FAISS_HOME="$(brew --prefix faiss)" \
 LIBOMP_HOME="$(brew --prefix libomp)" \
 FAISSR_REQUIRE_FAISS=1 \
-R CMD INSTALL faissR_0.99.36.tar.gz
+R CMD INSTALL faissR_0.99.37.tar.gz
 ```
 
 An already active conda/mamba environment is also accepted when it contains
@@ -109,7 +109,7 @@ CUVS_HOME=/opt/rapids \
 FAISSR_REQUIRE_FAISS=1 \
 FAISSR_REQUIRE_CUDA=1 \
 FAISSR_REQUIRE_CUVS=1 \
-R CMD INSTALL faissR_0.99.36.tar.gz
+R CMD INSTALL faissR_0.99.37.tar.gz
 ```
 
 Native RAPIDS builds are Linux-oriented; WSL2 is the documented
@@ -151,9 +151,9 @@ compiled against the provider and the runtime device must also be available.
 * **The package loads but `faiss_available()` is false:** this is a
     diagnostic-only artifact. Install from source with FAISS and set
     `FAISSR_REQUIRE_FAISS=1`.
-* **Loading reports an undefined BLAS symbol such as `ssyrk_`:** use faissR
-    0.99.36 or later and verify that the final link command places R's
-    LAPACK, BLAS, and Fortran libraries after `-lfaiss`.
+* **Loading reports an undefined BLAS symbol such as `ssyrk_`:** use the
+    current source and verify that the final link command places R's LAPACK,
+    BLAS, and Fortran libraries after `-lfaiss`.
 * **`libfaiss` or `GLIBCXX_*` load failure:** the runtime linker and compiler
     ABI do not match. Use one compiler/runtime stack and expose its library
     directory through the platform linker path.
@@ -171,8 +171,8 @@ installation:
 ```{bash, eval=FALSE}
 R CMD build .
 FAISS_HOME=/opt/faiss FAISSR_REQUIRE_FAISS=1 \
-    R CMD check --as-cran faissR_0.99.36.tar.gz
-Rscript -e 'BiocCheck::BiocCheck("faissR_0.99.36.tar.gz", `new-package`=TRUE)'
+    R CMD check --as-cran faissR_0.99.37.tar.gz
+Rscript -e 'BiocCheck::BiocCheck("faissR_0.99.37.tar.gz", `new-package`=TRUE)'
 ```
 
 `faissR` is MIT-licensed. FAISS is MIT-licensed, cuVS is Apache-2.0-licensed,

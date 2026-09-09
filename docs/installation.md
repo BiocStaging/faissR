@@ -456,7 +456,7 @@ available at runtime.
 |---|---|---|
 | `FAISS library not found` during install | FAISS headers/library are not in compiler paths | Set `FAISS_HOME` or `PKG_CONFIG_PATH`; verify `include/faiss/IndexFlat.h` and `lib/libfaiss.*` exist. |
 | Package installs but cannot load `libfaiss` | Runtime linker cannot find FAISS | Set `LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH`, or Windows `PATH`. |
-| Package compiles but loading reports an undefined BLAS symbol such as `ssyrk_` | FAISS was linked without its client-side BLAS dependency | Use faissR 0.99.36 or later, which places R's `LAPACK_LIBS`, `BLAS_LIBS`, and `FLIBS` after `-lfaiss`; inspect the final link command if using modified build files. |
+| Package compiles but loading reports an undefined BLAS symbol such as `ssyrk_` | FAISS was linked without its client-side BLAS dependency | Use the current source, which places R's `LAPACK_LIBS`, `BLAS_LIBS`, and `FLIBS` after `-lfaiss`; inspect the final link command if using modified build files. |
 | `GLIBCXX_* not found` on Linux | R loaded an older system `libstdc++` before FAISS/RAPIDS libraries | Use a consistent compiler/runtime stack; set `LD_LIBRARY_PATH` and, if necessary for benchmarks, `LD_PRELOAD` to the intended `libstdc++.so.6`. |
 | CUDA build cannot find `nvcc` | CUDA toolkit is missing or not on path | Set `CUDA_HOME` and/or `NVCC`; check `nvcc --version`. |
 | cuVS routes unavailable | cuVS headers/library were not found at build time | Set `CUVS_HOME`, `FAISSR_USE_CUVS=1`, and runtime `LD_LIBRARY_PATH`. |
@@ -472,14 +472,14 @@ itself is valid.
 ```sh
 R CMD build .
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-R CMD check --as-cran faissR_0.99.36.tar.gz
+R CMD check --as-cran faissR_0.99.37.tar.gz
 ```
 
 Bioconductor submission checks are run in addition to `R CMD check`:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.36.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.37.tar.gz", `new-package` = TRUE)
 ```
 
 A CPU-only check should still finish with `Status: OK` once FAISS is installed;

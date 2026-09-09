@@ -409,7 +409,7 @@ be inspected, but they do not provide nearest-neighbour computation.
 
 ## Bioconductor Readiness
 
-`faissR` includes the `GPU` `biocViews` term, a `BiocStyle` vignette, `NEWS.md`,
+`faissR` includes the `GPU` `biocViews` term, a `BiocStyle` vignette,
 a standard `License: MIT + file LICENSE` declaration, and a top-level
 `.BBSoptions` file with `GPU_reliance: optional`. This opts the package into
 Bioconductor GPU builders without making NVIDIA libraries mandatory for the
@@ -418,14 +418,14 @@ tarball:
 
 ```sh
 R CMD build .
-R CMD check --as-cran faissR_0.99.36.tar.gz
+R CMD check --as-cran faissR_0.99.37.tar.gz
 ```
 
 and then:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.36.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.37.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA and cuVS are

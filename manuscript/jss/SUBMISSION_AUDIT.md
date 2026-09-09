@@ -1,6 +1,6 @@
 # Submission audit
 
-Date: 2026-09-08. Package: faissR 0.99.36.
+Date: 2026-09-09. Package: faissR 0.99.37.
 This is a maintenance report, not part of the scientific article.
 
 ## Corrections
@@ -40,7 +40,7 @@ This is a maintenance report, not part of the scientific article.
 
 ## Verification
 
-- Functional local installation of 0.99.36 with external FAISS succeeded.
+- Functional local installation of 0.99.37 with external FAISS succeeded.
 - R CMD check --as-cran --no-manual: 0 errors, 0 warnings, 1 note (new
   submission). Tests, examples, compiled-code checks, Rd consistency, online
   incoming checks, and vignette rebuilding passed under a valid UTF-8 locale.
