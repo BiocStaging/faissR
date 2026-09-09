@@ -2,6 +2,7 @@ test_that("metric preflight reports cosine and correlation edge rows", {
   x <- rbind(c(0, 0), c(1, 1), c(1, 2))
 
   cosine_cpu <- nn_metric_preflight(x, metric = "cosine", backend = "cpu")
+  expect_identical(cosine_cpu$data_degenerate_rows, 1L)
   expect_identical(cosine_cpu$data_rows, 1L)
   expect_true(cosine_cpu$would_succeed)
   expect_identical(cosine_cpu$action, "cpu_zero_normalized_convention")
@@ -16,6 +17,7 @@ test_that("metric preflight reports cosine and correlation edge rows", {
     backend = "cpu"
   )
   expect_identical(correlation$data_rows, c(1L, 2L))
+  expect_identical(correlation$data_degenerate_rows, c(1L, 2L))
   expect_identical(correlation$degenerate_kind, "constant_row")
 })
 
@@ -29,7 +31,9 @@ test_that("metric preflight reports query and non-finite rows separately", {
     backend = "cpu"
   )
   expect_length(out$data_rows, 0L)
+  expect_length(out$data_degenerate_rows, 0L)
   expect_identical(out$points_rows, 1L)
+  expect_identical(out$points_degenerate_rows, 1L)
   expect_identical(out$points_non_finite_rows, 2L)
   expect_false(out$would_succeed)
   expect_identical(out$action, "error_non_finite_all_backends")

@@ -12,6 +12,9 @@
 #include <utility>
 #include <vector>
 
+#include "faissr_size_utils.hpp"
+#include "faissr_normalize.hpp"
+
 using Rcpp::IntegerMatrix;
 using Rcpp::IntegerVector;
 using Rcpp::List;
@@ -62,16 +65,18 @@ Rcpp::IntegerVector matrix_dims_from_object(SEXP x, const char* name) {
   return dims;
 }
 
-const float* float32_slot_ptr(SEXP slot, const int expected_length, const char* name) {
+const float* float32_slot_ptr(SEXP slot,
+                              const R_xlen_t expected_length,
+                              const char* name) {
   if (TYPEOF(slot) == INTSXP) {
-    if (Rf_length(slot) != expected_length) {
+    if (Rf_xlength(slot) != expected_length) {
       Rcpp::stop("%s float32 payload length does not match its dimensions", name);
     }
     return reinterpret_cast<const float*>(INTEGER(slot));
   }
   if (TYPEOF(slot) == RAWSXP) {
-    const R_xlen_t expected_bytes = static_cast<R_xlen_t>(expected_length) *
-      static_cast<R_xlen_t>(sizeof(float));
+    const R_xlen_t expected_bytes =
+      faissr::float_payload_byte_count(expected_length, name);
     if (Rf_xlength(slot) != expected_bytes) {
       Rcpp::stop("%s float32 raw payload length does not match its dimensions", name);
     }
@@ -93,10 +98,11 @@ NumericOrFloatMatrixView make_numeric_or_float_view(SEXP x, const char* name) {
   NumericOrFloatMatrixView view;
   view.nrow = dims[0];
   view.ncol = dims[1];
-  const int expected_length = view.nrow * view.ncol;
+  const R_xlen_t expected_length =
+    faissr::matrix_element_count(view.nrow, view.ncol);
 
   if (TYPEOF(x) == REALSXP) {
-    if (Rf_length(x) != expected_length) {
+    if (Rf_xlength(x) != expected_length) {
       Rcpp::stop("%s payload length does not match its dimensions", name);
     }
     view.doubles = REAL(x);
@@ -113,7 +119,7 @@ NumericOrFloatMatrixView make_numeric_or_float_view(SEXP x, const char* name) {
       return view;
     }
     if (TYPEOF(slot) == REALSXP) {
-      if (Rf_length(slot) != expected_length) {
+      if (Rf_xlength(slot) != expected_length) {
         Rcpp::stop("%s payload length does not match its dimensions", name);
       }
       view.doubles = REAL(slot);
@@ -139,7 +145,8 @@ std::uint64_t matrix_fingerprint_hash(const NumericOrFloatMatrixView& view) {
   hash_value(hash, view.ncol);
   const char type_tag = view.is_float32 ? 'f' : 'd';
   hash_value(hash, type_tag);
-  const int expected_length = view.nrow * view.ncol;
+  const R_xlen_t expected_length =
+    faissr::matrix_element_count(view.nrow, view.ncol);
   if (view.is_float32) {
     hash_bytes(hash, view.floats, static_cast<std::size_t>(expected_length) * sizeof(float));
   } else {
@@ -273,8 +280,8 @@ void parallel_for_rows(const int n, const int n_threads, Function fn) {
   std::vector<std::thread> workers;
   workers.reserve(static_cast<std::size_t>(threads));
   for (int t = 0; t < threads; ++t) {
-    const int begin = (n * t) / threads;
-    const int end = (n * (t + 1)) / threads;
+    const int begin = faissr::chunk_bound(n, t, threads);
+    const int end = faissr::chunk_bound(n, t + 1, threads);
     workers.emplace_back([&, begin, end, t]() {
       fn(begin, end, t);
     });
@@ -422,51 +429,17 @@ List normalized_float32_transform_cpp(SEXP x, std::string metric) {
   std::vector<float> row_major(total, 0.0f);
   Rcpp::LogicalVector zero(n);
 
-  bool finite = true;
+  std::vector<double> normalized;
   for (int row = 0; row < n; ++row) {
-    double mean = 0.0;
-    if (metric == "correlation") {
-      for (int col = 0; col < p; ++col) {
-        const double value = matrix_value(view, row, col);
-        if (!std::isfinite(value)) {
-          finite = false;
-          continue;
-        }
-        mean += value;
-      }
-      mean /= static_cast<double>(p);
-    }
-
-    double norm2 = 0.0;
-    for (int col = 0; col < p; ++col) {
-      const double raw = matrix_value(view, row, col);
-      if (!std::isfinite(raw)) {
-        finite = false;
-        continue;
-      }
-      const double value = metric == "correlation" ? raw - mean : raw;
-      row_major[static_cast<std::size_t>(row) * p + col] =
-        static_cast<float>(value);
-      norm2 += value * value;
-    }
-
-    const double norm = std::sqrt(norm2);
-    const bool keep = std::isfinite(norm) && norm > 0.0;
+    const bool keep = faissr::normalized_row(
+      p, metric == "correlation",
+      [&](int col) { return matrix_value(view, row, col); }, normalized
+    );
     zero[row] = !keep;
-    if (keep) {
-      const float inv_norm = static_cast<float>(1.0 / norm);
-      for (int col = 0; col < p; ++col) {
-        row_major[static_cast<std::size_t>(row) * p + col] *= inv_norm;
-      }
-    } else {
-      for (int col = 0; col < p; ++col) {
-        row_major[static_cast<std::size_t>(row) * p + col] = 0.0f;
-      }
+    for (int col = 0; col < p; ++col) {
+      row_major[static_cast<std::size_t>(row) * p + col] =
+        static_cast<float>(normalized[col]);
     }
-  }
-
-  if (!finite) {
-    Rcpp::stop("normalized float32 transforms require finite values");
   }
 
   Rcpp::S4 float_matrix("float32");
@@ -482,6 +455,21 @@ List normalized_float32_transform_cpp(SEXP x, std::string metric) {
     Rcpp::Named("row_major") = true,
     Rcpp::Named("storage") = "float32"
   );
+}
+
+// [[Rcpp::export]]
+NumericMatrix row_normalize_cpp(SEXP x, bool center) {
+  NumericOrFloatMatrixView view = make_numeric_or_float_view(x, "x");
+  NumericMatrix out(view.nrow, view.ncol);
+  std::vector<double> normalized;
+  for (int row = 0; row < view.nrow; ++row) {
+    faissr::normalized_row(
+      view.ncol, center,
+      [&](int col) { return matrix_value(view, row, col); }, normalized
+    );
+    for (int col = 0; col < view.ncol; ++col) out(row, col) = normalized[col];
+  }
+  return out;
 }
 
 // [[Rcpp::export]]
@@ -861,6 +849,10 @@ NumericMatrix normalized_euclidean_to_similarity_distance_cpp(
     for (int col = 0; col < k; ++col) {
       const int idx = indices(row, col);
       const double d = distances(row, col);
+      if (idx == NA_INTEGER || idx < 1 || idx > data_zero.size()) {
+        out(row, col) = R_PosInf;
+        continue;
+      }
       double value = d * d / 2.0;
       if (value < 0.0 && value > -1e-8) value = 0.0;
       if (value > 2.0 && value < 2.0 + 1e-8) value = 2.0;
@@ -1116,8 +1108,8 @@ NumericVector sampled_pair_distances_cpp(NumericMatrix x,
     std::vector<std::thread> workers;
     workers.reserve(static_cast<std::size_t>(n_threads));
     for (int t = 0; t < n_threads; ++t) {
-      const int start = (n_pairs * t) / n_threads;
-      const int end = (n_pairs * (t + 1)) / n_threads;
+      const int start = faissr::chunk_bound(n_pairs, t, n_threads);
+      const int end = faissr::chunk_bound(n_pairs, t + 1, n_threads);
       workers.emplace_back(write_range, start, end);
     }
     for (auto& worker : workers) worker.join();

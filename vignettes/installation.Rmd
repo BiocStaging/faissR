@@ -20,6 +20,8 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 
 A functional `faissR` installation requires R development headers, `Rcpp`,
 `Biobase`, a C++20 compiler, and ABI-compatible FAISS headers and libraries.
+`Biobase` supplies the Bioconductor example workflow in the main vignette;
+the native nearest-neighbour implementation itself does not call Biobase code.
 Unix builds also require a Fortran compiler; native Windows builds use the C++
 exact fallback instead.
 CUDA, FAISS GPU, and RAPIDS cuVS are optional. They become mandatory only when
@@ -72,11 +74,33 @@ sudo cmake --install faiss-1.14.3/build
 FAISS_HOME=/opt/faiss \
 FAISSR_REQUIRE_FAISS=1 \
 FAISSR_USE_CUDA=0 FAISSR_USE_CUVS=0 \
-R CMD INSTALL faissR_0.99.37.tar.gz
+R CMD INSTALL faissR_0.99.38.tar.gz
 ```
 
 When the distribution supplies compatible development files, installing
 `libfaiss-dev` and omitting `FAISS_HOME` is sufficient.
+
+## Optional Linux performance configuration
+
+An ABI-compatible LP64 OpenBLAS build is an optional CPU performance
+configuration for FAISS, not a requirement to replace R's configured BLAS.
+Benefits depend on the method, matrix shape, query batch size, and threading;
+graph traversal does not necessarily benefit from a faster dense BLAS.
+Keep the BLAS, LAPACK, and Fortran link flags reported by `R CMD config`.
+Do not overwrite `libRblas` or mix incompatible integer or compiler ABIs.
+
+When benchmarking FAISS OpenMP parallelism, start with one BLAS thread to
+avoid nested thread-pool oversubscription. For a pthread OpenBLAS build, for
+example, start R with `OPENBLAS_NUM_THREADS=1` and choose faissR's `n_threads`
+explicitly. An OpenMP OpenBLAS build instead shares `OMP_NUM_THREADS` control;
+check the installed provider before setting thread limits. Compare alternative
+settings on representative workloads in separate R sessions, and retain the
+configuration only when observed runtime improves without changing results.
+This is an opt-in deployment choice, not a modification of publication results.
+See the [OpenBLAS runtime documentation][openblas-runtime]
+for provider-specific thread controls.
+
+[openblas-runtime]: https://www.openmathlib.org/OpenBLAS/docs/runtime_variables/
 
 # macOS CPU-only installation
 
@@ -88,7 +112,7 @@ brew install faiss libomp gcc
 FAISS_HOME="$(brew --prefix faiss)" \
 LIBOMP_HOME="$(brew --prefix libomp)" \
 FAISSR_REQUIRE_FAISS=1 \
-R CMD INSTALL faissR_0.99.37.tar.gz
+R CMD INSTALL faissR_0.99.38.tar.gz
 ```
 
 An already active conda/mamba environment is also accepted when it contains
@@ -109,7 +133,7 @@ CUVS_HOME=/opt/rapids \
 FAISSR_REQUIRE_FAISS=1 \
 FAISSR_REQUIRE_CUDA=1 \
 FAISSR_REQUIRE_CUVS=1 \
-R CMD INSTALL faissR_0.99.37.tar.gz
+R CMD INSTALL faissR_0.99.38.tar.gz
 ```
 
 Native RAPIDS builds are Linux-oriented; WSL2 is the documented
@@ -171,8 +195,8 @@ installation:
 ```{bash, eval=FALSE}
 R CMD build .
 FAISS_HOME=/opt/faiss FAISSR_REQUIRE_FAISS=1 \
-    R CMD check --as-cran faissR_0.99.37.tar.gz
-Rscript -e 'BiocCheck::BiocCheck("faissR_0.99.37.tar.gz", `new-package`=TRUE)'
+    R CMD check --as-cran faissR_0.99.38.tar.gz
+Rscript -e 'BiocCheck::BiocCheck("faissR_0.99.38.tar.gz", `new-package`=TRUE)'
 ```
 
 `faissR` is MIT-licensed. FAISS is MIT-licensed, cuVS is Apache-2.0-licensed,

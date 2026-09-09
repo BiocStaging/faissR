@@ -357,6 +357,11 @@ all-zero cosine rows and constant correlation rows; explicit CUDA routes reject
 those rows. The explicit preflight scan reports affected one-based row indices
 without running a search.
 
+Normalization scales each row in double precision before computing its norm
+and converting to float32. This avoids overflow or underflow from squaring
+extreme finite inputs. Euclidean FAISS/CUDA input must fit in float32, and
+measurement units should also keep squared distances within provider precision.
+
 ```{r metric-preflight}
 edge_x <- rbind(c(0, 0), c(1, 0), c(1, 1))
 nn_metric_preflight(
@@ -422,7 +427,11 @@ class(float_nearest$distances)
 
 `knn()` can fit a model for repeated prediction, or it can fit and predict in
 one call when `Xtest` is supplied. Fitted FAISS Flat, HNSW, IVF, and IVFPQ
-indexes are reused by `predict()` where supported.
+indexes are reused by `predict()` where supported. Changing `target_recall`
+for a fitted HNSW, IVF, or IVFPQ model resolves the new tier through a fresh
+search instead of silently reusing settings for the original tier. The
+prediction metadata then records `query_source = "nn"`, and the fitted
+object itself remains unchanged.
 
 ```{r knn-fit}
 fit <- knn(
@@ -479,7 +488,11 @@ as.vector(immediate)
 
 # Candidate refinement
 
-`candidate_knn()` ranks only the supplied candidate rows. This is useful when
+`candidate_knn()` ranks only the supplied candidate rows. Insufficient valid,
+distinct candidates give `NA` indices and `Inf` distances on CPU and CUDA;
+the function never fills these positions with rows outside the supplied set.
+CUDA requires self-query scoring with `exclude_self = TRUE` and `k <= 256`.
+This is useful when
 another algorithm constructs a graph or a broad candidate pool and faissR
 should apply the final metric consistently.
 

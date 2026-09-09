@@ -932,6 +932,29 @@ test_that("auto metadata labels hardware extrapolation without changing selectio
   )
 })
 
+test_that("auto metadata distinguishes unidentified hardware", {
+  route <- list(
+    predicted_device = "cpu",
+    predicted_backend = "faiss_flat_l2",
+    selected_backend = "faiss_flat_l2",
+    calibration_cpu_model = NA_character_
+  )
+  old <- options(faissR.runtime_cpu_model = NA_character_)
+  on.exit(options(old), add = TRUE)
+
+  unidentified <- faissR:::nn_auto_hardware_metadata(route)
+  expect_equal(unidentified$hardware_match_status, "unknown")
+  expect_equal(unidentified$hardware_evidence, "hardware_unidentified")
+  expect_match(
+    unidentified$hardware_evidence_note,
+    "identity could not be confirmed",
+    fixed = TRUE
+  )
+  expect_no_warning(
+    faissR:::nn_maybe_warn_auto_hardware(unidentified, "auto")
+  )
+})
+
 test_that("CUDA auto hardware extrapolation warns once and can be silenced", {
   selection <- list(
     predicted_device = "cuda",

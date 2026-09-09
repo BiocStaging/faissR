@@ -13,6 +13,10 @@ normalized_float32_transform_cpp <- function(x, metric) {
     .Call(`_faissR_normalized_float32_transform_cpp`, x, metric)
 }
 
+row_normalize_cpp <- function(x, center) {
+    .Call(`_faissR_row_normalize_cpp`, x, center)
+}
+
 mips_l2_float32_transform_cpp <- function(data, points, self_query) {
     .Call(`_faissR_mips_l2_float32_transform_cpp`, data, points, self_query)
 }
@@ -434,9 +438,10 @@ gpu_knn_to_host_cpp <- function(result) {
     .Call(`_faissR_gpu_knn_to_host_cpp`, result)
 }
 
-row_candidate_knn_cuda_cpp <- function(data, candidate_indices, k, metric) {
+row_candidate_knn_cuda_cpp <- function(data, candidate_indices, k, metric,
+    fill_missing = TRUE) {
     .Call(`_faissR_row_candidate_knn_cuda_cpp`, data, candidate_indices, k,
-        metric)
+        metric, fill_missing)
 }
 
 row_candidate_knn_cuda_float32_cpp <- function(data, candidate_indices, k,
@@ -771,4 +776,3 @@ kmeans_faiss_gpu_cpp <- function(data, centers, max_iter, nredo, tol, seed,
     .Call(`_faissR_kmeans_faiss_gpu_cpp`, data, centers, max_iter, nredo, tol,
         seed, kmeans_plus_plus)
 }
-

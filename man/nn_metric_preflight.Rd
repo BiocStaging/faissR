@@ -24,11 +24,13 @@ nn_metric_preflight(
 follows the package backend option and environment-variable policy.}
 }
 \value{
-A list containing one-based `data_rows` and `points_rows` for the
-    metric-specific degenerate condition, corresponding non-finite row
-    indices, `would_succeed`, and a stable `action` label. CPU cosine and
-    correlation use the documented zero-normalized convention; CUDA rejects
-    affected rows. An automatic backend is reported as backend-dependent.
+A list containing one-based `data_degenerate_rows` and
+    `points_degenerate_rows` for the metric-specific degenerate condition,
+    corresponding non-finite row indices, `would_succeed`, and a stable
+    `action` label. `data_rows` and `points_rows` are retained as compatibility
+    aliases. CPU cosine and correlation use the documented zero-normalized
+    convention; CUDA rejects affected rows. An automatic backend is reported
+    as backend-dependent.
 }
 \description{
 Inspect reference and query rows for values that affect the public distance
@@ -41,6 +43,12 @@ all equal. `NA`, `NaN`, `Inf`, and `-Inf` are non-finite and are rejected by
 every backend. Row indices are one-based. The scan is `O((n + m) p)` and is
 intentionally explicit so it need not add another full pass to every
 nearest-neighbor call.
+Cosine/correlation normalization rescales finite rows in double precision
+before conversion to float32. This avoids interpreting numerical overflow
+as a zero vector or constant row. The preflight checks metric inputs, not
+installed capabilities, method-specific size limits, or device memory.
+Euclidean routes using float32 additionally require coordinates within its
+finite range; large squared distances can also exceed provider precision.
 }
 \examples{
 x <- rbind(c(0, 0), c(1, 0), c(1, 1))

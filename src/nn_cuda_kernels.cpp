@@ -607,7 +607,8 @@ __global__ void row_candidate_knn_kernel(const float* data,
                                          int n_features,
                                          int k,
                                          int n_candidates,
-                                         int metric_kind) {
+                                         int metric_kind,
+                                         bool fill_missing) {
   const int q = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
   if (q >= n) return;
   const bool inner_product = metric_kind == 1;
@@ -620,8 +621,10 @@ __global__ void row_candidate_knn_kernel(const float* data,
   }
 
   for (int c = 0; c < n_candidates; ++c) {
-    const int candidate = candidate_indices[static_cast<std::size_t>(c) * n + q] - 1;
-    if (candidate < 0 || candidate >= n || candidate == q) continue;
+    const int label = candidate_indices[static_cast<std::size_t>(c) * n + q];
+    if (label < 1 || label > n) continue;
+    const int candidate = label - 1;
+    if (candidate == q) continue;
     const float score = inner_product ?
       -self_dot_product(data, q, candidate, n, n_features) :
       self_distance_sq(data, q, candidate, n, n_features);
@@ -634,7 +637,7 @@ __global__ void row_candidate_knn_kernel(const float* data,
     );
   }
 
-  if (best_idx[k - 1] == INT_MAX) {
+  if (fill_missing && best_idx[k - 1] == INT_MAX) {
     for (int candidate = 0; candidate < n && best_idx[k - 1] == INT_MAX; ++candidate) {
       if (candidate == q) continue;
       const float score = inner_product ?
@@ -652,6 +655,11 @@ __global__ void row_candidate_knn_kernel(const float* data,
 
   for (int j = 0; j < k; ++j) {
     const std::size_t offset = static_cast<std::size_t>(j) * n + q;
+    if (best_idx[j] == INT_MAX) {
+      out_idx[offset] = INT_MIN;
+      out_dist[offset] = CUDART_INF_F;
+      continue;
+    }
     out_idx[offset] = best_idx[j] + 1;
     if (inner_product) {
       out_dist[offset] = fmaxf(best_dist[j] - best_dist[0], 0.0f);
@@ -671,6 +679,10 @@ int copy_double_to_float_device(const double* host,
     const std::size_t count = std::min(chunk_size, n - offset);
     for (std::size_t i = 0; i < count; ++i) {
       buffer[i] = static_cast<float>(host[offset + i]);
+      if (!std::isfinite(buffer[i])) {
+        set_error("CUDA float32 input requires finite values representable in float32");
+        return 1;
+      }
     }
     if (check_cuda(
       cudaMemcpy(device + offset, buffer.data(), count * sizeof(float), cudaMemcpyHostToDevice),
@@ -1673,7 +1685,8 @@ extern "C" int faissr_cuda_row_candidate_knn(const double* data,
                                                  int k,
                                                  int metric_kind,
                                                  int* out_indices,
-                                                 double* out_distances) {
+                                                 double* out_distances,
+                                                 int fill_missing) {
   last_error.clear();
   if (data == nullptr || candidate_indices == nullptr ||
       out_indices == nullptr || out_distances == nullptr) {
@@ -1681,7 +1694,7 @@ extern "C" int faissr_cuda_row_candidate_knn(const double* data,
     return 1;
   }
   if (n < 2 || n_features < 1 || n_candidates < 1 ||
-      k < 1 || k >= n || k > kMaxCudaK ||
+      k < 1 || (fill_missing && k >= n) || k > kMaxCudaK ||
       (metric_kind != 0 && metric_kind != 1)) {
     set_error("invalid row candidate KNN dimensions");
     return 1;
@@ -1745,7 +1758,8 @@ extern "C" int faissr_cuda_row_candidate_knn(const double* data,
     n_features,
     k,
     n_candidates,
-    metric_kind
+    metric_kind,
+    fill_missing != 0
   );
   if (check_cuda(cudaGetLastError(), "row_candidate_knn_kernel launch")) {
     cleanup();
@@ -1855,7 +1869,8 @@ extern "C" int faissr_cuda_row_candidate_knn_float(const float* data,
     n_features,
     k,
     n_candidates,
-    metric_kind
+    metric_kind,
+    true
   );
   if (check_cuda(cudaGetLastError(), "row_candidate_knn_kernel launch")) {
     cleanup();

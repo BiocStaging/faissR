@@ -12,6 +12,8 @@
 #include <utility>
 #include <vector>
 
+#include "faissr_size_utils.hpp"
+
 using Rcpp::IntegerMatrix;
 using Rcpp::IntegerVector;
 using Rcpp::List;
@@ -552,14 +554,9 @@ void copy_row_major_float(const double* src,
                           std::vector<float>& dest,
                           const int nrow,
                           const int ncol) {
-  dest.resize(static_cast<std::size_t>(nrow) * static_cast<std::size_t>(ncol));
-  for (int c = 0; c < ncol; ++c) {
-    const double* src_col = src + static_cast<std::size_t>(c) * nrow;
-    for (int r = 0; r < nrow; ++r) {
-      dest[static_cast<std::size_t>(r) * ncol + c] =
-        static_cast<float>(src_col[r]);
-    }
-  }
+  faissr::copy_column_major_to_row_major_float(
+    src, dest, nrow, ncol, false
+  );
 }
 
 struct MatrixViewF32 {
@@ -589,16 +586,18 @@ Rcpp::IntegerVector matrix_dims_from_object_f32(SEXP x, const char* name) {
   return dims;
 }
 
-const float* float32_slot_ptr_f32(SEXP slot, const int expected_length, const char* name) {
+const float* float32_slot_ptr_f32(SEXP slot,
+                                  const R_xlen_t expected_length,
+                                  const char* name) {
   if (TYPEOF(slot) == INTSXP) {
-    if (Rf_length(slot) != expected_length) {
+    if (Rf_xlength(slot) != expected_length) {
       Rcpp::stop("%s float32 payload length does not match its dimensions", name);
     }
     return reinterpret_cast<const float*>(INTEGER(slot));
   }
   if (TYPEOF(slot) == RAWSXP) {
-    const R_xlen_t expected_bytes = static_cast<R_xlen_t>(expected_length) *
-      static_cast<R_xlen_t>(sizeof(float));
+    const R_xlen_t expected_bytes =
+      faissr::float_payload_byte_count(expected_length, name);
     if (Rf_xlength(slot) != expected_bytes) {
       Rcpp::stop("%s float32 raw payload length does not match its dimensions", name);
     }
@@ -607,9 +606,9 @@ const float* float32_slot_ptr_f32(SEXP slot, const int expected_length, const ch
   return nullptr;
 }
 
-bool finite_float32_payload_f32(const float* ptr, const int length) {
+bool finite_float32_payload_f32(const float* ptr, const R_xlen_t length) {
   bool finite = true;
-  for (int i = 0; i < length; ++i) {
+  for (R_xlen_t i = 0; i < length; ++i) {
     if (!std::isfinite(ptr[i])) {
       finite = false;
       break;
@@ -623,26 +622,21 @@ MatrixViewF32 make_row_major_float32_view(SEXP x, const char* name) {
   MatrixViewF32 view;
   view.nrow = dims[0];
   view.ncol = dims[1];
-  const int expected_length = view.nrow * view.ncol;
+  const R_xlen_t expected_length =
+    faissr::matrix_element_count(view.nrow, view.ncol);
 
   bool finite = true;
   if (TYPEOF(x) == REALSXP) {
-    if (Rf_length(x) != expected_length) {
+    if (Rf_xlength(x) != expected_length) {
       Rcpp::stop("%s payload length does not match its dimensions", name);
     }
-    view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
     view.owns_data = true;
     view.compatibility_conversion = true;
     view.layout = "r_double_column_major_to_row_major_float32";
     const double* src = REAL(x);
-    for (int r = 0; r < view.nrow; ++r) {
-      for (int c = 0; c < view.ncol; ++c) {
-        const double value = src[static_cast<std::size_t>(c) * view.nrow + r];
-        if (!std::isfinite(value)) finite = false;
-        view.buffer[static_cast<std::size_t>(r) * view.ncol + c] =
-          static_cast<float>(value);
-      }
-    }
+    finite = faissr::copy_column_major_to_row_major_float(
+      src, view.buffer, view.nrow, view.ncol
+    );
   } else if (Rf_isS4(x)) {
     SEXP slot = R_do_slot(x, Rf_install("Data"));
     const float* payload = float32_slot_ptr_f32(slot, expected_length, name);
@@ -657,33 +651,23 @@ MatrixViewF32 make_row_major_float32_view(SEXP x, const char* name) {
           "float32_payload_direct_row_major" :
           "float32_payload_direct_row_compatible";
       } else {
-        view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
         view.owns_data = true;
         view.layout = "float32_column_major_payload_to_row_major";
-        for (int r = 0; r < view.nrow; ++r) {
-          for (int c = 0; c < view.ncol; ++c) {
-            view.buffer[static_cast<std::size_t>(r) * view.ncol + c] =
-              payload[static_cast<std::size_t>(c) * view.nrow + r];
-          }
-        }
+        faissr::copy_column_major_to_row_major_float(
+          payload, view.buffer, view.nrow, view.ncol, false
+        );
       }
     } else if (TYPEOF(slot) == REALSXP) {
-      if (Rf_length(slot) != expected_length) {
+      if (Rf_xlength(slot) != expected_length) {
         Rcpp::stop("%s payload length does not match its dimensions", name);
       }
-      view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
       view.owns_data = true;
       view.compatibility_conversion = true;
       view.layout = "s4_double_column_major_to_row_major_float32";
       const double* src = REAL(slot);
-      for (int r = 0; r < view.nrow; ++r) {
-        for (int c = 0; c < view.ncol; ++c) {
-          const double value = src[static_cast<std::size_t>(c) * view.nrow + r];
-          if (!std::isfinite(value)) finite = false;
-          view.buffer[static_cast<std::size_t>(r) * view.ncol + c] =
-            static_cast<float>(value);
-        }
-      }
+      finite = faissr::copy_column_major_to_row_major_float(
+        src, view.buffer, view.nrow, view.ncol
+      );
     } else {
       Rcpp::stop("%s must be a float::fl()/float32 object with an integer or raw @Data payload", name);
     }
@@ -1037,11 +1021,6 @@ void add_probe_center(const float* data,
     std::push_heap(probes.begin(), probes.end(), neighborf_less);
   }
 }
-
-bool insert_heap_top_double(const int candidate,
-                            const double distance,
-                            const int capacity,
-                            std::vector<Neighbor>& top);
 
 struct Grid2DIndex {
   int bins_x = 1;
@@ -1488,8 +1467,8 @@ NumericMatrix inner_product_scores_float32_cpp(SEXP data,
     std::vector<std::thread> workers;
     workers.reserve(static_cast<std::size_t>(n_threads));
     for (int t = 0; t < n_threads; ++t) {
-      const int start = (n_points * t) / n_threads;
-      const int end = (n_points * (t + 1)) / n_threads;
+      const int start = faissr::chunk_bound(n_points, t, n_threads);
+      const int end = faissr::chunk_bound(n_points, t + 1, n_threads);
       workers.emplace_back(worker, start, end);
     }
     for (auto& thread : workers) thread.join();
@@ -1558,8 +1537,8 @@ List nn_cpp(NumericMatrix data,
       std::vector<std::thread> workers;
       workers.reserve(n_threads);
       for (int t = 0; t < n_threads; ++t) {
-        const int start = (n_points * t) / n_threads;
-        const int end = (n_points * (t + 1)) / n_threads;
+        const int start = faissr::chunk_bound(n_points, t, n_threads);
+        const int end = faissr::chunk_bound(n_points, t + 1, n_threads);
         workers.emplace_back(write_fortran, start, end);
       }
       for (auto& worker : workers) worker.join();
@@ -1655,8 +1634,8 @@ List nn_cpp(NumericMatrix data,
     std::vector<std::thread> workers;
     workers.reserve(n_threads);
     for (int t = 0; t < n_threads; ++t) {
-      const int start = (n_points * t) / n_threads;
-      const int end = (n_points * (t + 1)) / n_threads;
+      const int start = faissr::chunk_bound(n_points, t, n_threads);
+      const int end = faissr::chunk_bound(n_points, t + 1, n_threads);
       workers.emplace_back(write_result, start, end);
     }
     for (auto& worker : workers) worker.join();
@@ -2449,8 +2428,8 @@ List landmark_candidate_knn_cpp(NumericMatrix data,
     std::vector<std::thread> workers;
     workers.reserve(static_cast<std::size_t>(n_threads));
     for (int t = 0; t < n_threads; ++t) {
-      const int start = (n * t) / n_threads;
-      const int end = (n * (t + 1)) / n_threads;
+      const int start = faissr::chunk_bound(n, t, n_threads);
+      const int end = faissr::chunk_bound(n, t + 1, n_threads);
       workers.emplace_back(write_rows, start, end);
     }
     for (auto& worker : workers) worker.join();
@@ -2589,8 +2568,8 @@ List landmark_candidate_knn_subset_cpp(NumericMatrix data,
     std::vector<std::thread> workers;
     workers.reserve(static_cast<std::size_t>(n_threads));
     for (int t = 0; t < n_threads; ++t) {
-      const int start = (n_query * t) / n_threads;
-      const int end = (n_query * (t + 1)) / n_threads;
+      const int start = faissr::chunk_bound(n_query, t, n_threads);
+      const int end = faissr::chunk_bound(n_query, t + 1, n_threads);
       workers.emplace_back(write_rows, start, end);
     }
     for (auto& worker : workers) worker.join();
@@ -2695,8 +2674,8 @@ List landmark_projection_knn_approx_cpp(NumericMatrix landmarks,
     std::vector<std::thread> workers;
     workers.reserve(static_cast<std::size_t>(score_threads));
     for (int t = 0; t < score_threads; ++t) {
-      const int start = (n_projections * t) / score_threads;
-      const int end = (n_projections * (t + 1)) / score_threads;
+      const int start = faissr::chunk_bound(n_projections, t, score_threads);
+      const int end = faissr::chunk_bound(n_projections, t + 1, score_threads);
       workers.emplace_back(score_projection_range, start, end);
     }
     for (auto& worker : workers) worker.join();
@@ -2792,8 +2771,8 @@ List landmark_projection_knn_approx_cpp(NumericMatrix landmarks,
     std::vector<std::thread> workers;
     workers.reserve(static_cast<std::size_t>(n_threads));
     for (int t = 0; t < n_threads; ++t) {
-      const int start = (n_queries * t) / n_threads;
-      const int end = (n_queries * (t + 1)) / n_threads;
+      const int start = faissr::chunk_bound(n_queries, t, n_threads);
+      const int end = faissr::chunk_bound(n_queries, t + 1, n_threads);
       workers.emplace_back(write_rows, start, end);
     }
     for (auto& worker : workers) worker.join();
@@ -2988,8 +2967,8 @@ List nndescent_self_knn_cpp(NumericMatrix data,
       std::vector<std::thread> workers;
       workers.reserve(static_cast<std::size_t>(n_threads));
       for (int t = 0; t < n_threads; ++t) {
-        const int start = (n * t) / n_threads;
-        const int end = (n * (t + 1)) / n_threads;
+        const int start = faissr::chunk_bound(n, t, n_threads);
+        const int end = faissr::chunk_bound(n, t + 1, n_threads);
         workers.emplace_back(refine_rows, start, end);
       }
       for (auto& worker : workers) worker.join();
@@ -3198,8 +3177,8 @@ List nndescent_self_knn_float32_cpp(SEXP data,
       std::vector<std::thread> workers;
       workers.reserve(static_cast<std::size_t>(n_threads));
       for (int t = 0; t < n_threads; ++t) {
-        const int start = (n * t) / n_threads;
-        const int end = (n * (t + 1)) / n_threads;
+        const int start = faissr::chunk_bound(n, t, n_threads);
+        const int end = faissr::chunk_bound(n, t + 1, n_threads);
         workers.emplace_back(refine_rows, start, end);
       }
       for (auto& worker : workers) worker.join();
@@ -3291,8 +3270,8 @@ List ivf_self_knn_cpp(NumericMatrix data,
     std::vector<std::thread> workers;
     workers.reserve(static_cast<std::size_t>(n_threads));
     for (int t = 0; t < n_threads; ++t) {
-      const int start = (n * t) / n_threads;
-      const int end = (n * (t + 1)) / n_threads;
+      const int start = faissr::chunk_bound(n, t, n_threads);
+      const int end = faissr::chunk_bound(n, t + 1, n_threads);
       workers.emplace_back(assign_rows, start, end);
     }
     for (auto& worker : workers) worker.join();
@@ -3380,8 +3359,8 @@ List ivf_self_knn_cpp(NumericMatrix data,
     std::vector<std::thread> workers;
     workers.reserve(static_cast<std::size_t>(n_threads));
     for (int t = 0; t < n_threads; ++t) {
-      const int start = (n * t) / n_threads;
-      const int end = (n * (t + 1)) / n_threads;
+      const int start = faissr::chunk_bound(n, t, n_threads);
+      const int end = faissr::chunk_bound(n, t + 1, n_threads);
       workers.emplace_back(query_rows, start, end);
     }
     for (auto& worker : workers) worker.join();
@@ -3467,8 +3446,8 @@ List grid2d_self_knn_cpp(NumericMatrix data,
     std::vector<std::thread> workers;
     workers.reserve(static_cast<std::size_t>(n_threads));
     for (int t = 0; t < n_threads; ++t) {
-      const int start = (n * t) / n_threads;
-      const int end = (n * (t + 1)) / n_threads;
+      const int start = faissr::chunk_bound(n, t, n_threads);
+      const int end = faissr::chunk_bound(n, t + 1, n_threads);
       workers.emplace_back(query_rows, start, end);
     }
     for (auto& worker : workers) worker.join();
@@ -3562,8 +3541,8 @@ List grid3d_self_knn_cpp(NumericMatrix data,
     std::vector<std::thread> workers;
     workers.reserve(static_cast<std::size_t>(n_threads));
     for (int t = 0; t < n_threads; ++t) {
-      const int start = (n * t) / n_threads;
-      const int end = (n * (t + 1)) / n_threads;
+      const int start = faissr::chunk_bound(n, t, n_threads);
+      const int end = faissr::chunk_bound(n, t + 1, n_threads);
       workers.emplace_back(query_rows, start, end);
     }
     for (auto& worker : workers) worker.join();
@@ -3653,7 +3632,11 @@ List grid2d_self_knn_float32_cpp(SEXP data,
     std::vector<std::thread> workers;
     workers.reserve(static_cast<std::size_t>(n_threads));
     for (int t = 0; t < n_threads; ++t) {
-      workers.emplace_back(query_rows, (n * t) / n_threads, (n * (t + 1)) / n_threads);
+      workers.emplace_back(
+        query_rows,
+        faissr::chunk_bound(n, t, n_threads),
+        faissr::chunk_bound(n, t + 1, n_threads)
+      );
     }
     for (auto& worker : workers) worker.join();
   }
@@ -3755,7 +3738,11 @@ List grid3d_self_knn_float32_cpp(SEXP data,
     std::vector<std::thread> workers;
     workers.reserve(static_cast<std::size_t>(n_threads));
     for (int t = 0; t < n_threads; ++t) {
-      workers.emplace_back(query_rows, (n * t) / n_threads, (n * (t + 1)) / n_threads);
+      workers.emplace_back(
+        query_rows,
+        faissr::chunk_bound(n, t, n_threads),
+        faissr::chunk_bound(n, t + 1, n_threads)
+      );
     }
     for (auto& worker : workers) worker.join();
   }
@@ -3842,8 +3829,8 @@ List candidate_knn_cpp(NumericMatrix data,
     std::vector<std::thread> workers;
     workers.reserve(static_cast<std::size_t>(n_threads));
     for (int t = 0; t < n_threads; ++t) {
-      const int start = (n_points * t) / n_threads;
-      const int end = (n_points * (t + 1)) / n_threads;
+      const int start = faissr::chunk_bound(n_points, t, n_threads);
+      const int end = faissr::chunk_bound(n_points, t + 1, n_threads);
       workers.emplace_back(worker, start, end);
     }
     for (auto& thread : workers) thread.join();
@@ -3929,8 +3916,8 @@ List candidate_knn_float32_cpp(SEXP data,
     std::vector<std::thread> workers;
     workers.reserve(static_cast<std::size_t>(n_threads));
     for (int t = 0; t < n_threads; ++t) {
-      const int start = (n_points * t) / n_threads;
-      const int end = (n_points * (t + 1)) / n_threads;
+      const int start = faissr::chunk_bound(n_points, t, n_threads);
+      const int end = faissr::chunk_bound(n_points, t + 1, n_threads);
       workers.emplace_back(worker, start, end);
     }
     for (auto& thread : workers) thread.join();

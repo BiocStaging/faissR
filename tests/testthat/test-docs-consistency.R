@@ -107,6 +107,11 @@ test_that("NN methods documentation metric table agrees with nn_capabilities", {
 
   caps <- nn_capabilities()
   supported <- caps[caps$supported, c("method", "backend", "metric")]
+  supported$method <- unname(vapply(
+    supported$method,
+    faissR:::normalize_nn_method,
+    character(1L)
+  ))
   supported <- supported[supported$backend %in% c("cpu", "cuda"), , drop = FALSE]
   supported <- supported[order(supported$method, supported$backend, supported$metric), , drop = FALSE]
   documented <- documented[order(documented$method, documented$backend, documented$metric), , drop = FALSE]
@@ -117,14 +122,14 @@ test_that("NN methods documentation metric table agrees with nn_capabilities", {
 })
 
 test_that("public NN method and metric labels are unique canonical labels", {
-  methods <- faissR:::nn_method_labels()
+  methods <- faissR:::nn_public_method_labels()
   metrics <- faissR:::nn_metric_labels()
 
   expect_equal(methods, unique(methods))
   expect_equal(metrics, unique(metrics))
-  expect_equal(methods, unname(vapply(methods, faissR:::normalize_nn_method, character(1L))))
   expect_equal(metrics, unname(vapply(metrics, faissR:::normalize_nn_metric, character(1L))))
   expect_false(any(grepl("^faiss_|^cuda_|^cpu_", methods)))
+  expect_false(any(c("nsg", "vamana", "nndescent") %in% methods))
   expect_false("manhattan" %in% metrics)
 })
 

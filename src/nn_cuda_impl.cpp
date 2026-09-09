@@ -8,6 +8,9 @@
 #include <string>
 #include <vector>
 
+#include "faissr_size_utils.hpp"
+#include "faissr_normalize.hpp"
+
 using Rcpp::IntegerMatrix;
 using Rcpp::IntegerVector;
 using Rcpp::List;
@@ -66,7 +69,8 @@ int faissr_cuda_row_candidate_knn(const double* data,
                                       int k,
                                       int metric_kind,
                                       int* out_indices,
-                                      double* out_distances);
+                                      double* out_distances,
+                                      int fill_missing);
 int faissr_cuda_row_candidate_knn_float(const float* data,
                                             const int* candidate_indices,
                                             int n,
@@ -114,6 +118,7 @@ struct CudaMatrixViewF32 {
   bool compatibility_conversion = false;
   std::string layout;
   std::vector<float> buffer;
+  std::vector<char> normalized_zero;
 };
 
 const char* cuda_error_message() {
@@ -261,16 +266,18 @@ IntegerVector matrix_dims_from_object_f32(SEXP x, const char* name) {
   return dims;
 }
 
-const float* float32_slot_ptr_f32(SEXP slot, const int expected_length, const char* name) {
+const float* float32_slot_ptr_f32(SEXP slot,
+                                  const R_xlen_t expected_length,
+                                  const char* name) {
   if (TYPEOF(slot) == INTSXP) {
-    if (Rf_length(slot) != expected_length) {
+    if (Rf_xlength(slot) != expected_length) {
       Rcpp::stop("%s float32 payload length does not match its dimensions", name);
     }
     return reinterpret_cast<const float*>(INTEGER(slot));
   }
   if (TYPEOF(slot) == RAWSXP) {
-    const R_xlen_t expected_bytes = static_cast<R_xlen_t>(expected_length) *
-      static_cast<R_xlen_t>(sizeof(float));
+    const R_xlen_t expected_bytes =
+      faissr::float_payload_byte_count(expected_length, name);
     if (Rf_xlength(slot) != expected_bytes) {
       Rcpp::stop("%s float32 raw payload length does not match its dimensions", name);
     }
@@ -279,23 +286,25 @@ const float* float32_slot_ptr_f32(SEXP slot, const int expected_length, const ch
   return nullptr;
 }
 
-bool finite_float32_payload_f32(const float* ptr, const int length) {
-  for (int i = 0; i < length; ++i) {
+bool finite_float32_payload_f32(const float* ptr, const R_xlen_t length) {
+  for (R_xlen_t i = 0; i < length; ++i) {
     if (!std::isfinite(ptr[i])) return false;
   }
   return true;
 }
 
-CudaMatrixViewF32 make_column_major_float32_view(SEXP x, const char* name) {
+CudaMatrixViewF32 make_column_major_float32_view(
+    SEXP x, const char* name, const std::string& metric = "euclidean") {
   IntegerVector dims = matrix_dims_from_object_f32(x, name);
   CudaMatrixViewF32 view;
   view.nrow = dims[0];
   view.ncol = dims[1];
-  const int expected_length = view.nrow * view.ncol;
+  const R_xlen_t expected_length =
+    faissr::matrix_element_count(view.nrow, view.ncol);
 
   bool finite = true;
   if (TYPEOF(x) == REALSXP) {
-    if (Rf_length(x) != expected_length) {
+    if (Rf_xlength(x) != expected_length) {
       Rcpp::stop("%s payload length does not match its dimensions", name);
     }
     view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
@@ -303,9 +312,18 @@ CudaMatrixViewF32 make_column_major_float32_view(SEXP x, const char* name) {
     view.compatibility_conversion = true;
     view.layout = "r_double_column_major_to_column_major_float32";
     const double* src = REAL(x);
-    for (int i = 0; i < expected_length; ++i) {
-      if (!std::isfinite(src[i])) finite = false;
-      view.buffer[static_cast<std::size_t>(i)] = static_cast<float>(src[i]);
+    if (metric == "cosine" || metric == "correlation") {
+      view.normalized_zero = faissr::normalized_float_matrix(
+        view.nrow, view.ncol, metric == "correlation", true,
+        [&](int r, int c) { return src[static_cast<std::size_t>(c) * view.nrow + r]; },
+        view.buffer
+      );
+    } else {
+      for (R_xlen_t i = 0; i < expected_length; ++i) {
+        const float value = static_cast<float>(src[i]);
+        if (!std::isfinite(src[i]) || !std::isfinite(value)) finite = false;
+        view.buffer[static_cast<std::size_t>(i)] = value;
+      }
     }
   } else if (Rf_isS4(x)) {
     SEXP slot = R_do_slot(x, Rf_install("Data"));
@@ -332,7 +350,7 @@ CudaMatrixViewF32 make_column_major_float32_view(SEXP x, const char* name) {
         }
       }
     } else if (TYPEOF(slot) == REALSXP) {
-      if (Rf_length(slot) != expected_length) {
+      if (Rf_xlength(slot) != expected_length) {
         Rcpp::stop("%s payload length does not match its dimensions", name);
       }
       view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
@@ -340,9 +358,18 @@ CudaMatrixViewF32 make_column_major_float32_view(SEXP x, const char* name) {
       view.compatibility_conversion = true;
       view.layout = "s4_double_column_major_to_column_major_float32";
       const double* src = REAL(slot);
-      for (int i = 0; i < expected_length; ++i) {
-        if (!std::isfinite(src[i])) finite = false;
-        view.buffer[static_cast<std::size_t>(i)] = static_cast<float>(src[i]);
+      if (metric == "cosine" || metric == "correlation") {
+        view.normalized_zero = faissr::normalized_float_matrix(
+          view.nrow, view.ncol, metric == "correlation", true,
+          [&](int r, int c) { return src[static_cast<std::size_t>(c) * view.nrow + r]; },
+          view.buffer
+        );
+      } else {
+        for (R_xlen_t i = 0; i < expected_length; ++i) {
+          const float value = static_cast<float>(src[i]);
+          if (!std::isfinite(src[i]) || !std::isfinite(value)) finite = false;
+          view.buffer[static_cast<std::size_t>(i)] = value;
+        }
       }
     } else {
       Rcpp::stop("%s must be a float::fl()/float32 object with an integer or raw @Data payload", name);
@@ -350,7 +377,7 @@ CudaMatrixViewF32 make_column_major_float32_view(SEXP x, const char* name) {
   } else {
     Rcpp::stop("%s must be an ordinary R double matrix or float::fl()/float32 object", name);
   }
-  if (!finite) Rcpp::stop("%s requires finite values", name);
+  if (!finite) Rcpp::stop("%s requires finite values representable in float32", name);
   if (view.data == nullptr) view.data = view.buffer.data();
   return view;
 }
@@ -358,36 +385,18 @@ CudaMatrixViewF32 make_column_major_float32_view(SEXP x, const char* name) {
 bool normalize_metric_view(CudaMatrixViewF32& view,
                            bool center_rows,
                            const char* name) {
-  std::vector<float> transformed(
-    static_cast<std::size_t>(view.nrow) * view.ncol,
-    0.0f
-  );
-  bool has_zero = false;
-  for (int r = 0; r < view.nrow; ++r) {
-    double mean = 0.0;
-    if (center_rows) {
-      for (int c = 0; c < view.ncol; ++c) {
-        mean += static_cast<double>(view.data[static_cast<std::size_t>(c) * view.nrow + r]);
-      }
-      mean /= static_cast<double>(view.ncol);
-    }
-    double norm2 = 0.0;
-    for (int c = 0; c < view.ncol; ++c) {
-      const double value =
-        static_cast<double>(view.data[static_cast<std::size_t>(c) * view.nrow + r]) - mean;
-      norm2 += value * value;
-      transformed[static_cast<std::size_t>(c) * view.nrow + r] =
-        static_cast<float>(value);
-    }
-    if (!std::isfinite(norm2) || norm2 <= 0.0) {
-      has_zero = true;
-      continue;
-    }
-    const float inv_norm = static_cast<float>(1.0 / std::sqrt(norm2));
-    for (int c = 0; c < view.ncol; ++c) {
-      transformed[static_cast<std::size_t>(c) * view.nrow + r] *= inv_norm;
-    }
+  if (view.normalized_zero.empty()) {
+    std::vector<float> transformed;
+    view.normalized_zero = faissr::normalized_float_matrix(
+      view.nrow, view.ncol, center_rows, true,
+      [&](int r, int c) { return view.data[static_cast<std::size_t>(c) * view.nrow + r]; },
+      transformed
+    );
+    view.buffer.swap(transformed);
   }
+  const bool has_zero = std::find(
+    view.normalized_zero.begin(), view.normalized_zero.end(), 1
+  ) != view.normalized_zero.end();
   if (has_zero) {
     Rcpp::stop(
       "%s contains rows with zero norm after %s; GPU-resident cosine/correlation "
@@ -396,7 +405,6 @@ bool normalize_metric_view(CudaMatrixViewF32& view,
       center_rows ? "centering" : "normalization"
     );
   }
-  view.buffer.swap(transformed);
   view.data = view.buffer.data();
   view.owns_data = true;
   view.layout = center_rows ?
@@ -567,11 +575,11 @@ List cuda_nn_float32_gpu_impl(SEXP data,
                               std::string metric,
                               std::string backend_used,
                               std::string method) {
-  CudaMatrixViewF32 data_view = make_column_major_float32_view(data, "data");
+  CudaMatrixViewF32 data_view = make_column_major_float32_view(data, "data", metric);
   const bool same_object = data == points;
   CudaMatrixViewF32 points_view = same_object ?
     CudaMatrixViewF32() :
-    make_column_major_float32_view(points, "points");
+    make_column_major_float32_view(points, "points", metric);
   if (same_object) {
     points_view.nrow = data_view.nrow;
     points_view.ncol = data_view.ncol;
@@ -728,7 +736,8 @@ List cuda_gpu_knn_to_host_impl(SEXP result) {
 List cuda_row_candidate_knn_impl(NumericMatrix data,
                                  IntegerMatrix candidate_indices,
                                  int k,
-                                 std::string metric) {
+                                 std::string metric,
+                                 bool fill_missing) {
   const int n = data.nrow();
   const int n_features = data.ncol();
   const int n_candidates = candidate_indices.ncol();
@@ -737,7 +746,9 @@ List cuda_row_candidate_knn_impl(NumericMatrix data,
     Rcpp::stop("candidate_indices row count must match data");
   }
   if (n_candidates < 1) Rcpp::stop("candidate_indices must have at least one column");
-  if (k < 1 || k >= n) Rcpp::stop("k must be in [1, nrow(data) - 1]");
+  if (k < 1 || (fill_missing && k >= n)) {
+    Rcpp::stop("k must be positive and smaller than nrow(data) when filling candidates");
+  }
   if (k > kMaxCudaK) Rcpp::stop("CUDA backend currently supports k <= %d", kMaxCudaK);
   if (!faissr_cuda_available()) Rcpp::stop("No CUDA device is available.");
   int metric_kind = 0;
@@ -758,7 +769,8 @@ List cuda_row_candidate_knn_impl(NumericMatrix data,
     k,
     metric_kind,
     indices.begin(),
-    distances.begin()
+    distances.begin(),
+    fill_missing ? 1 : 0
   );
   if (status != 0) {
     Rcpp::stop("CUDA row candidate KNN failed: %s", cuda_error_message());

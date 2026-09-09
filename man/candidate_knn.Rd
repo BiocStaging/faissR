@@ -29,13 +29,15 @@ entries are ignored.}
 
 \item{backend}{`"auto"`/`"cpu"` for the general CPU implementation,
 `"cuda"` for the native CUDA row-candidate kernel. GPU backends currently
-require self-query candidates with `exclude_self = TRUE`.}
+require self-query candidates with `exclude_self = TRUE` and `k <= 256`.}
 
 \item{metric}{`"euclidean"`, `"cosine"`, or `"correlation"`. Legacy
 metric aliases such as `"l2"`, `"cor"`,
 `"pearson"`, and `"ip"` are rejected. Correlation is centered cosine
 similarity. CUDA candidate scoring supports Euclidean directly and
-cosine/correlation through normalized Euclidean scoring.}
+cosine/correlation through normalized Euclidean scoring.
+CUDA rejects zero-vector cosine and constant-row correlation inputs;
+inspect affected rows with [nn_metric_preflight()].}
 
 \item{n_threads}{CPU threads for the CPU backend.}
 
@@ -45,7 +47,8 @@ set. This is valid only for self-query candidate KNN.}
 \value{
 A `faissR_nn` object with `indices` and `distances`. If a row
     has fewer than `k` valid unique candidates, remaining entries are `NA` and
-    `Inf`. Distance-contract metadata states whether the returned values are a
+    `Inf` on both CPU and CUDA. No neighbors outside the supplied candidate
+    set are added. Distance-contract metadata states whether the values are a
     metric and comparable across query rows.
 }
 \description{

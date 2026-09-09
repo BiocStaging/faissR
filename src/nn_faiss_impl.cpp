@@ -12,6 +12,9 @@
 #include <string>
 #include <vector>
 
+#include "faissr_size_utils.hpp"
+#include "faissr_normalize.hpp"
+
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -96,22 +99,9 @@ void validate_inputs(const NumericMatrix& data,
 void copy_row_major_float(const NumericMatrix& src, std::vector<float>& dest) {
   const int nrow = src.nrow();
   const int ncol = src.ncol();
-  dest.assign(static_cast<std::size_t>(nrow) * ncol, 0.0f);
-  bool finite = true;
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static) reduction(&& : finite)
-#endif
-  for (int r = 0; r < nrow; ++r) {
-    for (int c = 0; c < ncol; ++c) {
-      const double value = src(r, c);
-      if (!std::isfinite(value)) {
-        finite = false;
-        continue;
-      }
-      dest[static_cast<std::size_t>(r) * ncol + c] =
-        static_cast<float>(value);
-    }
-  }
+  const bool finite = faissr::copy_column_major_to_row_major_float(
+    src.begin(), dest, nrow, ncol
+  );
   if (!finite) {
     Rcpp::stop("FAISS backend requires finite numeric input");
   }
@@ -178,6 +168,7 @@ struct MatrixViewF32 {
   bool compatibility_conversion = false;
   std::string layout = "unknown";
   std::vector<float> buffer;
+  std::vector<char> normalized_zero;
 };
 
 struct FaissHnswIndexHandle {
@@ -308,16 +299,18 @@ Rcpp::IntegerVector matrix_dims_from_object(SEXP x, const char* name) {
   return dims;
 }
 
-const float* float32_slot_ptr(SEXP slot, const int expected_length, const char* name) {
+const float* float32_slot_ptr(SEXP slot,
+                              const R_xlen_t expected_length,
+                              const char* name) {
   if (TYPEOF(slot) == INTSXP) {
-    if (Rf_length(slot) != expected_length) {
+    if (Rf_xlength(slot) != expected_length) {
       Rcpp::stop("%s float32 payload length does not match its dimensions", name);
     }
     return reinterpret_cast<const float*>(INTEGER(slot));
   }
   if (TYPEOF(slot) == RAWSXP) {
-    const R_xlen_t expected_bytes = static_cast<R_xlen_t>(expected_length) *
-      static_cast<R_xlen_t>(sizeof(float));
+    const R_xlen_t expected_bytes =
+      faissr::float_payload_byte_count(expected_length, name);
     if (Rf_xlength(slot) != expected_bytes) {
       Rcpp::stop("%s float32 raw payload length does not match its dimensions", name);
     }
@@ -326,48 +319,45 @@ const float* float32_slot_ptr(SEXP slot, const int expected_length, const char* 
   return nullptr;
 }
 
-bool finite_float32_payload(const float* ptr, const int length) {
+bool finite_float32_payload(const float* ptr, const R_xlen_t length) {
   bool finite = true;
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static) reduction(&& : finite)
 #endif
-  for (int i = 0; i < length; ++i) {
+  for (R_xlen_t i = 0; i < length; ++i) {
     if (!std::isfinite(ptr[i])) finite = false;
   }
   return finite;
 }
 
-MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name) {
+MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name,
+                                      const std::string& metric = "euclidean") {
   Rcpp::IntegerVector dims = matrix_dims_from_object(x, name);
   MatrixViewF32 view;
   view.nrow = dims[0];
   view.ncol = dims[1];
-  const int expected_length = view.nrow * view.ncol;
+  const R_xlen_t expected_length =
+    faissr::matrix_element_count(view.nrow, view.ncol);
 
   bool finite = true;
   if (TYPEOF(x) == REALSXP) {
-    view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
     view.owns_data = true;
     view.compatibility_conversion = true;
     view.row_major = true;
     view.layout = "r_double_column_major_to_row_major_float32";
-    if (Rf_length(x) != expected_length) {
+    if (Rf_xlength(x) != expected_length) {
       Rcpp::stop("%s payload length does not match its dimensions", name);
     }
-    const double* col_major_double = REAL(x);
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static) reduction(&& : finite)
-#endif
-    for (int r = 0; r < view.nrow; ++r) {
-      for (int c = 0; c < view.ncol; ++c) {
-        const double value = col_major_double[r + view.nrow * c];
-        if (!std::isfinite(value)) {
-          finite = false;
-          continue;
-        }
-        view.buffer[static_cast<std::size_t>(r) * view.ncol + c] =
-          static_cast<float>(value);
-      }
+    if (metric == "cosine" || metric == "correlation") {
+      view.normalized_zero = faissr::normalized_float_matrix(
+        view.nrow, view.ncol, metric == "correlation", false,
+        [&](int r, int c) { return REAL(x)[static_cast<std::size_t>(c) * view.nrow + r]; },
+        view.buffer
+      );
+    } else {
+      finite = faissr::copy_column_major_to_row_major_float(
+        REAL(x), view.buffer, view.nrow, view.ncol
+      );
     }
   } else if (Rf_isS4(x)) {
     SEXP slot = R_do_slot(x, Rf_install("Data"));
@@ -387,43 +377,32 @@ MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name) {
         view.row_major = true;
         view.layout = "float32_payload_direct_row_compatible";
       } else {
-        view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
         view.owns_data = true;
         view.row_major = true;
         view.layout = "float32_column_major_payload_to_row_major";
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static)
-#endif
-        for (int r = 0; r < view.nrow; ++r) {
-          for (int c = 0; c < view.ncol; ++c) {
-            view.buffer[static_cast<std::size_t>(r) * view.ncol + c] =
-              col_major[r + view.nrow * c];
-          }
-        }
+        faissr::copy_column_major_to_row_major_float(
+          col_major, view.buffer, view.nrow, view.ncol, false
+        );
       }
     } else if (TYPEOF(slot) == REALSXP) {
-      view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
       view.owns_data = true;
       view.compatibility_conversion = true;
       view.row_major = true;
       view.layout = "s4_double_column_major_to_row_major_float32";
       const double* col_major_double = REAL(slot);
-      if (Rf_length(slot) != expected_length) {
+      if (Rf_xlength(slot) != expected_length) {
         Rcpp::stop("%s payload length does not match its dimensions", name);
       }
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static) reduction(&& : finite)
-#endif
-      for (int r = 0; r < view.nrow; ++r) {
-        for (int c = 0; c < view.ncol; ++c) {
-          const double value = col_major_double[r + view.nrow * c];
-          if (!std::isfinite(value)) {
-            finite = false;
-            continue;
-          }
-          view.buffer[static_cast<std::size_t>(r) * view.ncol + c] =
-            static_cast<float>(value);
-        }
+      if (metric == "cosine" || metric == "correlation") {
+        view.normalized_zero = faissr::normalized_float_matrix(
+          view.nrow, view.ncol, metric == "correlation", false,
+          [&](int r, int c) { return col_major_double[static_cast<std::size_t>(c) * view.nrow + r]; },
+          view.buffer
+        );
+      } else {
+        finite = faissr::copy_column_major_to_row_major_float(
+          col_major_double, view.buffer, view.nrow, view.ncol
+        );
       }
     } else {
       Rcpp::stop(
@@ -438,7 +417,7 @@ MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name) {
     );
   }
   if (!finite) {
-    Rcpp::stop("FAISS float32 input requires finite values");
+    Rcpp::stop("FAISS float32 input requires finite values representable in float32");
   }
   if (view.data == nullptr) {
     view.data = view.buffer.data();
@@ -453,52 +432,17 @@ std::vector<char> normalize_float32_view(MatrixViewF32& view,
     return zero;
   }
 
-  if (!view.owns_data || view.buffer.empty()) {
-    const float* source = view.data;
-    view.buffer.assign(static_cast<std::size_t>(view.nrow) * view.ncol, 0.0f);
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static)
-#endif
-    for (int r = 0; r < view.nrow; ++r) {
-      for (int c = 0; c < view.ncol; ++c) {
-        view.buffer[static_cast<std::size_t>(r) * view.ncol + c] =
-          source[static_cast<std::size_t>(r) * view.ncol + c];
-      }
-    }
-    view.data = view.buffer.data();
-    view.owns_data = true;
-    view.layout += "_normalized_copy";
-  }
-
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static)
-#endif
-  for (int r = 0; r < view.nrow; ++r) {
-    float* row = view.buffer.data() + static_cast<std::size_t>(r) * view.ncol;
-    double mean = 0.0;
-    if (metric == "correlation") {
-      for (int c = 0; c < view.ncol; ++c) {
-        mean += static_cast<double>(row[c]);
-      }
-      mean /= static_cast<double>(view.ncol);
-    }
-    double norm2 = 0.0;
-    for (int c = 0; c < view.ncol; ++c) {
-      const double centered = static_cast<double>(row[c]) - mean;
-      row[c] = static_cast<float>(centered);
-      norm2 += centered * centered;
-    }
-    if (norm2 <= 0.0 || !std::isfinite(norm2)) {
-      zero[static_cast<std::size_t>(r)] = 1;
-      std::fill(row, row + view.ncol, 0.0f);
-      continue;
-    }
-    const float inv_norm = static_cast<float>(1.0 / std::sqrt(norm2));
-    for (int c = 0; c < view.ncol; ++c) {
-      row[c] *= inv_norm;
-    }
-  }
+  if (!view.normalized_zero.empty()) return view.normalized_zero;
+  std::vector<float> normalized;
+  zero = faissr::normalized_float_matrix(
+    view.nrow, view.ncol, metric == "correlation", false,
+    [&](int r, int c) { return view.data[static_cast<std::size_t>(r) * view.ncol + c]; },
+    normalized
+  );
+  view.buffer.swap(normalized);
   view.data = view.buffer.data();
+  view.owns_data = true;
+  view.layout += "_normalized_copy";
   return zero;
 }
 
@@ -1321,10 +1265,10 @@ List search_faiss_flat_float32(SEXP data,
                                int n_threads,
                                const std::string& metric,
                                const std::string& distance_storage = "double") {
-  MatrixViewF32 xb = make_float32_matrix_view(data, "data");
+  MatrixViewF32 xb = make_float32_matrix_view(data, "data", metric);
   MatrixViewF32 xq = same_float32_object(data, points) ?
     MatrixViewF32() :
-    make_float32_matrix_view(points, "points");
+    make_float32_matrix_view(points, "points", metric);
   const bool same_storage = same_float32_object(data, points);
   const bool self_query = exclude_self || same_storage;
   if (xb.ncol < 1 || xb.nrow < 1) {

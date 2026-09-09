@@ -44,6 +44,18 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// row_normalize_cpp
+NumericMatrix row_normalize_cpp(SEXP x, bool center);
+RcppExport SEXP _faissR_row_normalize_cpp(SEXP xSEXP, SEXP centerSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type x(xSEXP);
+    Rcpp::traits::input_parameter< bool >::type center(centerSEXP);
+    rcpp_result_gen = Rcpp::wrap(row_normalize_cpp(x, center));
+    return rcpp_result_gen;
+END_RCPP
+}
 // mips_l2_float32_transform_cpp
 List mips_l2_float32_transform_cpp(SEXP data, SEXP points, bool self_query);
 RcppExport SEXP _faissR_mips_l2_float32_transform_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP self_querySEXP) {
@@ -1148,8 +1160,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // row_candidate_knn_cuda_cpp
-List row_candidate_knn_cuda_cpp(NumericMatrix data, IntegerMatrix candidate_indices, int k, std::string metric);
-RcppExport SEXP _faissR_row_candidate_knn_cuda_cpp(SEXP dataSEXP, SEXP candidate_indicesSEXP, SEXP kSEXP, SEXP metricSEXP) {
+List row_candidate_knn_cuda_cpp(NumericMatrix data, IntegerMatrix candidate_indices, int k, std::string metric, bool fill_missing);
+RcppExport SEXP _faissR_row_candidate_knn_cuda_cpp(SEXP dataSEXP, SEXP candidate_indicesSEXP, SEXP kSEXP, SEXP metricSEXP, SEXP fill_missingSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -1157,7 +1169,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< IntegerMatrix >::type candidate_indices(candidate_indicesSEXP);
     Rcpp::traits::input_parameter< int >::type k(kSEXP);
     Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
-    rcpp_result_gen = Rcpp::wrap(row_candidate_knn_cuda_cpp(data, candidate_indices, k, metric));
+    Rcpp::traits::input_parameter< bool >::type fill_missing(fill_missingSEXP);
+    rcpp_result_gen = Rcpp::wrap(row_candidate_knn_cuda_cpp(data, candidate_indices, k, metric, fill_missing));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2113,6 +2126,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_standardize_cpu_cpp", (DL_FUNC) &_faissR_standardize_cpu_cpp, 1},
     {"_faissR_matrix_fingerprint_cpp", (DL_FUNC) &_faissR_matrix_fingerprint_cpp, 1},
     {"_faissR_normalized_float32_transform_cpp", (DL_FUNC) &_faissR_normalized_float32_transform_cpp, 2},
+    {"_faissR_row_normalize_cpp", (DL_FUNC) &_faissR_row_normalize_cpp, 2},
     {"_faissR_mips_l2_float32_transform_cpp", (DL_FUNC) &_faissR_mips_l2_float32_transform_cpp, 3},
     {"_faissR_strip_self_neighbors_cpp", (DL_FUNC) &_faissR_strip_self_neighbors_cpp, 2},
     {"_faissR_prepend_self_neighbors_cpp", (DL_FUNC) &_faissR_prepend_self_neighbors_cpp, 2},
@@ -2181,7 +2195,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_cuda_float32_cpp", (DL_FUNC) &_faissR_nn_cuda_float32_cpp, 4},
     {"_faissR_nn_cuda_float32_gpu_cpp", (DL_FUNC) &_faissR_nn_cuda_float32_gpu_cpp, 7},
     {"_faissR_gpu_knn_to_host_cpp", (DL_FUNC) &_faissR_gpu_knn_to_host_cpp, 1},
-    {"_faissR_row_candidate_knn_cuda_cpp", (DL_FUNC) &_faissR_row_candidate_knn_cuda_cpp, 4},
+    {"_faissR_row_candidate_knn_cuda_cpp", (DL_FUNC) &_faissR_row_candidate_knn_cuda_cpp, 5},
     {"_faissR_row_candidate_knn_cuda_float32_cpp", (DL_FUNC) &_faissR_row_candidate_knn_cuda_float32_cpp, 4},
     {"_faissR_cuda_grid_self_knn_cpp", (DL_FUNC) &_faissR_cuda_grid_self_knn_cpp, 4},
     {"_faissR_cuda_grid_self_knn_float32_cpp", (DL_FUNC) &_faissR_cuda_grid_self_knn_float32_cpp, 4},

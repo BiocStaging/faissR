@@ -11,11 +11,13 @@
 #' @param backend Requested backend (`"auto"`, `"cpu"`, or `"cuda"`). `NULL`
 #'   follows the package backend option and environment-variable policy.
 #'
-#' @return A list containing one-based `data_rows` and `points_rows` for the
-#'   metric-specific degenerate condition, corresponding non-finite row
-#'   indices, `would_succeed`, and a stable `action` label. CPU cosine and
-#'   correlation use the documented zero-normalized convention; CUDA rejects
-#'   affected rows. An automatic backend is reported as backend-dependent.
+#' @return A list containing one-based `data_degenerate_rows` and
+#'   `points_degenerate_rows` for the metric-specific degenerate condition,
+#'   corresponding non-finite row indices, `would_succeed`, and a stable
+#'   `action` label. `data_rows` and `points_rows` are retained as compatibility
+#'   aliases. CPU cosine and correlation use the documented zero-normalized
+#'   convention; CUDA rejects affected rows. An automatic backend is reported
+#'   as backend-dependent.
 #'
 #' @details
 #' For cosine, a degenerate row is exactly all zero after conversion to the
@@ -24,6 +26,12 @@
 #' every backend. Row indices are one-based. The scan is `O((n + m) p)` and is
 #' intentionally explicit so it need not add another full pass to every
 #' nearest-neighbor call.
+#' Cosine/correlation normalization rescales finite rows in double precision
+#' before conversion to float32. This avoids interpreting numerical overflow
+#' as a zero vector or constant row. The preflight checks metric inputs, not
+#' installed capabilities, method-specific size limits, or device memory.
+#' Euclidean routes using float32 additionally require coordinates within its
+#' finite range; large squared distances can also exceed provider precision.
 #'
 #' @examples
 #' x <- rbind(c(0, 0), c(1, 0), c(1, 1))
@@ -83,6 +91,8 @@ metric_preflight_result <- function(
     has_non_finite,
     decision
 ) {
+    data_degenerate_rows <- data_scan$degenerate
+    points_degenerate_rows <- points_scan$degenerate
     list(
         metric = metric,
         requested_backend = backend,
@@ -93,8 +103,10 @@ metric_preflight_result <- function(
             correlation = "constant_row",
             euclidean = "none"
         ),
-        data_rows = data_scan$degenerate,
-        points_rows = points_scan$degenerate,
+        data_degenerate_rows = data_degenerate_rows,
+        points_degenerate_rows = points_degenerate_rows,
+        data_rows = data_degenerate_rows,
+        points_rows = points_degenerate_rows,
         data_non_finite_rows = data_scan$non_finite,
         points_non_finite_rows = points_scan$non_finite,
         has_degenerate_rows = has_degenerate,

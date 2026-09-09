@@ -259,7 +259,12 @@ candidate_knn(data, candidates, points = data, k,
 | `exclude_self` | If `TRUE`, remove each row from its own candidate list. This requires `points = data`. |
 
 This function does not generate candidates; it only reranks candidates supplied
-by another method.
+by another method. Missing, invalid, and duplicate candidates do not expand
+the candidate set. If fewer than `k` valid distinct candidates remain, both
+backends return `NA` indices and `Inf` distances for the missing positions.
+CUDA requires self-query scoring with `exclude_self = TRUE`, at least two
+reference rows, and `k <= 256`; zero cosine rows and constant correlation rows
+produce an explicit error rather than CPU-side repair.
 
 ## `fast_kmeans()`
 
@@ -386,10 +391,14 @@ product-quantizer codebooks and compressed vector codes; metadata reports
 `pq_codebooks_reused`, `pq_codes_reused`, and
 `search_pq_train_call_count = 0`.
 `predict()` reuses the fitted index when the requested backend, method, tuning,
-and HNSW `target_recall` requirements match the fitted model, and prediction
+and HNSW/IVF/IVFPQ `target_recall` requirements match the fitted model, and prediction
 metadata reports `approximation$index_reused = TRUE`. If the model is saved and
 reloaded in a later R session, or if prediction settings do not match,
 `predict()` rebuilds the same route instead of switching algorithms.
+
+Changing the recall tier bypasses an index built for the old tier and
+recomputes its calibrated settings. The prediction records `query_source =
+"nn"`; the original fitted object and its default tier are not modified.
 
 ## `predict()`
 

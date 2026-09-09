@@ -47,21 +47,24 @@ test_that("capability metadata identifies experimental and provider routes", {
   caps <- nn_capabilities()
   expect_true("implementation_status" %in% names(caps))
   expect_true(all(
-    caps$implementation_status[caps$method %in% c("nsg", "vamana")] ==
+    caps$implementation_status[
+      caps$method %in% c("nsg_style", "vamana_style")
+    ] ==
       "experimental"
   ))
   expect_identical(
     unique(caps$implementation_status[
-      caps$method == "nndescent" & caps$backend == "cpu"
+      caps$method == "nndescent_style" & caps$backend == "cpu"
     ]),
     "experimental"
   )
   expect_identical(
     unique(caps$implementation_status[
-      caps$method == "nndescent" & caps$backend == "cuda"
+      caps$method == "nndescent_style" & caps$backend == "cuda"
     ]),
     "external_provider"
   )
+  expect_false(any(c("nsg", "vamana", "nndescent") %in% caps$method))
 })
 
 test_that("printing a package-owned style result exposes experimental status", {

@@ -35,7 +35,8 @@ List cuda_gpu_knn_to_host_impl(SEXP result);
 List cuda_row_candidate_knn_impl(NumericMatrix data,
                                  IntegerMatrix candidate_indices,
                                  int k,
-                                 std::string metric);
+                                 std::string metric,
+                                 bool fill_missing);
 List cuda_row_candidate_knn_float32_impl(SEXP data,
                                          IntegerMatrix candidate_indices,
                                          int k,
@@ -184,8 +185,9 @@ extern "C" SEXP faissR_nn_cuda_tuned_gpu_call(SEXP x,
 List row_candidate_knn_cuda_cpp(NumericMatrix data,
                                 IntegerMatrix candidate_indices,
                                 int k,
-                                std::string metric) {
-  return cuda_row_candidate_knn_impl(data, candidate_indices, k, metric);
+                                std::string metric,
+                                bool fill_missing = true) {
+  return cuda_row_candidate_knn_impl(data, candidate_indices, k, metric, fill_missing);
 }
 
 // [[Rcpp::export]]

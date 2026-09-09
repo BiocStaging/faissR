@@ -15,18 +15,21 @@
 #' @param k Number of neighbours to return from each candidate row.
 #' @param backend `"auto"`/`"cpu"` for the general CPU implementation,
 #'   `"cuda"` for the native CUDA row-candidate kernel. GPU backends currently
-#'   require self-query candidates with `exclude_self = TRUE`.
+#'   require self-query candidates with `exclude_self = TRUE` and `k <= 256`.
 #' @param metric `"euclidean"`, `"cosine"`, or `"correlation"`. Legacy
 #'   metric aliases such as `"l2"`, `"cor"`,
 #'   `"pearson"`, and `"ip"` are rejected. Correlation is centered cosine
 #'   similarity. CUDA candidate scoring supports Euclidean directly and
 #'   cosine/correlation through normalized Euclidean scoring.
+#'   CUDA rejects zero-vector cosine and constant-row correlation inputs;
+#'   inspect affected rows with [nn_metric_preflight()].
 #' @param n_threads CPU threads for the CPU backend.
 #' @param exclude_self If `TRUE`, remove each query row from its own candidate
 #'   set. This is valid only for self-query candidate KNN.
 #' @return A `faissR_nn` object with `indices` and `distances`. If a row
 #'   has fewer than `k` valid unique candidates, remaining entries are `NA` and
-#'   `Inf`. Distance-contract metadata states whether the returned values are a
+#'   `Inf` on both CPU and CUDA. No neighbors outside the supplied candidate
+#'   set are added. Distance-contract metadata states whether the values are a
 #'   metric and comparable across query rows.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
@@ -148,16 +151,32 @@ candidate_knn_cuda <- function(input, metric) {
             metric
         )
     }
+    if (normalized) {
+        reject_cuda_normalized_cpu_repair(
+            "cuda",
+            metric,
+            metric_inputs$data_zero,
+            metric_inputs$points_zero,
+            "cuda_candidate"
+        )
+    }
     search_x <- if (normalized) metric_inputs$data else input$x
     out <- row_candidate_knn_cuda_cpp(
         search_x,
         input$cand,
         as.integer(input$k),
-        "euclidean"
+        "euclidean",
+        fill_missing = FALSE
     )
     result <- finish_nn_result(
-        out, "cuda_candidate", input$k, TRUE, exact = FALSE, metric = metric
+        out,
+        "cuda_candidate",
+        input$k,
+        TRUE,
+        exact = FALSE,
+        metric = metric
     )
+    attr(result, "exclude_self") <- input$exclude_self
     if (normalized) {
         result <- finalize_normalized_euclidean_metric_result(
             result,
@@ -210,6 +229,7 @@ candidate_knn_cpu <- function(input, metric, n_threads) {
         exact = FALSE,
         metric = metric
     )
+    attr(result, "exclude_self") <- input$exclude_self
     attr(result, "candidate_knn") <- candidate_knn_metadata(
         input,
         n_threads = as.integer(out$n_threads)

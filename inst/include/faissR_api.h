@@ -15,6 +15,11 @@ extern "C" {
 
 typedef int (*faissR_c_api_version_fun)(void);
 
+/*
+ * The include_self arguments use the opposite polarity from the R-level
+ * exclude_self argument: TRUE retains each query row in self-search output.
+ * Host callables return one-based R indices.
+ */
 typedef SEXP (*faissR_nn_float32_fun)(
     SEXP x,
     SEXP k,
@@ -39,6 +44,12 @@ typedef SEXP (*faissR_nn_cuda_tuned_gpu_fun)(
     SEXP metric,
     SEXP include_self,
     SEXP target_recall);
+
+/*
+ * The GPU-resident callable accepts method values "auto", "exact", "flat",
+ * and "bruteforce". The returned owner object must remain reachable while
+ * any child device pointer is in use.
+ */
 
 static inline int faissR_c_api_version(void) {
   faissR_c_api_version_fun fn =

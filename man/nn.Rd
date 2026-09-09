@@ -10,11 +10,9 @@ nn(
     k = NULL,
     exclude_self = FALSE,
     backend = NULL,
-    method = c(
-"auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf",
-"ivfpq", "vamana_style", "nsg_style", "nndescent_style",
-"ivfpq_fastscan", "cagra"
-    ),
+    method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf",
+        "ivfpq", "vamana_style", "nsg_style", "nndescent_style",
+        "ivfpq_fastscan", "cagra"),
     metric = c("euclidean", "cosine", "correlation"),
     tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
     target_recall = 0.99,
@@ -226,11 +224,12 @@ A list with integer matrix `indices`, `distances`, and stable
     implies general workload or hardware validation.
     Expected future query batches are not an input; use a
     fitted or cached index when construction will be amortized. A
-    capability-compatible machine that differs from
-    the calibration hardware keeps the compiled policy but is labelled
-    `hardware_extrapolated_unvalidated`; hardware identity alone never causes
-    a silent method or device fallback. CUDA auto emits one warning per
-    unmatched runtime GPU model unless
+    capability-compatible machine that differs from the calibration hardware
+    keeps the compiled policy but is labelled
+    `hardware_extrapolated_unvalidated`. If either hardware identity cannot be
+    determined, the label is `hardware_unidentified`. Hardware identity alone
+    never causes a silent method or device fallback. CUDA auto emits one
+    warning per confirmed, unmatched runtime GPU model unless
     `options(faissR.warn_hardware_extrapolation = FALSE)` is set. Pilot/cache
     tuning adjusts parameters within a method and does not install a new
     cross-method policy. The selector does not run pilot
@@ -319,18 +318,18 @@ knn_euclidean <- nn(x, k = 16, metric = "euclidean", backend = "cpu")
 knn_cosine <- nn(x, k = 16, metric = "cosine", backend = "cpu")
 knn_correlation <- nn(x, k = 16, metric = "correlation", backend = "cpu")
 
-if (faiss_available()) {
-data("sample.ExpressionSet", package = "Biobase")
-expression_data <- Biobase::exprs(sample.ExpressionSet)
-x_biobase <- scale(t(expression_data[seq_len(32L), , drop = FALSE]))
-expression_knn <- nn(
-x_biobase,
-k = 3,
-backend = "cpu",
-method = "exact",
-exclude_self = TRUE
-)
-dim(expression_knn$indices)
+if (faiss_available() && requireNamespace("Biobase", quietly = TRUE)) {
+    data("sample.ExpressionSet", package = "Biobase")
+    expression_data <- Biobase::exprs(sample.ExpressionSet)
+    x_biobase <- scale(t(expression_data[seq_len(32L), , drop = FALSE]))
+    expression_knn <- nn(
+        x_biobase,
+        k = 3,
+        backend = "cpu",
+        method = "exact",
+        exclude_self = TRUE
+    )
+    dim(expression_knn$indices)
 }
 }
 \references{

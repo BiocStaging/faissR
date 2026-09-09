@@ -40,8 +40,9 @@ runtime support is available, and CPU otherwise.}
 \code{"auto"} chooses the most appropriate method for the selected backend.
 See \code{?nn} for descriptions and references for \code{"exact"},
 \code{"flat"}, \code{"bruteforce"}, \code{"grid"}, \code{"hnsw"},
-\code{"ivf"}, \code{"ivfpq"}, \code{"ivfpq_fastscan"}, \code{"vamana"},
-\code{"nsg"}, \code{"nndescent"}, and \code{"cagra"}.}
+\code{"ivf"}, \code{"ivfpq"}, \code{"ivfpq_fastscan"},
+\code{"vamana_style"}, \code{"nsg_style"}, \code{"nndescent_style"},
+and \code{"cagra"}. The package-owned derived graph routes are experimental.}
 \item{metric}{Distance metric passed to \code{nn()}: \code{"euclidean"},
 \code{"cosine"}, or \code{"correlation"}. Legacy metric aliases are rejected.
 Correlation is centered cosine similarity. See
@@ -98,6 +99,11 @@ parameters, and auto-selection metadata from the underlying
 \code{\link{nn}()} call, including \code{batch_query = TRUE},
 \code{query_n}, and \code{query_call_count = 1L} for the full-matrix
 prediction query.
+
+Changing \code{target_recall} at prediction time bypasses an IVF/IVFPQ index
+fitted for a different tier and resolves the requested settings afresh.
+The prediction records \code{query_source = "nn"} in
+\code{attr(result, "faissR_nn")}; the original fitted model is unchanged.
 }
 \description{
 \code{knn()} is the high-level supervised kNN API. With \code{Xtrain} and

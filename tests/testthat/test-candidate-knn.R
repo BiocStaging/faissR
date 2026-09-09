@@ -47,6 +47,8 @@ test_that("candidate_knn exclude_self matches exact CPU without self", {
 
   expect_equal(cand$indices, exact$indices)
   expect_equal(cand$distances, exact$distances, tolerance = 1e-12)
+  expect_true(isTRUE(attr(cand, "exclude_self")))
+  expect_true(isTRUE(summary(cand)$exclude_self))
 })
 
 test_that("candidate_knn ignores duplicate and invalid candidates", {

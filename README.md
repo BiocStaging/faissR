@@ -64,11 +64,12 @@ calibrated on NVIDIA L40S jobs for cold full-self-search. It checks runtime
 capabilities but does not retune from a
 CPU/GPU model string. `attr(result, "auto_selection")$hardware_evidence` is
 `"calibration_hardware_matched"` for a confirmed L40S match and
-`"hardware_extrapolated_unvalidated"` for a different or unidentified
-machine. In the latter case the static policy remains active and no silent
-method/device fallback occurs. CUDA `method = "auto"` also emits one visible
-warning per runtime GPU model when that match is not confirmed; suppress it
-only after review with
+`"hardware_extrapolated_unvalidated"` for a confirmed different machine. If
+the runtime or calibration hardware identity cannot be determined, it reports
+`"hardware_unidentified"`. In either case the static policy remains active and
+no silent method/device fallback occurs. CUDA `method = "auto"` emits one
+visible warning per confirmed different runtime GPU model; suppress it only
+after review with
 `options(faissR.warn_hardware_extrapolation = FALSE)`. Request
 `method = "exact"` explicitly when exhaustive search is required. The opt-in
 `tuning = "pilot"` and `"cache"` modes tune parameters within an explicit or
@@ -155,6 +156,9 @@ headers and libraries discovered by `configure`.
   `options(faissR.cache_fitted_nn_indexes = FALSE)` to disable the cache or
   `faissR.cache_fitted_nn_indexes_max_entries` to bound memory.
 - `candidate_knn()` for exact top-k ranking inside supplied candidate rows.
+  CPU and CUDA never add neighbours outside that set: insufficient valid,
+  distinct candidates produce `NA` indices and `Inf` distances. CUDA requires
+  self-query scoring with `exclude_self = TRUE` and `k <= 256`.
 - Native exact 2D/3D grid KNN on CPU and CUDA.
 - `fast_kmeans()` for CPU, FAISS CPU/GPU, and optional cuVS k-means [7-8],
   with deterministic shape-aware defaults for `max_iter`, `n_init`, and `tol`
@@ -173,7 +177,10 @@ headers and libraries discovered by `configure`.
   sends the full `Xtest`/`newdata` matrix to the resolved NN backend in one
   batched search call, recording `batch_query`, `query_n`, and
   `query_call_count` in
-  prediction metadata.
+  prediction metadata. Changing `target_recall` for a fitted HNSW, IVF, or
+  IVFPQ model bypasses an index calibrated for the old tier and resolves the
+  requested settings afresh; `query_source = "nn"` records that path. The
+  original fitted model is unchanged.
 - CUDA FAISS/cuVS NN results record `attr(result, "gpu_residency")`, including
   the GPU provider, transient versus persistent index residency, host/device
   transfer strategy, whether a self-query reused the dataset device buffer, and
@@ -190,6 +197,10 @@ headers and libraries discovered by `configure`.
 - `nn_metric_preflight()` to identify non-finite rows, zero vectors for cosine,
   and constant rows for correlation before search. It reports one-based row
   indices and whether the requested CPU or CUDA backend will proceed.
+  Cosine/correlation normalization uses scaled double-precision arithmetic
+  before conversion to float32, so extreme finite magnitudes are not mistaken
+  for zero rows. Euclidean FAISS/CUDA input must be representable in float32;
+  use suitable measurement units to avoid overflow in squared distances.
 - Set the faissR session default with
   `options(faissR.backend = "cuda")`, or use
   `Sys.setenv(FAISSR_BACKEND = "cuda")`. An explicit function argument always
@@ -418,14 +429,14 @@ tarball:
 
 ```sh
 R CMD build .
-R CMD check --as-cran faissR_0.99.37.tar.gz
+R CMD check --as-cran faissR_0.99.38.tar.gz
 ```
 
 and then:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.37.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.38.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA and cuVS are

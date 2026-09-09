@@ -12,6 +12,11 @@
 #' prediction call may adjust the search-time `nprobe` for its requested `k`
 #' without retraining. IVFPQ also reuses trained product-quantizer codebooks
 #' and compressed codes.
+#' Changing `target_recall` at prediction time bypasses an IVF/IVFPQ index
+#' fitted for a different tier and performs a fresh route calculation with
+#' the requested tier. The original fitted object is not modified. Inspect
+#' `attr(prediction, "faissR_nn")$query_source` for `"fitted_index"` versus
+#' `"nn"` and the effective parameters in `approximation`.
 #'
 #' @param Xtrain Numeric training matrix or optional `float::fl()`/`float32`
 #'   matrix with observations in rows. Float32 inputs are preserved for
@@ -1289,6 +1294,16 @@ knn_fitted_faiss_settings_match <- function(
     tuning,
     target_recall
 ) {
+    if (
+        stored %in%
+            c("faiss_ivf", "faiss_ivfpq") &&
+            !isTRUE(all.equal(
+                as.numeric(target_recall),
+                as.numeric(object$nn_index_target_recall)
+            ))
+    ) {
+        return(FALSE)
+    }
     supported <- c(
         "faiss_flat_l2",
         "faiss_flat_ip",

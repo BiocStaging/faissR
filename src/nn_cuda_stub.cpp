@@ -45,7 +45,8 @@ List cuda_gpu_knn_to_host_impl(SEXP) {
 List cuda_row_candidate_knn_impl(NumericMatrix,
                                  IntegerMatrix,
                                  int,
-                                 std::string) {
+                                 std::string,
+                                 bool) {
   Rcpp::stop("CUDA row-candidate KNN is available only when the package is built with CUDA support.");
 }
 

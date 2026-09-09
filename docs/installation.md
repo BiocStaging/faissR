@@ -108,7 +108,21 @@ FAISS_HOME=/path/to/faiss R CMD INSTALL .
 /path/to/faiss/lib/faiss.lib        # Windows-style toolchains
 ```
 
-## macOS
+## Optional Linux Performance Configuration
+
+For Linux CPU performance, an ABI-compatible LP64 OpenBLAS build for FAISS is
+optional. It can affect dense linear algebra, but does not guarantee faster
+graph search. Preserve R's configured BLAS/LAPACK/Fortran link flags; do not
+replace `libRblas` by hand. Benchmark method, batch size, and thread settings
+on the intended workload. Start with one BLAS thread when using FAISS OpenMP
+parallelism to avoid oversubscription (`OPENBLAS_NUM_THREADS=1` for pthread
+OpenBLAS; OpenMP builds use `OMP_NUM_THREADS`). See the
+[installation vignette](../vignettes/installation.Rmd#optional-linux-performance-configuration)
+for the optional performance configuration and the
+[OpenBLAS runtime documentation](https://www.openmathlib.org/OpenBLAS/docs/runtime_variables/)
+for provider-specific thread controls.
+
+## macOS CPU Installation
 
 macOS is recommended for CPU/FAISS builds. NVIDIA CUDA is not supported on
 modern Apple Silicon/macOS systems, so CUDA/cuVS backends are expected to be
@@ -472,14 +486,14 @@ itself is valid.
 ```sh
 R CMD build .
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-R CMD check --as-cran faissR_0.99.37.tar.gz
+R CMD check --as-cran faissR_0.99.38.tar.gz
 ```
 
 Bioconductor submission checks are run in addition to `R CMD check`:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.37.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.38.tar.gz", `new-package` = TRUE)
 ```
 
 A CPU-only check should still finish with `Status: OK` once FAISS is installed;

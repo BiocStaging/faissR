@@ -5719,8 +5719,26 @@ nn_method_labels <- function() {
     )
 }
 
+nn_public_method_labels <- function() {
+    c(
+        "auto",
+        "exact",
+        "flat",
+        "bruteforce",
+        "grid",
+        "hnsw",
+        "ivf",
+        "ivfpq",
+        "vamana_style",
+        "nsg_style",
+        "nndescent_style",
+        "ivfpq_fastscan",
+        "cagra"
+    )
+}
+
 nn_method_request_labels <- function() {
-    c(nn_method_labels(), "vamana_style", "nsg_style", "nndescent_style")
+    unique(c(nn_public_method_labels(), nn_method_labels()))
 }
 
 faissr_option <- function(name, default = NULL) {
@@ -6078,7 +6096,7 @@ cuda_cagra_route_available <- function(
 #' @export
 nn_capabilities <- function(runtime = FALSE) {
     runtime <- normalize_scalar_logical_arg(runtime, "runtime", default = FALSE)
-    methods <- nn_method_labels()
+    methods <- nn_public_method_labels()
     backends <- c("auto", "cpu", "cuda")
     metrics <- nn_metric_labels()
     rows <- vector("list", length(methods) * length(backends) * length(metrics))
@@ -6377,10 +6395,11 @@ nn_cuvs_hnsw_availability <- function() {
 }
 
 nn_capability_row <- function(method, backend, metric) {
+    internal_method <- normalize_nn_method(method)
     capability <- if (identical(backend, "auto")) {
-        nn_auto_backend_capability(method, metric)
+        nn_auto_backend_capability(internal_method, metric)
     } else {
-        nn_method_capability(method, backend, metric)
+        nn_method_capability(internal_method, backend, metric)
     }
     data.frame(
         method = method,
@@ -7251,6 +7270,8 @@ nn_auto_hardware_metadata <- function(route) {
     route$hardware_match_status <- match_status
     route$hardware_evidence <- if (identical(match_status, "matched")) {
         "calibration_hardware_matched"
+    } else if (identical(match_status, "unknown")) {
+        "hardware_unidentified"
     } else {
         "hardware_extrapolated_unvalidated"
     }
@@ -7278,20 +7299,26 @@ nn_auto_hardware_models <- function(route, device) {
 
 nn_auto_hardware_evidence_note <- function(match_status) {
     if (identical(match_status, "matched")) {
-        paste0(
+        return(paste0(
             "Runtime accelerator model matches the frozen ",
             "calibration profile; provider versions and ",
             "data geometry remain relevant."
-        )
-    } else {
-        paste0(
-            "The compiled policy is being applied outside ",
-            "a confirmed hardware match. Method selection ",
-            "is unchanged; target and timing evidence are ",
-            "calibration-informed, not validated on this ",
-            "machine."
-        )
+        ))
     }
+    if (identical(match_status, "unknown")) {
+        return(paste0(
+            "Runtime hardware identity could not be confirmed. ",
+            "Method selection is unchanged; hardware-specific ",
+            "target and timing evidence is unavailable."
+        ))
+    }
+    paste0(
+        "The compiled policy is being applied outside ",
+        "a confirmed hardware match. Method selection ",
+        "is unchanged; target and timing evidence are ",
+        "calibration-informed, not validated on this ",
+        "machine."
+    )
 }
 
 nn_auto_selection_for_backend <- function(
@@ -7590,27 +7617,11 @@ select_cpu_spatial_backend <- function(data, k, exclude_self = TRUE) {
 }
 
 row_center_l2_normalize <- function(x) {
-    x <- as.matrix(x)
-    storage.mode(x) <- "double"
-    means <- rowMeans(x)
-    x <- x - means
-    norms <- sqrt(rowSums(x * x))
-    keep <- is.finite(norms) & norms > 0
-    if (any(keep)) {
-        x[keep, ] <- x[keep, , drop = FALSE] / norms[keep]
-    }
-    x
+    row_normalize_cpp(x, TRUE)
 }
 
 row_l2_normalize <- function(x) {
-    x <- as.matrix(x)
-    storage.mode(x) <- "double"
-    norms <- sqrt(rowSums(x * x))
-    keep <- is.finite(norms) & norms > 0
-    if (any(keep)) {
-        x[keep, ] <- x[keep, , drop = FALSE] / norms[keep]
-    }
-    x
+    row_normalize_cpp(x, FALSE)
 }
 
 normalized_euclidean_metric_inputs <- function(
@@ -7951,9 +7962,11 @@ normalized_flat_zero_fallback <- function(
     data, points, k, self_query, exclude_self, metric, backend,
     n_threads, output, exact_params, route
 ) {
+    inputs <- normalized_double_metric_inputs(data, points, self_query, metric)
     out <- nn_cpp(
-        data, points, as.integer(k), metric, FALSE, TRUE, 0, TRUE,
-        as.integer(normalize_nn_threads(n_threads)), isTRUE(exclude_self)
+        inputs$data, inputs$points, as.integer(k), "cosine", FALSE, TRUE,
+        0, TRUE, as.integer(normalize_nn_threads(n_threads)),
+        isTRUE(exclude_self)
     )
     result <- finish_nn_result(
         out, backend, k, self_query, exact = TRUE, metric = metric
@@ -11756,11 +11769,12 @@ grid_self_knn <- function(
 #'   implies general workload or hardware validation.
 #'   Expected future query batches are not an input; use a
 #'   fitted or cached index when construction will be amortized. A
-#'   capability-compatible machine that differs from
-#'   the calibration hardware keeps the compiled policy but is labelled
-#'   `hardware_extrapolated_unvalidated`; hardware identity alone never causes
-#'   a silent method or device fallback. CUDA auto emits one warning per
-#'   unmatched runtime GPU model unless
+#'   capability-compatible machine that differs from the calibration hardware
+#'   keeps the compiled policy but is labelled
+#'   `hardware_extrapolated_unvalidated`. If either hardware identity cannot be
+#'   determined, the label is `hardware_unidentified`. Hardware identity alone
+#'   never causes a silent method or device fallback. CUDA auto emits one
+#'   warning per confirmed, unmatched runtime GPU model unless
 #'   `options(faissR.warn_hardware_extrapolation = FALSE)` is set. Pilot/cache
 #'   tuning adjusts parameters within a method and does not install a new
 #'   cross-method policy. The selector does not run pilot
@@ -11797,7 +11811,7 @@ grid_self_knn <- function(
 #' knn_cosine <- nn(x, k = 16, metric = "cosine", backend = "cpu")
 #' knn_correlation <- nn(x, k = 16, metric = "correlation", backend = "cpu")
 #'
-#' if (faiss_available()) {
+#' if (faiss_available() && requireNamespace("Biobase", quietly = TRUE)) {
 #'     data("sample.ExpressionSet", package = "Biobase")
 #'     expression_data <- Biobase::exprs(sample.ExpressionSet)
 #'     x_biobase <- scale(t(expression_data[seq_len(32L), , drop = FALSE]))
