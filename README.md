@@ -324,7 +324,14 @@ deterministic C++ defaults for each method and backend.
 
 ## Installation
 
+Install the native FAISS dependency using the platform instructions below or
+the complete [installation guide](docs/installation.md). Then install the R
+dependencies and faissR:
+
 ```r
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("Biobase")
 install.packages("remotes")
 remotes::install_github("tkcaccia/faissR")
 ```
@@ -343,10 +350,10 @@ builds require an Rtools-compatible FAISS library supplied through
 Windows builders that do not provide FAISS compile a diagnostic build that
 loads and reports the missing system capability. Set
 `FAISSR_REQUIRE_FAISS=1` when installation must fail unless a functional FAISS
-backend is linked. Automated macOS builders without FAISS produce a
-diagnostic-only build that reports the missing system capability. User macOS
-source installs remain supported with Homebrew or an active conda/mamba
-environment.
+backend is linked. Recognized r-universe/BiocStaging macOS workers without
+FAISS produce a diagnostic-only build that reports the missing system
+capability. Other macOS source installs require FAISS and remain supported with
+Homebrew or an active conda/mamba environment.
 
 On macOS with Homebrew, install FAISS and the OpenMP runtime first:
 
@@ -411,14 +418,14 @@ tarball:
 
 ```sh
 R CMD build .
-R CMD check --as-cran faissR_0.99.35.tar.gz
+R CMD check --as-cran faissR_0.99.36.tar.gz
 ```
 
 and then:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.35.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.36.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA and cuVS are

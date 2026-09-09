@@ -1,25 +1,37 @@
 External system requirements
 ============================
 
-faissR requires the FAISS C++ library. FAISS is mandatory for all builds,
-including CPU-only builds. The package does not vendor FAISS.
+faissR requires the FAISS C++ library for a functional installation, including
+CPU-only installations. The package does not vendor FAISS. Explicitly
+recognized package-staging and WebAssembly targets can produce diagnostic-only
+artifacts without FAISS; those artifacts cannot perform nearest-neighbour
+search.
 
-NVIDIA CUDA, RAPIDS cuVS, and RAPIDS libcugraph are not required for a
-CPU-only FAISS build. They are required when the user requests a GPU-enabled
-build.
+NVIDIA CUDA and RAPIDS cuVS are not required for a CPU-only FAISS build. They
+are required when the user explicitly requests the corresponding GPU features.
 
 Required for all platforms
 --------------------------
 
 - R development headers.
 - A C++20-capable compiler.
-- A Fortran compiler.
+- A Fortran compiler for Unix functional builds. Windows uses the package's
+  C++ exact fallback and does not compile the Fortran source.
 - FAISS C++ headers and library.
+
+The Unix package shared library links against the LAPACK, BLAS, and Fortran
+libraries reported by R. No separate BLAS implementation is required when R's
+own BLAS/LAPACK libraries provide these symbols.
+
+The mandatory R packages are `Rcpp` and the Bioconductor package `Biobase`;
+`methods` ships with R. R package installers normally resolve these
+dependencies automatically. Building the vignettes additionally requires
+`BiocStyle`, `knitr`, and `rmarkdown`.
 
 If FAISS is not in a standard compiler/linker path or visible through
 pkg-config, set FAISS_HOME to a prefix containing:
 
-  include/faiss/Index.h
+  include/faiss/IndexFlat.h
   lib/libfaiss.so      on Linux
   lib/libfaiss.dylib   on macOS
 
@@ -33,9 +45,9 @@ Linux CPU-only build
 Install or build FAISS with GPU support disabled. Then install faissR with:
 
   FAISS_HOME=/path/to/faiss-cpu \
+  FAISSR_REQUIRE_FAISS=1 \
   FAISSR_USE_CUDA=0 \
   FAISSR_USE_CUVS=0 \
-  FAISSR_USE_CUGRAPH=0 \
   R CMD INSTALL .
 
 Linux NVIDIA GPU build
@@ -60,18 +72,9 @@ Strict direct cuVS build:
   FAISSR_REQUIRE_CUVS=1 \
   R CMD INSTALL .
 
-Strict CUDA graph-clustering build:
-
-  CUDA_HOME=/usr/local/cuda \
-  FAISS_HOME=/path/to/faiss \
-  CUGRAPH_HOME=/path/to/rapids-or-cugraph \
-  FAISSR_REQUIRE_CUDA=1 \
-  FAISSR_REQUIRE_CUGRAPH=1 \
-  R CMD INSTALL .
-
-The FAISSR_REQUIRE_* variables are aliases for requiring the corresponding
-GPU feature at configure time. If a required GPU component is missing,
-installation fails rather than producing a CPU-only build.
+The FAISSR_REQUIRE_* variables require the corresponding FAISS, CUDA, or cuVS
+feature at configure time. If a required component is missing, installation
+fails rather than producing a diagnostic or CPU-only build.
 
 macOS
 -----
@@ -100,9 +103,9 @@ Bioconductor notes
 ------------------
 
 Bioconductor and r-universe CPU builders need FAISS installed or FAISS_HOME set.
-CUDA/cuVS/libcugraph should not be required on CPU-only builders. If NVIDIA GPU
-support is required for a particular build environment, use the strict
-FAISSR_REQUIRE_* variables above.
+CUDA/cuVS should not be required on CPU-only builders. If NVIDIA GPU support is
+required for a particular build environment, use the strict FAISSR_REQUIRE_*
+variables above.
 
 Functional verification
 -----------------------
@@ -121,3 +124,8 @@ The installed vignette gives pinned, tested commands, provider/toolchain
 combinations, capability checks, license boundaries, and troubleshooting:
 
   Rscript -e 'vignette("installation", package="faissR")'
+
+If package installation compiles but loading fails with an undefined BLAS
+symbol such as `ssyrk_`, verify that the generated `src/Makevars` ends with
+`$(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)`. These libraries must follow `-lfaiss`
+in the linker command.

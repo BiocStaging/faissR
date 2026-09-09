@@ -12,7 +12,6 @@ jobs:
       FAISSR_REQUIRE_FAISS: 1
       FAISSR_USE_CUDA: 0
       FAISSR_USE_CUVS: 0
-      FAISSR_USE_CUGRAPH: 0
       FAISS_HOME: /tmp/faiss
       LD_LIBRARY_PATH: /tmp/faiss/lib
     steps:

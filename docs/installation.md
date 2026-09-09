@@ -78,13 +78,19 @@ R CMD INSTALL .
 
 ## Required Build Tools
 
-All platforms need:
+Functional Unix builds need:
 
 - R and R development headers;
 - `Rcpp`;
 - a C++20 compiler;
 - a Fortran compiler;
 - FAISS headers and library.
+
+The mandatory R dependencies are `Rcpp` and the Bioconductor package
+`Biobase`; `methods` ships with R. Package installers normally resolve them
+automatically. Building the vignettes also requires `BiocStyle`, `knitr`, and
+`rmarkdown`. Native Windows builds use the package's C++ exact fallback and do
+not compile the Fortran source.
 
 `configure` searches common compiler/linker paths, `pkg-config`, and
 environment variables. The most portable explicit install is:
@@ -96,7 +102,7 @@ FAISS_HOME=/path/to/faiss R CMD INSTALL .
 `FAISS_HOME` should be a prefix containing files such as:
 
 ```text
-/path/to/faiss/include/faiss/Index.h
+/path/to/faiss/include/faiss/IndexFlat.h
 /path/to/faiss/lib/libfaiss.so      # Linux
 /path/to/faiss/lib/libfaiss.dylib   # macOS
 /path/to/faiss/lib/faiss.lib        # Windows-style toolchains
@@ -349,6 +355,7 @@ Linux and macOS source builds still require real FAISS.
 | Variable | Purpose |
 |---|---|
 | `FAISS_HOME` | Prefix containing FAISS headers and libraries. Mandatory when FAISS is not visible through compiler defaults or `pkg-config`. |
+| `FAISSR_REQUIRE_FAISS` | Set to `1` in production or CI to reject diagnostic-only builds when a functional FAISS library is required. |
 | `FAISSR_AUTO_INSTALL_FAISS` | Explicit macOS/Homebrew convenience switch. Set to `1` to let `configure` run `brew install faiss libomp` if FAISS or the macOS OpenMP runtime is missing. Generic CI variables never enable this path. Bioconductor/r-universe macOS binary workers may provide diagnostic-only builds until their system-library bundle provides FAISS. |
 | `FAISSR_RUNIVERSE_MACOS_STUBS` | r-universe/BiocStaging macOS-only diagnostic switch. Defaults to `1`, allowing diagnostic stubs only on those macOS binary workers when FAISS is absent. Set to `0` to make that worker fail instead. User macOS installs are unaffected and still require FAISS. |
 | `LIBOMP_HOME` or `FAISSR_LIBOMP_HOME` | macOS OpenMP prefix containing `include/omp.h` and `lib/libomp.*`. Usually `$(brew --prefix libomp)`. |
@@ -447,8 +454,9 @@ available at runtime.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `FAISS library not found` during install | FAISS headers/library are not in compiler paths | Set `FAISS_HOME` or `PKG_CONFIG_PATH`; verify `include/faiss/Index.h` and `lib/libfaiss.*` exist. |
+| `FAISS library not found` during install | FAISS headers/library are not in compiler paths | Set `FAISS_HOME` or `PKG_CONFIG_PATH`; verify `include/faiss/IndexFlat.h` and `lib/libfaiss.*` exist. |
 | Package installs but cannot load `libfaiss` | Runtime linker cannot find FAISS | Set `LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH`, or Windows `PATH`. |
+| Package compiles but loading reports an undefined BLAS symbol such as `ssyrk_` | FAISS was linked without its client-side BLAS dependency | Use faissR 0.99.36 or later, which places R's `LAPACK_LIBS`, `BLAS_LIBS`, and `FLIBS` after `-lfaiss`; inspect the final link command if using modified build files. |
 | `GLIBCXX_* not found` on Linux | R loaded an older system `libstdc++` before FAISS/RAPIDS libraries | Use a consistent compiler/runtime stack; set `LD_LIBRARY_PATH` and, if necessary for benchmarks, `LD_PRELOAD` to the intended `libstdc++.so.6`. |
 | CUDA build cannot find `nvcc` | CUDA toolkit is missing or not on path | Set `CUDA_HOME` and/or `NVCC`; check `nvcc --version`. |
 | cuVS routes unavailable | cuVS headers/library were not found at build time | Set `CUVS_HOME`, `FAISSR_USE_CUVS=1`, and runtime `LD_LIBRARY_PATH`. |
@@ -464,14 +472,14 @@ itself is valid.
 ```sh
 R CMD build .
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-R CMD check --as-cran faissR_0.99.35.tar.gz
+R CMD check --as-cran faissR_0.99.36.tar.gz
 ```
 
 Bioconductor submission checks are run in addition to `R CMD check`:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.35.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.36.tar.gz", `new-package` = TRUE)
 ```
 
 A CPU-only check should still finish with `Status: OK` once FAISS is installed;
@@ -487,8 +495,8 @@ builds.
 
 For r-universe/BiocStaging logs, a failure that installs `nvidia-cuda-dev` but
 not `libfaiss-dev` indicates a system-requirements resolver issue rather than a
-package compile error: FAISS is mandatory for all builds, whereas CUDA/RAPIDS
-is optional unless a GPU build is requested.
+package compile error: FAISS is mandatory for functional builds, whereas
+CUDA/RAPIDS is optional unless a GPU build is requested.
 
 Until the upstream r-universe system-requirements database includes a FAISS
 rule, the repository includes a top-level `.prepare` hook for r-universe source

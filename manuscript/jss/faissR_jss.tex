@@ -472,7 +472,7 @@ A typical macOS CPU installation is:
 \begin{CodeChunk}
 \begin{CodeInput}
 brew install faiss libomp
-R> install.packages("faissR_0.99.35.tar.gz", repos = NULL, type = "source")
+R> install.packages("faissR_0.99.36.tar.gz", repos = NULL, type = "source")
 R> backend_info()
 R> subset(nn_capabilities(runtime = TRUE), available)
 \end{CodeInput}
@@ -805,7 +805,7 @@ Debian 13, OpenBLAS 0.3.33, and a checksummed Singularity image.
 the supplementary environment table records the principal software identities;
 the supplement provides the remaining environment and hardware details.
 
-The article accompanies \pkg{faissR} 0.99.35. Experiment-specific package,
+The article accompanies \pkg{faissR} 0.99.36. Experiment-specific package,
 provider, container, and data fingerprints are retained in the replication
 archive and are analyzed under their recorded identities rather than relabelled
 as the current build. Timing ratios are computed within their matched
@@ -863,10 +863,10 @@ Comparator & Matched & Cold call & Build & Fitted query \\
 
 The query-workload audit completed 60/60 cells on each backend. CPU calls
 recorded a fitted-index cache hit in all 60 cells. In the 15 HNSW cells, warm
-HNSW queries were faster than one-shot Flat calls, and the median smallest
-integer satisfying
-\(T_{\mathrm{cold,HNSW}}+(A-1)T_{\mathrm{warm,HNSW}}
-\leq A T_{\mathrm{cold,Flat}}\) was \(A=13\) batches. Flat was rebuilt for
+HNSW queries were faster than one-shot Flat calls. Let \(C_H\), \(W_H\), and
+\(C_F\) denote cold HNSW, warm HNSW, and cold Flat time, respectively. The
+median smallest integer satisfying
+\(C_H+(A-1)W_H \leq A C_F\) was \(A=13\) batches. Flat was rebuilt for
 each batch, so this estimand answers when HNSW reuse overtakes repeated
 one-shot exhaustive calls; it is not a comparison with a reusable exact
 index. CUDA recorded no fitted-index cache hit, and its results characterize

@@ -1,3 +1,16 @@
+# faissR 0.99.36
+
+* Aligns the installation guide, README, vignette, CI, and configure scripts
+  with the implemented FAISS/CUDA/cuVS build contract.
+* Makes `FAISSR_REQUIRE_FAISS=1` reject diagnostic-only Unix and WebAssembly
+  builds, removes obsolete libcugraph build switches, and documents the
+  mandatory R dependencies and Windows C++ fallback.
+* Installs TinyTeX in the functional GitHub Actions workflow so its requested
+  PDF-manual check runs on both Linux and macOS.
+* Links functional Unix builds explicitly against R's LAPACK, BLAS, and
+  Fortran libraries, preventing unresolved FAISS symbols such as `ssyrk_` on
+  systems whose FAISS shared library leaves BLAS resolution to clients.
+
 # faissR 0.99.35
 
 * Increments the Bioconductor development version after the JSS manuscript and

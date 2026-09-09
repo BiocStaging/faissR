@@ -3,6 +3,7 @@
 set -eu
 
 wasm_build=0
+require_faiss=${FAISSR_REQUIRE_FAISS:-0}
 for arg in "$@"; do
   case "$arg" in
     --host=wasm32-*|--host=*emscripten*)
@@ -23,6 +24,10 @@ write_diagnostic_makevars() {
 }
 
 if [ "$wasm_build" = "1" ]; then
+  if [ "$require_faiss" = "1" ]; then
+    echo "FAISSR_REQUIRE_FAISS=1, but FAISS is unavailable for webR/WebAssembly." >&2
+    exit 1
+  fi
   echo "WebAssembly target detected: building faissR with diagnostic stubs." >&2
   echo "Native FAISS/CUDA/cuVS libraries are not available for webR/WebAssembly;" >&2
   echo "native Linux/macOS builds still require FAISS." >&2
@@ -105,6 +110,9 @@ runiverse_macos_diagnostic_stubs_allowed() {
     return 1
   fi
   if [ "${FAISSR_RUNIVERSE_MACOS_STUBS:-1}" = "0" ]; then
+    return 1
+  fi
+  if [ "$require_faiss" = "1" ]; then
     return 1
   fi
   if [ -n "${UNIVERSE_NAME:-}" ] || [ -n "${MY_UNIVERSE:-}" ]; then
@@ -431,7 +439,8 @@ fi
   if [ -n "$cppflags" ]; then
     echo "PKG_CPPFLAGS = $cppflags"
   fi
-  printf '%s%s\n' 'PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) ' "$libs"
+  printf '%s%s\n' 'PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) ' \
+    "$libs \$(LAPACK_LIBS) \$(BLAS_LIBS) \$(FLIBS)"
   if [ "$cuda_objects" != "nn_cuda_stub.o" ]; then
     echo "NVCC = $nvcc"
     printf "%s" "$cuda_rule"

@@ -1,6 +1,6 @@
 # Submission audit
 
-Date: 2026-09-07. Package: faissR 0.99.35.
+Date: 2026-09-08. Package: faissR 0.99.36.
 This is a maintenance report, not part of the scientific article.
 
 ## Corrections
@@ -40,15 +40,17 @@ This is a maintenance report, not part of the scientific article.
 
 ## Verification
 
-- Functional local installation of 0.99.35 with external FAISS succeeded.
+- Functional local installation of 0.99.36 with external FAISS succeeded.
 - R CMD check --as-cran --no-manual: 0 errors, 0 warnings, 1 note (new
   submission). Tests, examples, compiled-code checks, Rd consistency, online
   incoming checks, and vignette rebuilding passed under a valid UTF-8 locale.
   The reference manual was built separately.
-- BiocCheck 1.49.30: 0 errors, 0 warnings, 0 notes, with only the
-  credential-dependent Bioconductor mailing-list/support lookup explicitly
-  disabled. All package-source, function-length, formatting, documentation,
-  dependency, license, vignette, and unit-test checks ran.
+- BiocCheck 1.49.30: 0 errors, 0 warnings, 1 note. The note reports that
+  subscription to the bioc-devel mailing list cannot be verified without
+  Bioconductor administrative credentials; the maintainer is registered at
+  the support site and watches the `faissr` tag. All package-source,
+  function-length, formatting, documentation, dependency, license, vignette,
+  and unit-test checks ran.
 - The complete replication entry point passed checksum validation, archive
   analysis and compact examples. Completed-systems audits passed for 720 tuned
   HNSW repetitions and 60 CPU plus 60 CUDA query-workload cells.
