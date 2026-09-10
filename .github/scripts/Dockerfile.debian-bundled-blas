@@ -1,0 +1,25 @@
+FROM debian:trixie
+
+ARG R_VERSION=4.6.0
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl build-essential gfortran pkg-config \
+    libpcre2-dev libcurl4-openssl-dev libbz2-dev liblzma-dev zlib1g-dev \
+    libfaiss-dev libblas-dev liblapack-dev \
+    r-cran-rcpp r-bioc-biobase r-cran-testthat r-cran-withr \
+    && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL "https://cran.r-project.org/src/base/R-4/R-${R_VERSION}.tar.gz" \
+      -o /tmp/R.tar.gz \
+    && tar -xzf /tmp/R.tar.gz -C /tmp \
+    && cd /tmp/R-${R_VERSION} \
+    && ./configure --prefix=/opt/R --enable-R-shlib \
+      --with-x=no --with-readline=no --without-recommended-packages \
+      --without-blas --without-lapack \
+    && make -j4 && make install \
+    && rm -rf /tmp/R-${R_VERSION} /tmp/R.tar.gz
+ENV PATH="/opt/R/bin:${PATH}"
+ENV R_LIBS_SITE=/usr/lib/R/site-library
+RUN R --vanilla --slave -e \
+    'install.packages(c("Rcpp", "BiocManager"), repos="https://cloud.r-project.org"); BiocManager::install("Biobase", ask=FALSE, update=FALSE, force=TRUE)'
+ENV FAISSR_USE_CUDA=0 FAISSR_USE_CUVS=0 FAISSR_REQUIRE_FAISS=1
+ENV OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=2
+WORKDIR /work

@@ -42,4 +42,12 @@ test_that("Unix FAISS builds link R numerical and Fortran libraries", {
         "LAPACK_LIBS.*BLAS_LIBS.*FLIBS",
         configure_text
     ))
+    expect_true(grepl(
+        "libs \\$faiss_numerical_libs.*LAPACK_LIBS.*BLAS_LIBS.*FLIBS",
+        configure_text
+    ))
+    expect_match(configure_text, "void ssyrk_()", fixed = TRUE)
+    expect_match(configure_text, "void sgeqrf_()", fixed = TRUE)
+    expect_match(configure_text, "LD_BIND_NOW=1", fixed = TRUE)
+    expect_match(configure_text, "local = TRUE, now = TRUE", fixed = TRUE)
 })

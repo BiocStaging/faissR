@@ -3,9 +3,9 @@
 set -eu
 
 add_faiss_sysreq() {
-  if [ -f DESCRIPTION ] && ! grep -q '^Config/pak/sysreqs:.*libfaiss-dev' DESCRIPTION; then
-    echo "faissR .prepare: recording Config/pak/sysreqs: libfaiss-dev."
-    printf 'Config/pak/sysreqs: libfaiss-dev\n' >> DESCRIPTION
+  if [ -f DESCRIPTION ] && ! grep -q '^Config/pak/sysreqs:' DESCRIPTION; then
+    echo "faissR .prepare: recording FAISS and complete numerical-library requirements."
+    printf 'Config/pak/sysreqs: libfaiss-dev libblas-dev liblapack-dev\n' >> DESCRIPTION
   fi
 }
 
@@ -13,7 +13,8 @@ if [ "$(uname -s 2>/dev/null || echo unknown)" != "Linux" ]; then
   exit 0
 fi
 
-if [ -f /usr/include/faiss/IndexFlat.h ] && \
+if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists blas lapack && \
+   [ -f /usr/include/faiss/IndexFlat.h ] && \
    { ls /usr/lib/*/libfaiss.so /usr/lib/libfaiss.so >/dev/null 2>&1 || \
      ls /usr/lib/*/libfaiss.a /usr/lib/libfaiss.a >/dev/null 2>&1; }; then
   echo "faissR .prepare: FAISS development files already available."
@@ -22,9 +23,9 @@ if [ -f /usr/include/faiss/IndexFlat.h ] && \
 fi
 
 if command -v apt-get >/dev/null 2>&1; then
-  echo "faissR .prepare: installing mandatory FAISS development package libfaiss-dev."
+  echo "faissR .prepare: installing FAISS and complete BLAS/LAPACK development packages."
   apt-get update -y
-  DEBIAN_FRONTEND=noninteractive apt-get install -y libfaiss-dev
+  DEBIAN_FRONTEND=noninteractive apt-get install -y libfaiss-dev libblas-dev liblapack-dev
   add_faiss_sysreq
 else
   echo "faissR .prepare: apt-get is unavailable; relying on configure to find FAISS." >&2

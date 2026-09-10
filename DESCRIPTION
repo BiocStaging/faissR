@@ -1,7 +1,7 @@
 Package: faissR
 Type: Package
 Title: FAISS-Backed Nearest Neighbours, kNN Models, and k-Means
-Version: 0.99.39
+Version: 0.99.40
 Authors@R: person(given = "Stefano",
     family = "Cacciatore",
     role = c("aut", "cre"),
@@ -54,9 +54,11 @@ Suggests:
 LinkingTo:
     Rcpp
 SystemRequirements: C++20, Fortran on Unix, FAISS C++ development library
-    (Debian/Ubuntu: libfaiss-dev; macOS: Homebrew faiss and libomp;
+    (Debian/Ubuntu: libfaiss-dev, libblas-dev, liblapack-dev;
+    macOS: Homebrew faiss and libomp;
     Windows: an Rtools-compatible FAISS CPU build), OpenMP runtime on macOS
-    when FAISS headers include omp.h. Optional GPU libraries are documented
+    when FAISS headers include omp.h, complete LP64 BLAS and LAPACK with
+    single-precision routines on Linux. Optional GPU libraries are documented
     in the installation guide and are used only when a GPU-enabled build is
     explicitly requested.
 VignetteBuilder: knitr

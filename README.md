@@ -355,6 +355,14 @@ through `pkg-config` or standard compiler paths, set `FAISS_HOME`:
 FAISS_HOME=/path/to/faiss R CMD INSTALL .
 ```
 
+On Debian/Ubuntu, also install `libblas-dev` and `liblapack-dev` alongside
+`libfaiss-dev`. R's bundled numerical libraries can omit the single-precision
+routines FAISS needs (for example `ssyrk_`). Linux configure now verifies both
+linking and loading and, when needed, adds a complete external LP64 BLAS/LAPACK
+provider. For custom installations use `FAISSR_NUMERICAL_LIBS`; see the
+[Debian installation instructions](docs/installation.md#debian-with-rs-bundled-numerical-libraries).
+R's own BLAS/LAPACK libraries do not need to be replaced.
+
 Linux, macOS, and Windows are eligible package platforms. Native Windows CPU
 builds require an Rtools-compatible FAISS library supplied through
 `FAISS_HOME`; WSL2 remains the practical route for CUDA/cuVS. Automated
@@ -429,14 +437,14 @@ tarball:
 
 ```sh
 R CMD build .
-R CMD check --as-cran faissR_0.99.39.tar.gz
+R CMD check --as-cran faissR_0.99.40.tar.gz
 ```
 
 and then:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.39.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.40.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA and cuVS are
@@ -447,12 +455,13 @@ fail during configuration. Maintainer Support Site registration and bioc-devel
 subscription are external submission steps.
 
 On Debian/Ubuntu CPU builders, FAISS should be supplied by the FAISS
-development package, typically `libfaiss-dev`. If a BiocStaging/r-universe log
+development package, typically `libfaiss-dev`, together with `libblas-dev`
+and `liblapack-dev`. If a BiocStaging/r-universe log
 installs NVIDIA CUDA packages but not `libfaiss-dev`, the failing step is the
 automated system-requirements resolution: FAISS is mandatory for faissR, while
 CUDA/RAPIDS libraries are optional unless a GPU build is explicitly requested.
 Until the upstream r-universe resolver includes FAISS, the repository-level
-`.prepare` hook installs `libfaiss-dev` for r-universe source builds and is
+`.prepare` hook installs those three development packages for r-universe source builds and is
 excluded from the package tarball.
 
 For macOS r-universe/BiocStaging binary builds, FAISS is not currently available

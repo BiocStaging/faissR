@@ -433,6 +433,97 @@ if [ "$use_cuvs" != "0" ]; then
   fi
 fi
 
+faiss_numerical_libs=${FAISSR_NUMERICAL_LIBS:-}
+if [ "$(uname -s 2>/dev/null || echo unknown)" = "Linux" ]; then
+  # R's bundled BLAS/LAPACK omit single-precision routines used by FAISS.
+  # A shared-library link alone permits unresolved symbols, so also load it
+  # in a fresh R process with immediate symbol resolution.
+  if [ -n "${R_HOME:-}" ]; then
+    r_bin="$R_HOME/bin/R"
+  else
+    r_bin=$(command -v R || true)
+  fi
+  if [ ! -x "$r_bin" ]; then
+    echo "R was not found for the FAISS numerical-library check." >&2
+    exit 1
+  fi
+  probe_dir=$(mktemp -d "${TMPDIR:-/tmp}/faissR-link-XXXXXX")
+  trap 'rm -rf "$probe_dir"' 0
+  trap 'exit 1' HUP INT QUIT TERM
+  probe_log="$(pwd)/config.log"
+  printf '%s\n' 'FAISS numerical-library compile/load probes' > "$probe_log"
+  cat > "$probe_dir/conftest.cpp" <<'EOF'
+#include <faiss/IndexFlat.h>
+extern "C" {
+void sgemm_(); void ssyrk_(); void sgeqrf_(); void sorgqr_();
+void sgesvd_(); void sgelsd_(); void sgetrf_(); void sgetri_();
+void dgemm_(); void dsyev_(); void dgesvd_(); void dgetrf_(); void dgetri_();
+void (*volatile faissr_numerical_symbols[])() = {
+    sgemm_, ssyrk_, sgeqrf_, sorgqr_, sgesvd_, sgelsd_, sgetrf_, sgetri_,
+    dgemm_, dsyev_, dgesvd_, dgetrf_, dgetri_
+};
+void *faissr_link_probe() { return new faiss::IndexFlatL2(2); }
+}
+EOF
+
+  try_numerical_libs() {
+    probe_libs=$1
+    {
+      echo 'CXX_STD = CXX20'
+      echo "PKG_CPPFLAGS = $cppflags"
+      printf '%s%s\n' 'PKG_CXXFLAGS = -pthread $(SHLIB_OPENMP_CXXFLAGS)' "$extra_cxxflags"
+      printf '%s%s\n' 'PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) ' \
+        "$libs $probe_libs \$(LAPACK_LIBS) \$(BLAS_LIBS) \$(FLIBS)"
+    } > "$probe_dir/Makevars"
+    rm -f "$probe_dir/conftest.o" "$probe_dir/conftest.so"
+    printf '\nExtra numerical libraries: %s\n' "${probe_libs:-(none)}" >> "$probe_log"
+    if (cd "$probe_dir" && "$r_bin" CMD SHLIB conftest.cpp && \
+        LD_BIND_NOW=1 "$r_bin" --vanilla --slave -e \
+        'dyn.load("conftest.so", local = TRUE, now = TRUE)') >> "$probe_log" 2>&1; then
+      faiss_numerical_libs=$probe_libs
+      return 0
+    fi
+    return 1
+  }
+
+  numerical_ok=0
+  if [ -n "$faiss_numerical_libs" ]; then
+    if try_numerical_libs "$faiss_numerical_libs"; then numerical_ok=1; fi
+  elif try_numerical_libs ""; then
+    numerical_ok=1
+  else
+    for numerical_pc in 'lapack blas' openblas; do
+      if command -v pkg-config >/dev/null 2>&1 && \
+          pkg-config --exists $numerical_pc; then
+        numerical_candidate=$(pkg-config --libs $numerical_pc)
+        if try_numerical_libs "$numerical_candidate"; then
+          numerical_ok=1
+          break
+        fi
+      fi
+    done
+    if [ "$numerical_ok" = "0" ]; then
+      for numerical_candidate in '-llapack -lblas' '-lopenblas'; do
+        if try_numerical_libs "$numerical_candidate"; then
+          numerical_ok=1
+          break
+        fi
+      done
+    fi
+  fi
+  if [ "$numerical_ok" = "0" ]; then
+    echo "FAISS was found, but its numerical-library compile/load check failed." >&2
+    echo "FAISS needs complete, ABI-compatible LP64 BLAS and LAPACK, including single precision." >&2
+    echo "On Debian/Ubuntu: apt-get install libfaiss-dev libblas-dev liblapack-dev" >&2
+    echo "For a custom provider, set FAISSR_NUMERICAL_LIBS (for example '-llapack -lblas')." >&2
+    echo "Do not replace R's libRblas/libRlapack. See config.log for the compiler/loader error." >&2
+    exit 1
+  fi
+  echo "FAISS compile/load check passed; extra numerical libraries: ${faiss_numerical_libs:-(none)}"
+  rm -rf "$probe_dir"
+  trap - 0 HUP INT QUIT TERM
+fi
+
 {
   echo "CXX_STD = CXX20"
   printf '%s%s\n' 'PKG_CXXFLAGS = -pthread $(SHLIB_OPENMP_CXXFLAGS)' "$extra_cxxflags"
@@ -440,7 +531,7 @@ fi
     echo "PKG_CPPFLAGS = $cppflags"
   fi
   printf '%s%s\n' 'PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) ' \
-    "$libs \$(LAPACK_LIBS) \$(BLAS_LIBS) \$(FLIBS)"
+    "$libs $faiss_numerical_libs \$(LAPACK_LIBS) \$(BLAS_LIBS) \$(FLIBS)"
   if [ "$cuda_objects" != "nn_cuda_stub.o" ]; then
     echo "NVCC = $nvcc"
     printf "%s" "$cuda_rule"

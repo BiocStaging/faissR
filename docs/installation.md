@@ -40,7 +40,8 @@ strict build uses `FAISSR_REQUIRE_CUDA=1` and, where relevant,
 `FAISSR_REQUIRE_CUVS=1`.
 
 On Debian/Ubuntu builders, the mandatory CPU dependency is the FAISS
-development package, typically `libfaiss-dev`. Automated systems such as
+development package, typically `libfaiss-dev`, and complete LP64 BLAS/LAPACK
+development libraries (`libblas-dev` and `liblapack-dev`). Automated systems such as
 r-universe resolve this from the package `SystemRequirements` field through
 their system-requirements database. If that database or base image does not yet
 provide FAISS, the package will fail early at `configure` with a clear
@@ -107,6 +108,36 @@ FAISS_HOME=/path/to/faiss R CMD INSTALL .
 /path/to/faiss/lib/libfaiss.dylib   # macOS
 /path/to/faiss/lib/faiss.lib        # Windows-style toolchains
 ```
+
+## Debian With R's Bundled Numerical Libraries
+
+R's bundled `libRblas` and `libRlapack` do not include all the single-precision
+routines needed by FAISS. In particular, merely adding R's `BLAS_LIBS` to the
+link command does not resolve `ssyrk_`. Static FAISS archives require these
+dependencies to be linked by the package using them.
+
+```sh
+sudo apt-get install libfaiss-dev libblas-dev liblapack-dev
+R CMD INSTALL faissR_0.99.40.tar.gz
+```
+
+On Linux, configure compiles a small FAISS client and loads it in a fresh R
+process with immediate symbol resolution. If R's configured libraries are
+insufficient, it tests complete external BLAS/LAPACK providers and adds the
+working libraries after FAISS, retaining R's own link flags. Failures stop
+installation early and are recorded in `config.log`. This checks symbol
+availability, not every possible provider ABI or numerical operation.
+
+An administrator can explicitly select an ABI-compatible LP64 provider:
+
+```sh
+FAISSR_NUMERICAL_LIBS="-llapack -lblas" R CMD INSTALL faissR_0.99.40.tar.gz
+```
+
+For nonstandard prefixes, include `-L` and runtime-search-path flags in that
+variable. A supplied value must pass the check; it is not silently replaced.
+Do not replace R's `libRblas` or `libRlapack`, and do not use ILP64 libraries
+with an LP64 FAISS build. CUDA is not required for this CPU installation.
 
 ## Optional Linux Performance Configuration
 
@@ -371,6 +402,7 @@ Linux and macOS source builds still require real FAISS.
 | `FAISS_HOME` | Prefix containing FAISS headers and libraries. Mandatory when FAISS is not visible through compiler defaults or `pkg-config`. |
 | `FAISSR_REQUIRE_FAISS` | Set to `1` in production or CI to reject diagnostic-only builds when a functional FAISS library is required. |
 | `FAISSR_AUTO_INSTALL_FAISS` | Explicit macOS/Homebrew convenience switch. Set to `1` to let `configure` run `brew install faiss libomp` if FAISS or the macOS OpenMP runtime is missing. Generic CI variables never enable this path. Bioconductor/r-universe macOS binary workers may provide diagnostic-only builds until their system-library bundle provides FAISS. |
+| `FAISSR_NUMERICAL_LIBS` | Explicit link flags for complete, ABI-compatible LP64 BLAS/LAPACK dependencies of FAISS. On Linux the flags must pass a compile/load check. R's own numerical-library flags are retained. |
 | `FAISSR_RUNIVERSE_MACOS_STUBS` | r-universe/BiocStaging macOS-only diagnostic switch. Defaults to `1`, allowing diagnostic stubs only on those macOS binary workers when FAISS is absent. Set to `0` to make that worker fail instead. User macOS installs are unaffected and still require FAISS. |
 | `LIBOMP_HOME` or `FAISSR_LIBOMP_HOME` | macOS OpenMP prefix containing `include/omp.h` and `lib/libomp.*`. Usually `$(brew --prefix libomp)`. |
 | `CONDA_PREFIX` | Active conda/mamba prefix. Used only as a passive fallback when `faiss-cpu` and `libomp` are already installed there. |
@@ -470,7 +502,7 @@ available at runtime.
 |---|---|---|
 | `FAISS library not found` during install | FAISS headers/library are not in compiler paths | Set `FAISS_HOME` or `PKG_CONFIG_PATH`; verify `include/faiss/IndexFlat.h` and `lib/libfaiss.*` exist. |
 | Package installs but cannot load `libfaiss` | Runtime linker cannot find FAISS | Set `LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH`, or Windows `PATH`. |
-| Package compiles but loading reports an undefined BLAS symbol such as `ssyrk_` | FAISS was linked without its client-side BLAS dependency | Use the current source, which places R's `LAPACK_LIBS`, `BLAS_LIBS`, and `FLIBS` after `-lfaiss`; inspect the final link command if using modified build files. |
+| Package loading reports an undefined numerical symbol such as `ssyrk_` | R's bundled numerical libraries can lack single-precision FAISS dependencies | Install complete LP64 BLAS/LAPACK development libraries and use the current Linux compile/load check; inspect `config.log` or set `FAISSR_NUMERICAL_LIBS` for a custom provider. R's link flags alone are not sufficient on every installation. |
 | `GLIBCXX_* not found` on Linux | R loaded an older system `libstdc++` before FAISS/RAPIDS libraries | Use a consistent compiler/runtime stack; set `LD_LIBRARY_PATH` and, if necessary for benchmarks, `LD_PRELOAD` to the intended `libstdc++.so.6`. |
 | CUDA build cannot find `nvcc` | CUDA toolkit is missing or not on path | Set `CUDA_HOME` and/or `NVCC`; check `nvcc --version`. |
 | cuVS routes unavailable | cuVS headers/library were not found at build time | Set `CUVS_HOME`, `FAISSR_USE_CUVS=1`, and runtime `LD_LIBRARY_PATH`. |
@@ -486,14 +518,14 @@ itself is valid.
 ```sh
 R CMD build .
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-R CMD check --as-cran faissR_0.99.39.tar.gz
+R CMD check --as-cran faissR_0.99.40.tar.gz
 ```
 
 Bioconductor submission checks are run in addition to `R CMD check`:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.39.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.40.tar.gz", `new-package` = TRUE)
 ```
 
 A CPU-only check should still finish with `Status: OK` once FAISS is installed;
@@ -514,7 +546,8 @@ CUDA/RAPIDS is optional unless a GPU build is requested.
 
 Until the upstream r-universe system-requirements database includes a FAISS
 rule, the repository includes a top-level `.prepare` hook for r-universe source
-builds. The hook installs `libfaiss-dev` on Debian/Ubuntu before `R CMD build`.
+builds. The hook installs `libfaiss-dev`, `libblas-dev`, and `liblapack-dev`
+on Debian/Ubuntu before `R CMD build`.
 It is excluded from the package tarball with `.Rbuildignore`; regular package
 installation still relies on normal system-library discovery through
 `configure`.

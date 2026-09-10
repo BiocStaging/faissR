@@ -1,0 +1,35 @@
+name: Debian bundled BLAS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Debian Trixie with R bundled BLAS and LAPACK
+        run: docker build -f .github/scripts/Dockerfile.debian-bundled-blas -t faissr-debian .github/scripts
+      - name: Build source and test installation
+        run: |
+          mkdir -p "$RUNNER_TEMP/debian-results"
+          docker run --rm --cpus=4 --memory=8g \
+            -v "$PWD:/source:ro" -v "$RUNNER_TEMP/debian-results:/work" \
+            faissr-debian sh -c '
+              R CMD build --no-build-vignettes --no-manual /source > build.log 2>&1
+              archive=$(find /work -maxdepth 1 -name "faissR_*.tar.gz" -print -quit)
+              test -n "$archive"
+              sh /source/.github/scripts/check-debian-bundled-blas.sh "$archive"
+            '
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: debian-bundled-blas-logs
+          path: |
+            ${{ runner.temp }}/debian-results/*.log
+            ${{ runner.temp }}/debian-results/*.txt
+            ${{ runner.temp }}/debian-results/automatic-Makevars
