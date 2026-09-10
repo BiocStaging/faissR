@@ -1,0 +1,28 @@
+Bootstrap: docker-archive
+From: @BASE_ARCHIVE@
+
+# The base recipe is ../scripts/Dockerfile.debian-bundled-blas. This local
+# base avoids duplicating an existing R-from-source build on the remote host.
+# build.sh exports it before entering fakeroot (which cannot use docker.sock).
+%post
+    export DEBIAN_FRONTEND=noninteractive
+    export R_LIBS_SITE=/opt/test-library
+    mkdir -p /opt/test-library
+    apt-get update
+    apt-get install -y --no-install-recommends libuv1-dev devscripts qpdf r-cran-codetools r-bioc-biocstyle r-cran-knitr r-cran-rmarkdown r-cran-matrix
+    # Do not mix any Debian R binaries with this custom R ABI.
+    /opt/R/bin/Rscript -e 'options(repos=c(CRAN="https://cloud.r-project.org")); install.packages(c("Rcpp","float","testthat","withr","knitr","rmarkdown","Matrix","codetools","BiocManager"),lib="/opt/test-library"); BiocManager::install(c("Biobase","BiocStyle"),lib="/opt/test-library",ask=FALSE,update=FALSE)'
+    rm -rf /var/lib/apt/lists/*
+
+%environment
+    export PATH=/opt/R/bin:$PATH
+    export R_LIBS_SITE=/opt/test-library
+    export FAISSR_REQUIRE_FAISS=1
+    export FAISSR_USE_CUDA=0
+    export FAISSR_USE_CUVS=0
+    export OMP_NUM_THREADS=2
+    export OPENBLAS_NUM_THREADS=1
+    export LANG=C.UTF-8
+
+%test
+    /opt/R/bin/Rscript -e 'print(.libPaths()); ok<-vapply(c("Rcpp","Biobase","testthat","withr","float","knitr","rmarkdown","Matrix","BiocStyle","codetools"),requireNamespace,logical(1),quietly=FALSE); print(ok); stopifnot(all(ok))'

@@ -1,0 +1,25 @@
+name: Test harness validation
+on:
+  push:
+    paths:
+      - '.github/package-check/**'
+      - '.github/workflows/package-test-harness.yaml'
+  pull_request:
+    paths:
+      - '.github/package-check/**'
+      - '.github/workflows/package-test-harness.yaml'
+jobs:
+  harness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python .github/package-check/test_matrix.py
+      - name: Validate shell launchers
+        run: |
+          bash -n .github/package-check/macos.sh
+          bash -n .github/package-check/linux/build.sh
+          bash -n .github/package-check/linux/run.sh
+          bash -n .github/package-check/linux/test-rcpp-minimum.sh

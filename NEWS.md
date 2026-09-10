@@ -1,4 +1,4 @@
-# faissR 0.99.40
+# faissR 0.99.41
 
 ## Initial Bioconductor submission
 

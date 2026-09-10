@@ -21,6 +21,7 @@ knitr::opts_chunk$set(
     fig.width = 6,
     fig.height = 4
 )
+has_float <- requireNamespace("float", quietly = TRUE)
 ```
 
 # Overview
@@ -400,9 +401,10 @@ do.call(rbind, metric_results)
 FAISS and cuVS consume float32 data internally. Ordinary R numeric matrices are
 converted once for those compiled routes. If the optional `float` package is
 installed, `faissR` can also accept `float::fl()` input and return float32
-distance matrices with `output = "float"`.
+distance matrices with `output = "float"`. The native float32 example requires
+a functional FAISS installation and is not executed by diagnostic-only builds.
 
-```{r float32, eval=requireNamespace("float", quietly = TRUE)}
+```{r float32, eval=faiss_available() && has_float}
 xf <- float::fl(x)
 
 float_nearest <- nn(

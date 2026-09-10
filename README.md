@@ -347,7 +347,8 @@ install.packages("remotes")
 remotes::install_github("tkcaccia/faissR")
 ```
 
-FAISS is required and is not vendored. `faissR` compiles with C++20 because
+FAISS is required and is not vendored. Rcpp >= 1.1.0 is required; update an
+older distribution-provided Rcpp before compiling. `faissR` compiles with C++20 because
 recent FAISS headers use C++20 syntax. On systems where FAISS is not visible
 through `pkg-config` or standard compiler paths, set `FAISS_HOME`:
 
@@ -365,7 +366,10 @@ R's own BLAS/LAPACK libraries do not need to be replaced.
 
 Linux, macOS, and Windows are eligible package platforms. Native Windows CPU
 builds require an Rtools-compatible FAISS library supplied through
-`FAISS_HOME`; WSL2 remains the practical route for CUDA/cuVS. Automated
+`FAISS_HOME` and complete single-precision BLAS/LAPACK routines. Windows
+configure verifies a compiled DLL can load and selects compatible Rtools
+numerical libraries where needed; `FAISSR_NUMERICAL_LIBS` allows explicit
+configuration. WSL2 remains the practical route for CUDA/cuVS. Automated
 Windows builders that do not provide FAISS compile a diagnostic build that
 loads and reports the missing system capability. Set
 `FAISSR_REQUIRE_FAISS=1` when installation must fail unless a functional FAISS
@@ -373,6 +377,10 @@ backend is linked. Recognized r-universe/BiocStaging macOS workers without
 FAISS produce a diagnostic-only build that reports the missing system
 capability. Other macOS source installs require FAISS and remain supported with
 Homebrew or an active conda/mamba environment.
+
+For repeatable native Windows/macOS and multi-distribution Linux checks, see
+the [cross-platform test lab](docs/package-testing.md). Functional and
+diagnostic-only results are reported separately.
 
 On macOS with Homebrew, install FAISS and the OpenMP runtime first:
 
@@ -437,14 +445,14 @@ tarball:
 
 ```sh
 R CMD build .
-R CMD check --as-cran faissR_0.99.40.tar.gz
+R CMD check --as-cran faissR_0.99.41.tar.gz
 ```
 
 and then:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.40.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.41.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA and cuVS are

@@ -1,0 +1,16 @@
+{
+  "targets": [
+    {"name": "macos-arm64", "kind": "macos"},
+    {"name": "debian13-bundled", "kind": "linux", "host": "linux-test-host",
+      "root": "/large-disk/r-package-test-lab",
+      "image": "/large-disk/r-package-test-lab/images/debian13-r46-bundled.sif"},
+    {"name": "ubuntu24", "kind": "linux", "host": "linux-test-host",
+      "root": "/large-disk/r-package-test-lab",
+      "image": "/large-disk/r-package-test-lab/images/ubuntu24.sif"},
+    {"name": "windows-x64", "kind": "windows", "scp_root": "r-package-test-lab", "host": "user@windows-host",
+      "ssh_options": ["-i", "/path/to/private-key", "-o", "IdentitiesOnly=yes"],
+      "root": "C:/Users/user/r-package-test-lab", "r_home": "C:/Users/user/r-package-test-lab/R-4.6.1",
+      "rtools": "C:/rtools45", "faiss_home": "C:/Users/user/r-package-test-lab/faiss-1.11.0",
+      "dependency_library": "C:/Users/user/r-package-test-lab/dependencies"}
+  ]
+}

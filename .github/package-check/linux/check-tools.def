@@ -1,0 +1,13 @@
+Bootstrap: localimage
+From: @UBUNTU_BASE@
+
+# Add checker utilities to an existing Debian/Ubuntu image without replacing it.
+%post
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y --no-install-recommends devscripts qpdf
+    rm -rf /var/lib/apt/lists/*
+
+%test
+    command -v checkbashisms
+    qpdf --version

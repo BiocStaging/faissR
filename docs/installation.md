@@ -82,7 +82,7 @@ R CMD INSTALL .
 Functional Unix builds need:
 
 - R and R development headers;
-- `Rcpp`;
+- `Rcpp >= 1.1.0`;
 - a C++20 compiler;
 - a Fortran compiler;
 - FAISS headers and library.
@@ -118,7 +118,7 @@ dependencies to be linked by the package using them.
 
 ```sh
 sudo apt-get install libfaiss-dev libblas-dev liblapack-dev
-R CMD INSTALL faissR_0.99.40.tar.gz
+R CMD INSTALL faissR_0.99.41.tar.gz
 ```
 
 On Linux, configure compiles a small FAISS client and loads it in a fresh R
@@ -131,7 +131,7 @@ availability, not every possible provider ABI or numerical operation.
 An administrator can explicitly select an ABI-compatible LP64 provider:
 
 ```sh
-FAISSR_NUMERICAL_LIBS="-llapack -lblas" R CMD INSTALL faissR_0.99.40.tar.gz
+FAISSR_NUMERICAL_LIBS="-llapack -lblas" R CMD INSTALL faissR_0.99.41.tar.gz
 ```
 
 For nonstandard prefixes, include `-L` and runtime-search-path flags in that
@@ -362,6 +362,15 @@ search path, add its directory to `PATH` before loading R:
 set PATH=C:\path\to\faiss\bin;%PATH%
 ```
 
+Windows configure compiles and loads a DLL that references the required
+single- and double-precision BLAS/LAPACK routines. R's bundled libraries may
+not export the single-precision symbols. When necessary, configure adds
+complete Rtools `-llapack -lblas` libraries while preserving R's own numerical
+and Fortran link flags. Use `FAISSR_NUMERICAL_LIBS` for an explicit compatible
+LP64 library selection; failed probes are recorded in `config.log` and abort
+the functional build. The [cross-platform test lab](package-testing.md) includes
+a tested Rtools FAISS recipe and isolated Windows checks.
+
 ### Windows CUDA/cuVS
 
 For CUDA/cuVS, use WSL2 Linux unless you are maintaining your own native
@@ -402,7 +411,7 @@ Linux and macOS source builds still require real FAISS.
 | `FAISS_HOME` | Prefix containing FAISS headers and libraries. Mandatory when FAISS is not visible through compiler defaults or `pkg-config`. |
 | `FAISSR_REQUIRE_FAISS` | Set to `1` in production or CI to reject diagnostic-only builds when a functional FAISS library is required. |
 | `FAISSR_AUTO_INSTALL_FAISS` | Explicit macOS/Homebrew convenience switch. Set to `1` to let `configure` run `brew install faiss libomp` if FAISS or the macOS OpenMP runtime is missing. Generic CI variables never enable this path. Bioconductor/r-universe macOS binary workers may provide diagnostic-only builds until their system-library bundle provides FAISS. |
-| `FAISSR_NUMERICAL_LIBS` | Explicit link flags for complete, ABI-compatible LP64 BLAS/LAPACK dependencies of FAISS. On Linux the flags must pass a compile/load check. R's own numerical-library flags are retained. |
+| `FAISSR_NUMERICAL_LIBS` | Explicit link flags for complete, ABI-compatible LP64 BLAS/LAPACK dependencies of FAISS. On Linux and Windows the flags must pass a compile/load check. R's own numerical-library flags are retained. |
 | `FAISSR_RUNIVERSE_MACOS_STUBS` | r-universe/BiocStaging macOS-only diagnostic switch. Defaults to `1`, allowing diagnostic stubs only on those macOS binary workers when FAISS is absent. Set to `0` to make that worker fail instead. User macOS installs are unaffected and still require FAISS. |
 | `LIBOMP_HOME` or `FAISSR_LIBOMP_HOME` | macOS OpenMP prefix containing `include/omp.h` and `lib/libomp.*`. Usually `$(brew --prefix libomp)`. |
 | `CONDA_PREFIX` | Active conda/mamba prefix. Used only as a passive fallback when `faiss-cpu` and `libomp` are already installed there. |
@@ -502,7 +511,7 @@ available at runtime.
 |---|---|---|
 | `FAISS library not found` during install | FAISS headers/library are not in compiler paths | Set `FAISS_HOME` or `PKG_CONFIG_PATH`; verify `include/faiss/IndexFlat.h` and `lib/libfaiss.*` exist. |
 | Package installs but cannot load `libfaiss` | Runtime linker cannot find FAISS | Set `LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH`, or Windows `PATH`. |
-| Package loading reports an undefined numerical symbol such as `ssyrk_` | R's bundled numerical libraries can lack single-precision FAISS dependencies | Install complete LP64 BLAS/LAPACK development libraries and use the current Linux compile/load check; inspect `config.log` or set `FAISSR_NUMERICAL_LIBS` for a custom provider. R's link flags alone are not sufficient on every installation. |
+| Package loading reports an undefined numerical symbol such as `ssyrk_` | R's bundled numerical libraries can lack single-precision FAISS dependencies | Install complete LP64 BLAS/LAPACK development libraries and use the current Linux or Windows compile/load check; inspect `config.log` or set `FAISSR_NUMERICAL_LIBS` for a custom provider. R's link flags alone are not sufficient on every installation. |
 | `GLIBCXX_* not found` on Linux | R loaded an older system `libstdc++` before FAISS/RAPIDS libraries | Use a consistent compiler/runtime stack; set `LD_LIBRARY_PATH` and, if necessary for benchmarks, `LD_PRELOAD` to the intended `libstdc++.so.6`. |
 | CUDA build cannot find `nvcc` | CUDA toolkit is missing or not on path | Set `CUDA_HOME` and/or `NVCC`; check `nvcc --version`. |
 | cuVS routes unavailable | cuVS headers/library were not found at build time | Set `CUVS_HOME`, `FAISSR_USE_CUVS=1`, and runtime `LD_LIBRARY_PATH`. |
@@ -518,14 +527,14 @@ itself is valid.
 ```sh
 R CMD build .
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-R CMD check --as-cran faissR_0.99.40.tar.gz
+R CMD check --as-cran faissR_0.99.41.tar.gz
 ```
 
 Bioconductor submission checks are run in addition to `R CMD check`:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.40.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.41.tar.gz", `new-package` = TRUE)
 ```
 
 A CPU-only check should still finish with `Status: OK` once FAISS is installed;

@@ -1,0 +1,12 @@
+Bootstrap: localimage
+From: @UBUNTU_BASE@
+
+# Minimum-supported Rcpp regression profile, layered on the distribution image.
+%post
+    apt-get update
+    apt-get install -y --no-install-recommends r-cran-codetools devscripts qpdf
+    Rscript -e 'install.packages("https://cran.r-project.org/src/contrib/Archive/Rcpp/Rcpp_1.1.0.tar.gz", repos=NULL, type="source")'
+    rm -rf /var/lib/apt/lists/*
+
+%test
+    Rscript -e 'stopifnot(packageVersion("Rcpp") == "1.1.0")'

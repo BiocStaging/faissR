@@ -1,0 +1,9 @@
+diff --git a/faiss/impl/mapped_io.cpp b/faiss/impl/mapped_io.cpp
+--- a/faiss/impl/mapped_io.cpp
++++ b/faiss/impl/mapped_io.cpp
+@@ -173 +173 @@
+-            FAISS_THROW_FMT("could not get a HANDLE");
++            FAISS_THROW_MSG("could not get a HANDLE");
+@@ -179 +179 @@
+-            FAISS_THROW_FMT("could not get an OS HANDLE");
++            FAISS_THROW_MSG("could not get an OS HANDLE");
