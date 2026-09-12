@@ -5,17 +5,17 @@
 \title{Preflight nearest-neighbor metric inputs}
 \usage{
 nn_metric_preflight(
-    data,
-    points = NULL,
-    metric = c("euclidean", "cosine", "correlation"),
-    backend = NULL
+  data,
+  points = NULL,
+  metric = c("euclidean", "cosine", "correlation"),
+  backend = NULL
 )
 }
 \arguments{
-\item{data}{Numeric reference matrix, data frame, or optional
+\item{data}{Dense numeric reference matrix, data frame, or optional
 `float::fl()`/`float32` matrix.}
 
-\item{points}{Optional query object with the same number of columns as
+\item{points}{Optional dense query object with the same number of columns as
 `data`. `NULL` represents self-query and reuses the `data` inspection.}
 
 \item{metric}{One of `"euclidean"`, `"cosine"`, or `"correlation"`.}
@@ -25,12 +25,12 @@ follows the package backend option and environment-variable policy.}
 }
 \value{
 A list containing one-based `data_degenerate_rows` and
-    `points_degenerate_rows` for the metric-specific degenerate condition,
-    corresponding non-finite row indices, `would_succeed`, and a stable
-    `action` label. `data_rows` and `points_rows` are retained as compatibility
-    aliases. CPU cosine and correlation use the documented zero-normalized
-    convention; CUDA rejects affected rows. An automatic backend is reported
-    as backend-dependent.
+  `points_degenerate_rows` for the metric-specific degenerate condition,
+  corresponding non-finite row indices, `would_succeed`, and a stable
+  `action` label. `data_rows` and `points_rows` are retained as compatibility
+  aliases. CPU cosine and correlation use the documented zero-normalized
+  convention; CUDA rejects affected rows. An automatic backend is reported
+  as backend-dependent.
 }
 \description{
 Inspect reference and query rows for values that affect the public distance

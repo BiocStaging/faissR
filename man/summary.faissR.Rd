@@ -23,7 +23,7 @@
 }
 \value{
 A one-row data frame containing the principal dimensions, backend,
-    metric, and fit or residency metadata for `object`.
+  metric, and fit or residency metadata for `object`.
 }
 \description{
 These methods return compact one-row data frames describing nearest-neighbor

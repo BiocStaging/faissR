@@ -118,7 +118,7 @@ dependencies to be linked by the package using them.
 
 ```sh
 sudo apt-get install libfaiss-dev libblas-dev liblapack-dev
-R CMD INSTALL faissR_0.99.41.tar.gz
+R CMD INSTALL faissR_0.99.42.tar.gz
 ```
 
 On Linux, configure compiles a small FAISS client and loads it in a fresh R
@@ -131,7 +131,7 @@ availability, not every possible provider ABI or numerical operation.
 An administrator can explicitly select an ABI-compatible LP64 provider:
 
 ```sh
-FAISSR_NUMERICAL_LIBS="-llapack -lblas" R CMD INSTALL faissR_0.99.41.tar.gz
+FAISSR_NUMERICAL_LIBS="-llapack -lblas" R CMD INSTALL faissR_0.99.42.tar.gz
 ```
 
 For nonstandard prefixes, include `-L` and runtime-search-path flags in that
@@ -527,14 +527,14 @@ itself is valid.
 ```sh
 R CMD build .
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-R CMD check --as-cran faissR_0.99.41.tar.gz
+R CMD check --as-cran faissR_0.99.42.tar.gz
 ```
 
 Bioconductor submission checks are run in addition to `R CMD check`:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.41.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.42.tar.gz", `new-package` = TRUE)
 ```
 
 A CPU-only check should still finish with `Status: OK` once FAISS is installed;

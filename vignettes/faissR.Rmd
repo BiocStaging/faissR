@@ -1,15 +1,13 @@
 ---
-title: "faissR: nearest-neighbor search, prediction, and k-means"
+title: "faissR: nearest-neighbor search for Bioconductor workflows"
 author: "Stefano Cacciatore"
 package: faissR
 output:
     BiocStyle::html_document:
         toc: true
         toc_float: true
-header-includes:
-    - \usepackage{array}
 vignette: >
-    %\VignetteIndexEntry{faissR: nearest-neighbor search and prediction}
+    %\VignetteIndexEntry{faissR nearest-neighbor workflow}
     %\VignetteEngine{knitr::rmarkdown}
     %\VignetteEncoding{UTF-8}
 ---
@@ -21,233 +19,254 @@ knitr::opts_chunk$set(
     fig.width = 6,
     fig.height = 4
 )
-has_float <- requireNamespace("float", quietly = TRUE)
 ```
 
-# Overview
+<style>
+@media print {
+    #TOC,
+    .tocify,
+    .main-container > .row > .col-sm-4 {
+        display: none !important;
+    }
+    .toc-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+    body {
+        font-size: 10pt;
+    }
+    pre {
+        font-size: 7.5pt;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+    table {
+        font-size: 8pt;
+    }
+}
+</style>
 
-`faissR` provides native nearest-neighbour search, k-nearest-neighbour
-prediction, and k-means utilities for R
-workflows that use large row-wise matrices. The package is designed for
-high-throughput biological data analysis, including single-cell, flow
-cytometry, imaging, and mass spectrometry applications.
+# Introduction
 
-The package requires the FAISS C++ library for CPU indexes. CUDA, FAISS GPU
-indexes and NVIDIA cuVS are optional. CPU-only
-installations do not need NVIDIA libraries, and explicit CUDA requests fail
-clearly when CUDA support is not available.
+`faissR` provides exact and approximate nearest-neighbor search for dense
+row-wise matrices. A functional installation uses the FAISS C++ library on
+CPU; optional CUDA, FAISS GPU, and NVIDIA cuVS providers support GPU execution.
+The same metric and result conventions are used through the public R API.
 
-# Select a default execution backend
+This vignette follows one practical workflow:
 
-faissR uses CPU unless a backend is selected for the R session:
+1. load a dense single-cell representation;
+2. inspect the installed capabilities;
+3. run exact and HNSW searches;
+4. compare observed HNSW recall with an exact reference;
+5. reuse an index for prediction; and
+6. preflight input and metric edge cases.
 
-```r
-options(faissR.backend = "cuda")
-# Equivalent: faissR_backend("cuda")
-
-g <- nn(x, k = 30)                  # CUDA
-g.cpu <- nn(x, k = 30, backend = "cpu")
-g.auto <- nn(x, k = 30, backend = "auto")
-```
-
-For batch jobs, `FAISSR_BACKEND=cpu|cuda` is used when the R option is unset.
-Precedence is explicit argument, R option, environment variable, then CPU.
-Explicit `backend = "auto"` retains faissR's shape-aware routing. The current
-faissR implementation does not contain a Metal backend, so selecting `metal`
-fails clearly instead of silently changing the computation.
-
-Here `backend` is the requested execution **device** policy. The historical
-metadata field `backend_used` is the concrete resolved **provider/route** (for
-example, `faiss_hnsw`) and is retained for API compatibility.
-
-The main public functions are:
-
-| Function | Purpose |
-|---|---|
-| `nn()` | nearest-neighbour search on host matrices |
-| `nn_gpu()` | GPU-resident exact-family KNN result for downstream CUDA code |
-| `candidate_knn()` | refine a supplied candidate neighbour set |
-| `knn()` and `predict()` | supervised kNN fitting and prediction |
-| `fast_kmeans()` | CPU or optional CUDA k-means |
-| `backend_info()` and `nn_capabilities()` | inspect compiled backends |
-| `print()` and `summary()` | inspect result and fitted-model metadata |
-
-## Input, result, and lifecycle contract
-
-The search interfaces accept dense numeric matrices, data frames, and optional
-`float::fl()` matrices, with observations in rows. Sparse, delayed, and
-file-backed matrices are not searched in place. Matrix-like objects may be
-eagerly materialized by `as.matrix()`, which can densify the input; explicitly
-materialize or batch these objects before search when memory matters. A direct
-FAISS/cuVS route converts an ordinary R double matrix to contiguous float32
-storage (about `4 * nrow(x) * ncol(x)` temporary bytes) while the original R
-matrix remains live. A supported direct `float` adapter can avoid the numeric
-conversion, although metadata may still report a layout copy.
-
-`nn()` returns a `faissR_nn` list whose integer `indices` and `distances` have
-one row per query and one column per neighbor. Identifiers are one-based.
-Duplicate observations retain distinct identifiers and can have distance zero.
-For self-search, `exclude_self = TRUE` removes only the query row identifier;
-if an approximate candidate list omitted that identifier, faissR retains the
-first `k` non-self candidates rather than removing another row.
-Host identifiers and GPU identifiers use signed 32-bit integers, so the public
-row-identifier limit is `.Machine$integer.max` (2,147,483,647). Provider and
-memory limits are normally much lower.
-
-Fitted FAISS indexes and GPU results contain session-local external pointers.
-There is no public manual destroy function: the owning object's finalizer
-releases native allocations after the object becomes unreachable. A saved and
-reloaded `faissR_knn_model` rebuilds its requested route through the ordinary
-search path before prediction; that first post-reload call reports
-`query_source = "nn"`, not `"fitted_index"`. Native index serialization is not
-supported. A `faissR_gpu_knn` object cannot
-be serialized or shared across processes/devices. Keep its owner alive until
-all downstream CUDA work has completed, then allow normal garbage collection.
-
-# Installation contract
-
-FAISS is mandatory. A source installation stops when its headers or library
-cannot be found; it does not silently substitute an unrelated nearest-neighbor
-implementation. On macOS, a typical system installation is
-`brew install faiss libomp`. On Linux, install the distribution's FAISS
-development package or set `FAISS_HOME` to a prefix containing
-`include/faiss` and `lib/libfaiss`. CUDA and cuVS are optional unless a GPU
-build is explicitly requested.
-
-Automatic Homebrew installation is never enabled by default. GitHub users who
-explicitly want that convenience can set
-`FAISSR_AUTO_INSTALL_FAISS=1` before installation. Unsupported WebAssembly and
-package-staging platforms can compile diagnostic stubs for portability checks;
-those artifacts report that native search is unavailable and are not
-functional FAISS builds.
+All computational chunks are evaluated. CUDA code is evaluated conditionally
+and prints a skip message when the package was built without CUDA support.
+Detailed build instructions are available in
+`vignette("installation", package = "faissR")`.
 
 # Example data
 
-The examples use `Biobase::sample.ExpressionSet`, a Bioconductor example
-expression dataset. The assay contains samples in columns and features in rows.
-The code transposes the assay, retains the 128 features with the largest
-variance, and standardizes them. The resulting sample-by-feature matrix follows
-the input convention used by `faissR`, while the bundled case/control `type`
-annotation is used as a classification response.
+The installed example is derived from the public Zeisel mouse-brain
+single-cell RNA-sequencing data distributed by `scRNAseq`. It contains 50 PCA
+coordinates and cell annotations for 3,005 cells, but no expression matrix.
+The source URLs, complete preprocessing procedure, seed, and package versions
+are recorded by `inst/scripts/prepare_zeisel_brain_pca.R` and documented in
+`?zeisel_brain_pca`.
 
-```{r data}
+```{r data, message=FALSE, warning=FALSE}
 library("faissR")
+library("SingleCellExperiment")
 
-data("sample.ExpressionSet", package = "Biobase")
-expression_data <- Biobase::exprs(sample.ExpressionSet)
-feature_variance <- apply(expression_data, 1L, stats::var)
-selected_features <- order(feature_variance, decreasing = TRUE)[seq_len(128L)]
-x <- scale(t(expression_data[selected_features, , drop = FALSE]))
+example_file <- system.file(
+    "extdata", "zeisel_brain_pca.rds", package = "faissR"
+)
+sce <- readRDS(example_file)
+x <- reducedDim(sce, "PCA")
 storage.mode(x) <- "double"
-groups <- droplevels(Biobase::pData(sample.ExpressionSet)$type)
+groups <- droplevels(factor(colData(sce)$level1class))
+
 dim(x)
-table(groups)
+head(table(groups), 6L)
 ```
 
-# Backends
+Nearest-neighbor search should normally receive a dense low-dimensional
+representation such as PCA scores, not a full sparse gene-by-cell count
+matrix. The following table estimates the principal host allocations for 50
+PCs and `k = 30` without allocating the larger matrices.
 
-`backend_info()` reports which compiled routes are available in the current R
-session. On a CPU-only machine, CUDA-related entries are expected to be
-unavailable.
-
-```{r backends}
-available_backends <- backend_info()
-available_backends <- available_backends[
-    c("backend", "available", "knn_available")
-]
-available_backends
-```
-
-`nn_capabilities()` gives method, backend, and metric support. The table can be
-large, so the example below shows only CPU Euclidean rows.
-
-```{r capabilities}
-caps <- nn_capabilities()
-subset(
-    caps,
-    backend == "cpu" & metric == "euclidean",
-    select = c("method", "backend", "metric", "supported", "exact")
+```{r memory-budget}
+cells <- c(3005, 100000, 1000000)
+data.frame(
+    cells = cells,
+    input_double_MiB = round(8 * cells * 50 / 1024^2, 1),
+    native_float32_MiB = round(4 * cells * 50 / 1024^2, 1),
+    result_MiB = round((4 + 8) * cells * 30 / 1024^2, 1)
 )
 ```
 
-# Nearest-neighbour search
+The result estimate includes int32 identifiers and R double distances. Exact
+full self-search also has quadratic computational cost, so large studies will
+usually require an approximate method, an exact validation subsample, and an
+explicit memory budget.
 
-The main entry point is `nn()`. Use `exclude_self = TRUE` for self-KNN when
-each row is searched against the same matrix and should not return itself.
+# Inspect execution capabilities
 
-```{r nn-exact}
-nearest <- nn(
-    x,
-    k = 5,
-    backend = "cpu",
-    method = "exact",
-    metric = "euclidean",
-    exclude_self = TRUE,
-    n_threads = 2
+Hardware visibility and package capability are different questions. The
+terminology here follows the framework-independent distinction used by the
+[`gpuinfo` project](https://github.com/tkcaccia/gpuinfo): a visible GPU or
+driver does not prove that a consuming R package was compiled with a usable
+GPU provider.
+
+In `faissR`:
+
+- `faissR_backend()` reads or sets the requested session device;
+- `backend_info()` reports providers compiled into this installation and
+  whether their runtimes are currently usable;
+- `nn_capabilities(runtime = TRUE)` checks a method, device, and metric
+  combination; and
+- `cuda_available()` is package-specific: it requires both a CUDA-enabled
+  `faissR` build and a runtime-visible device.
+
+The separate `gpuinfo` project can provide platform-level hardware diagnosis.
+`faissR` does not currently import it; package-specific provider checks remain
+authoritative for deciding whether a `faissR` call can execute.
+
+```{r backend-status}
+faissR_backend()
+
+backend_info()[, c(
+    "backend", "available", "device"
+)]
+
+cpu_euclidean <- subset(
+    nn_capabilities(runtime = TRUE),
+    backend == "cpu" & metric == "euclidean"
 )
-
-nearest
-summary(nearest)
-dim(nearest$indices)
-head(nearest$indices)
-head(round(nearest$distances, 3))
+cpu_euclidean[, c(
+    "method", "supported", "runtime_available", "resolved_backend"
+)]
 ```
 
-The returned object stores both the public request and the implementation that
-actually ran.
+CPU is the default. An explicit function argument has highest precedence,
+followed by `options(faissR.backend)`, `FAISSR_BACKEND`, and finally CPU.
 
-```{r nn-metadata}
+```{r backend-precedence}
+old_backend <- faissR_backend("cpu")
+stopifnot(identical(faissR_backend(), "cpu"))
+```
+
+An explicit `backend = "cuda"` never silently falls back to CPU. `faissR`
+does not provide a Metal backend.
+
+# Run a nearest-neighbor search
+
+Use `exclude_self = TRUE` when the query and reference are the same rows and a
+row must not return its own identifier.
+
+```{r exact-search}
+exact_time <- system.time(
+    exact <- nn(
+        x,
+        k = 15,
+        backend = "cpu",
+        method = "exact",
+        metric = "euclidean",
+        exclude_self = TRUE,
+        n_threads = 2
+    )
+)[["elapsed"]]
+
+exact
+dim(exact$indices)
+head(exact$indices, 3L)
+head(round(exact$distances, 3), 3L)
+```
+
+Indices are one-based R integers. Distances are sorted within each query row.
+The returned metadata distinguishes the user request from the provider that
+actually executed it.
+
+```{r result-metadata}
 c(
-    requested_backend = attr(nearest, "requested_backend"),
-    requested_method = attr(nearest, "requested_method"),
-    backend_used = attr(nearest, "backend_used"),
-    metric = attr(nearest, "metric"),
-    distance_type = attr(nearest, "distance_type"),
-    exact = attr(nearest, "exact"),
-    exclude_self = attr(nearest, "exclude_self")
+    requested_backend = attr(exact, "requested_backend"),
+    requested_method = attr(exact, "requested_method"),
+    backend_used = attr(exact, "backend_used"),
+    metric = attr(exact, "metric"),
+    exact = attr(exact, "exact"),
+    exclude_self = attr(exact, "exclude_self"),
+    input_type = attr(exact, "input_type")
 )
 ```
 
-`exact`, `flat`, and `bruteforce` all request exhaustive mathematics, but they
-express different provider intentions. `exact` lets faissR choose an exhaustive
-provider, `flat` explicitly requests FAISS Flat, and CUDA `bruteforce` prefers
-direct cuVS brute force. They should have the same neighbor quality; timing
-differences measure provider and wrapper overhead.
+`exact`, `flat`, and `bruteforce` request exhaustive mathematics but express
+different provider intentions:
 
-* `exact` uses FAISS Flat on CPU. On CUDA it resolves to FAISS GPU Flat or
-    direct cuVS brute force. Choose it when any exhaustive provider is
-    acceptable.
-* `flat` explicitly requires FAISS Flat on CPU or CUDA and errors when that
-    provider is unavailable.
-* `bruteforce` uses FAISS Flat on CPU. On CUDA it prefers direct cuVS brute
-    force and otherwise uses FAISS GPU Flat.
+| Method | Practical use |
+|---|---|
+| `exact` | Let `faissR` choose an available exhaustive provider. |
+| `flat` | Require a FAISS Flat provider. |
+| `bruteforce` | Prefer direct cuVS on CUDA; use FAISS Flat on CPU. |
 
-The metric-specific value in `backend_used` is authoritative for the current
-installation.
+The `backend_used` attribute is the authoritative resolved implementation.
 
-## Automatic method selection
+# Approximate search and observed recall
 
-The automatic arguments act at different levels:
+HNSW trades exactness for speed and index storage. `tuning = "auto"` chooses
+parameters for the resolved method. `target_recall` accepts the calibrated
+tiers 0.90, 0.95, and 0.99; it is not interpolated. For a new application,
+measure observed recall on representative queries against an exact reference.
+
+```{r hnsw-search}
+hnsw_time <- system.time(
+    hnsw <- nn(
+        x,
+        k = 15,
+        backend = "cpu",
+        method = "hnsw",
+        metric = "euclidean",
+        tuning = "auto",
+        target_recall = 0.99,
+        exclude_self = TRUE,
+        n_threads = 2
+    )
+)[["elapsed"]]
+
+query_recall <- vapply(
+    seq_len(nrow(exact$indices)),
+    function(i) mean(hnsw$indices[i, ] %in% exact$indices[i, ]),
+    numeric(1L)
+)
+
+c(
+    elapsed_seconds = unname(hnsw_time),
+    mean_recall = mean(query_recall),
+    fifth_percentile_recall = unname(quantile(query_recall, 0.05)),
+    minimum_recall = min(query_recall),
+    backend_used = attr(hnsw, "backend_used")
+)
+```
+
+# Automatic selection
+
+Three arguments control different decisions:
 
 | Argument | Decision |
 |---|---|
-| `backend = "auto"` | choose the CPU/CUDA execution device |
-| `method = "auto"` | choose a method family using the experimental policy |
-| `tuning = "auto"` | choose parameters within the resolved method |
-| `target_recall` | choose one discrete tier: 0.90, 0.95, or 0.99 |
+| `backend = "auto"` | choose CPU or CUDA |
+| `method = "auto"` | choose a method family |
+| `tuning = "auto"` | choose parameters within that method |
 
-The default `method = "auto"` uses compiled shape-, metric-, `k`-, backend-,
-and target-recall-aware rules. These rules are deterministic; they do not run a
-slow tuning pass inside ordinary user calls.
-For approximate methods, `target_recall` selects a calibrated operating policy;
-it accepts only `0.90`, `0.95`, or `0.99`. Other values error; faissR neither
-rounds nor interpolates between tiers. The value is a requested recall tier,
-not a guarantee for a new dataset. Inspect
-`tuning_benchmark_target_met` in the returned metadata and validate recall
-against an exact reference when the application requires a quality bound.
+`method = "auto"` is a static, calibration-informed experimental policy. It
+does not benchmark the current data during an ordinary call. CPU automatic
+selection has less independent validation than the CUDA policy; use an
+explicit method when reproducibility, memory, or latency constraints require a
+fixed route.
 
-```{r nn-auto}
-auto_nearest <- nn(
+```{r auto-selection}
+auto_result <- nn(
     x,
     k = 8,
     backend = "cpu",
@@ -258,110 +277,25 @@ auto_nearest <- nn(
 )
 
 c(
-    requested_device = attr(auto_nearest, "requested_backend"),
-    selected_route = attr(auto_nearest, "auto_selection")$predicted_method,
-    resolved_provider = attr(auto_nearest, "backend_used"),
-    requested_recall_tier = attr(auto_nearest, "target_recall"),
-    attained_status = if (isTRUE(attr(auto_nearest, "exact"))) {
-        "exact_audited"
-    } else {
-        "inspect_approximation_evidence"
-    },
-    evidence_source = attr(auto_nearest, "auto_selection")$policy,
-    hardware_evidence = attr(auto_nearest, "auto_selection")$hardware_evidence,
-    input_conversion = attr(auto_nearest, "memory_layout"),
-    index_reused = FALSE,
-    device_to_host_result_copies = 0L
+    requested_method = attr(auto_result, "requested_method"),
+    selected_method = attr(auto_result, "auto_selection")$predicted_method,
+    backend_used = attr(auto_result, "backend_used"),
+    policy_status = attr(auto_result, "auto_policy_status")
 )
 ```
 
-CPU automatic selection is a calibration-informed experimental static policy;
-it does not have the independent installed-policy validation reported for CUDA.
-The printed object and `auto_policy_status` make that evidence distinction
-visible. Automatic selection currently has no memory budget, build/latency
-deadline, or `allow_exhaustive = FALSE` control. Use an explicit method when
-those operational constraints apply.
+# Metrics and edge cases
 
-For large two- or three-dimensional self-KNN, `method = "auto"` can select the
-native grid route. CPU and CUDA have separate implementations. The explicit
-CPU call below demonstrates the API on a small two-dimensional matrix.
+The public metric set is `"euclidean"`, `"cosine"`, and `"correlation"`.
+Euclidean results are ordinary L2 distances, not squared values. Cosine
+normalizes rows; correlation centers and then normalizes rows. All routes
+reject `NA`, `NaN`, and infinite input.
 
-```{r grid}
-x2 <- cbind(
-    x = (seq_len(1000L) - 1L) / 999,
-    y = ((seq_len(1000L) * 37L) %% 1000L) / 999
-)
-grid_nearest <- nn(
-    x2,
-    k = 10,
-    backend = "cpu",
-    method = "grid",
-    metric = "euclidean",
-    exclude_self = TRUE,
-    n_threads = 2
-)
-
-c(
-    backend_used = attr(grid_nearest, "backend_used"),
-    k = attr(grid_nearest, "k")
-)
-```
-
-CUDA uses its native grid implementation. Explicit CUDA calls fail when the
-requested route is unavailable and never report a CPU fallback as GPU work.
-
-```{r cuda-grid, eval=FALSE}
-cuda_nearest <- nn(
-    x2,
-    k = 10,
-    exclude_self = TRUE,
-    backend = "cuda",
-    method = "grid",
-    metric = "euclidean"
-)
-```
-
-The same failure rule applies before launch. For example, CAGRA is CUDA-only:
-
-```{r unsupported-combination, eval=FALSE}
-nn(
-    x,
-    k = 5,
-    backend = "cpu",
-    method = "cagra",
-    exclude_self = TRUE
-)
-```
-
-# Metrics
-
-The package-owned candidate-graph refinements use the preferred request names
-`nsg_style`, `vamana_style`, and `nndescent_style`. The shorter historical names
-remain compatibility aliases. Returned metadata and `print()` explicitly state
-that these are experimental package-owned derived graph algorithms rather than
-canonical reproductions;
-`preferred_public_method` records the unambiguous spelling, and
-direct cuVS NN-descent is identified as an external-provider route.
-
-The public metric set is intentionally small:
-
-- `euclidean`;
-- `cosine`;
-- `correlation`.
-
-Cosine normalizes each row before searching. Correlation first centers each row
-and then applies row normalization. Every result declares whether its values
-form a metric and whether they are comparable across query rows. Euclidean
-results are ordinary L2 distances, not squared L2 values. All backends reject
-non-finite input. CPU routes apply the documented finite convention to
-all-zero cosine rows and constant correlation rows; explicit CUDA routes reject
-those rows. The explicit preflight scan reports affected one-based row indices
-without running a search.
-
-Normalization scales each row in double precision before computing its norm
-and converting to float32. This avoids overflow or underflow from squaring
-extreme finite inputs. Euclidean FAISS/CUDA input must fit in float32, and
-measurement units should also keep squared distances within provider precision.
+Zero vectors have undefined cosine distance, and constant rows have undefined
+correlation distance. CPU routes apply documented finite conventions; CUDA
+routes reject those rows because no CPU repair is performed. Use
+`nn_metric_preflight()` before an expensive call to identify affected
+one-based row indices and the backend action.
 
 ```{r metric-preflight}
 edge_x <- rbind(c(0, 0), c(1, 0), c(1, 1))
@@ -372,247 +306,134 @@ nn_metric_preflight(
 )
 ```
 
-```{r metrics}
-metric_results <- lapply(
-    c("euclidean", "cosine", "correlation"),
-    function(metric) {
-        out <- nn(
-            x,
-            k = 5,
-            backend = "cpu",
-            method = "exact",
-            metric = metric,
-            exclude_self = TRUE,
-            n_threads = 2
-        )
-        data.frame(
-            metric = metric,
-            backend_used = attr(out, "backend_used"),
-            first_distance = round(out$distances[1, 1], 4)
-        )
-    }
-)
+Unsupported method, backend, and metric combinations fail explicitly. The
+capability table can be used to filter a workflow before execution.
 
-do.call(rbind, metric_results)
+```{r unsupported-combination}
+tryCatch(
+    nn(x, k = 5, backend = "cpu", method = "cagra"),
+    error = function(e) conditionMessage(e)
+)
 ```
 
-# Float32 input and output
+# Dense input contract
 
-FAISS and cuVS consume float32 data internally. Ordinary R numeric matrices are
-converted once for those compiled routes. If the optional `float` package is
-installed, `faissR` can also accept `float::fl()` input and return float32
-distance matrices with `output = "float"`. The native float32 example requires
-a functional FAISS installation and is not executed by diagnostic-only builds.
+`faissR` searches dense, two-dimensional numeric data only. Accepted inputs
+are numeric matrices, numeric data frames, and optional `float::fl()`
+matrices, with observations in rows. It does not implement sparse nearest-
+neighbor search. Sparse, delayed, file-backed, and other matrix-like objects
+are rejected before conversion and are never silently materialized with
+`as.matrix()`.
 
-```{r float32, eval=faiss_available() && has_float}
-xf <- float::fl(x)
-
-float_nearest <- nn(
-    xf,
-    k = 5,
-    backend = "cpu",
-    method = "flat",
-    metric = "euclidean",
-    exclude_self = TRUE,
-    output = "float",
-    n_threads = 2
+```{r sparse-input-guard}
+sparse_example <- Matrix::Matrix(diag(4), sparse = TRUE)
+tryCatch(
+    nn(sparse_example, k = 1),
+    error = function(e) conditionMessage(e)
 )
+```
+
+For single-cell data, keep the expression or count assay sparse during
+normalization and dimension reduction, then pass a dense, size-checked cell
+embedding such as PCA coordinates to `faissR`. If direct materialization is
+appropriate for another workflow, it must be performed explicitly by the
+caller before the `faissR` call.
+
+Ordinary R double matrices are converted internally to contiguous float32
+storage for FAISS and cuVS. This numeric conversion applies only after the
+input has passed the dense-input check. The original R object remains live
+during conversion, so the double source, float32 payload, index workspace,
+and result must all fit in host memory.
+
+# Reuse an index for prediction
+
+`knn()` creates a fitted classification or regression model. Supported FAISS
+indexes are retained for later `predict()` calls in the same R session. Native
+indexes are session-local external pointers: after `saveRDS()` and
+`readRDS()`, the R model remains usable but the native index is rebuilt on the
+first prediction.
+
+```{r fitted-model}
+build_time <- system.time(
+    fit <- knn(
+        Xtrain = x,
+        Ytrain = groups,
+        k = 7,
+        backend = "cpu",
+        method = "exact",
+        metric = "euclidean",
+        n_threads = 2
+    )
+)[["elapsed"]]
+
+query_time <- system.time(
+    prediction <- predict(fit, x[1:12, , drop = FALSE])
+)[["elapsed"]]
 
 c(
-    input_type = attr(float_nearest, "input_type"),
-    distance_type = attr(float_nearest, "distance_type")
+    build_seconds = unname(build_time),
+    query_seconds = unname(query_time),
+    query_source = attr(prediction, "faissR_nn")$query_source,
+    backend_used = attr(prediction, "faissR_nn")$resolved_backend
 )
-class(float_nearest$distances)
+head(as.vector(prediction))
 ```
 
-# Reusing fitted indexes with kNN models
+The imported `Biobase` package is supported for conventional
+`ExpressionSet` workflows. Samples are stored in columns, so transpose the
+assay before search.
 
-`knn()` can fit a model for repeated prediction, or it can fit and predict in
-one call when `Xtest` is supplied. Fitted FAISS Flat, HNSW, IVF, and IVFPQ
-indexes are reused by `predict()` where supported. Changing `target_recall`
-for a fitted HNSW, IVF, or IVFPQ model resolves the new tier through a fresh
-search instead of silently reusing settings for the original tier. The
-prediction metadata then records `query_source = "nn"`, and the fitted
-object itself remains unchanged.
-
-```{r knn-fit}
-fit <- knn(
-    Xtrain = x,
-    Ytrain = groups,
-    k = 7,
-    backend = "cpu",
-    method = "exact",
-    metric = "euclidean",
-    n_threads = 2
-)
-
-pred <- predict(fit, x[1:6, , drop = FALSE])
-prob <- predict(fit, x[1:6, , drop = FALSE], type = "prob")
-
-summary(fit)
-as.vector(pred)
-prob_display <- matrix(
-    as.numeric(prob),
-    nrow = nrow(prob),
-    dimnames = dimnames(prob)
-)
-round(prob_display, 3)
-```
-
-Serialization preserves the R model but not its native index. This executable
-example makes the rebuild visible:
-
-```{r knn-serialization}
-path <- tempfile(fileext = ".rds")
-saveRDS(fit, path)
-restored <- readRDS(path)
-restored_prediction <- predict(restored, x[1:6, , drop = FALSE])
-attr(restored_prediction, "faissR_nn")$query_source
-unlink(path)
-```
-
-Immediate prediction uses the same interface:
-
-```{r knn-immediate}
-immediate <- knn(
-    Xtrain = x,
-    Ytrain = groups,
-    Xtest = x[1:6, , drop = FALSE],
-    k = 7,
-    backend = "cpu",
-    method = "exact",
-    metric = "euclidean",
-    n_threads = 2
-)
-
-as.vector(immediate)
-```
-
-# Candidate refinement
-
-`candidate_knn()` ranks only the supplied candidate rows. Insufficient valid,
-distinct candidates give `NA` indices and `Inf` distances on CPU and CUDA;
-the function never fills these positions with rows outside the supplied set.
-CUDA requires self-query scoring with `exclude_self = TRUE` and `k <= 256`.
-This is useful when
-another algorithm constructs a graph or a broad candidate pool and faissR
-should apply the final metric consistently.
-
-```{r candidate-refinement}
-candidates <- nearest$indices
-refined <- candidate_knn(
-    data = x,
-    points = x,
-    candidates = candidates,
+```{r biobase-example}
+data("sample.ExpressionSet", package = "Biobase")
+biobase_x <- t(Biobase::exprs(sample.ExpressionSet)[seq_len(32L), ])
+biobase_result <- nn(
+    biobase_x,
     k = 3,
-    metric = "euclidean",
-    exclude_self = TRUE,
-    n_threads = 2
-)
-summary(refined)
-```
-
-# k-means
-
-`fast_kmeans()` uses the same backend style as the nearest-neighbour functions.
-The CPU route is available everywhere; CUDA is optional.
-
-```{r kmeans}
-km <- fast_kmeans(
-    x,
-    centers = 2,
     backend = "cpu",
-    n_init = 2,
-    max_iter = 20
+    method = "exact",
+    exclude_self = TRUE
 )
-
-summary(km)
-c(
-    backend = km$backend,
-    backend_library = km$backend_library,
-    converged = km$converged
-)
-table(km$cluster, groups)
+dim(biobase_result$indices)
 ```
 
-# Optional CUDA use
+# Optional CUDA execution
 
-CUDA-specific calls should be guarded with `cuda_available()` or inspected with
-`backend_info()`. The example below is not evaluated on CPU-only builders.
+Guard CUDA work with the package-specific `cuda_available()` predicate. The
+conditional code below is evaluated on every builder; only the GPU operation
+is skipped when CUDA is unavailable.
 
-```{r cuda-example, eval=FALSE}
+```{r cuda-example}
 if (cuda_available()) {
-    gpu_knn <- nn_gpu(
+    cuda_result <- nn(
         x,
         k = 15,
-        exclude_self = TRUE,
-        method = "auto",
+        backend = "cuda",
+        method = "exact",
         metric = "euclidean",
-        tuning = "auto",
-        target_recall = 0.99
+        exclude_self = TRUE
     )
-
-    gpu_knn
-    host_copy <- gpu_knn_to_host(gpu_knn)
+    c(
+        backend_used = attr(cuda_result, "backend_used"),
+        device = attr(cuda_result, "device")
+    )
+} else {
+    cat(
+        "CUDA example skipped: this faissR installation has ",
+        "no usable CUDA route."
+    )
 }
 ```
 
-`nn_gpu()` is for downstream CUDA consumers. It keeps result buffers resident on
-the GPU and copies them back to R only when `gpu_knn_to_host()` is called
-explicitly. Its current public method set is intentionally limited to
-`"auto"`, `"exact"`, `"flat"`, and `"bruteforce"`. Euclidean inputs with more
-than three columns use the FAISS GPU direct brute-force primitive when
-available. Two- and three-dimensional Euclidean inputs use a
-native direct-difference CUDA kernel to avoid float32 cancellation for nearly
-coincident vectors. Cosine and correlation use the native CUDA exact route
-after their documented row transformations. If ordinary
-`nn(method = "auto", backend = "cuda")` would
-prefer an approximate method, the GPU-resident object records that preference
-and the exact-family residency constraint instead of silently claiming that
-the approximate route executed.
+`nn_gpu()` serves a different workflow: it returns an owning
+`faissR_gpu_knn` object whose neighbor buffers stay on the device until
+`gpu_knn_to_host()` is called. This is intended for compiled downstream CUDA
+consumers. The object must remain alive while non-owning device pointers are in
+use and cannot be serialized across sessions or devices. See `?nn_gpu` and
+`?faissR_c_api` for the ownership and C-callable interface contracts.
 
-## Compiled inter-package API
-
-CUDA-enabled downstream R packages can consume the same device-resident result
-without calling an R wrapper or copying through host matrices. They should add
-`faissR` to `LinkingTo`, include the installed `<faissR_api.h>` header, check
-that `faissR_c_api_version()` returns the ABI version they support, and obtain
-the typed function pointer with `faissR_get_nn_cuda_tuned_gpu()`. The callable
-returns the same owning `faissR_gpu_knn` external-pointer object as `nn_gpu()`.
-The R object must remain protected while downstream C++ or CUDA code uses its
-non-owning device pointers; only `gpu_knn_to_host()` performs an explicit host
-copy. The header also provides typed accessors for the host-returned float32
-nearest-neighbour callables.
-
-# Reproducibility and third-party software
-
-Every nearest-neighbour result records the requested and resolved route,
-metric, exactness, self-exclusion policy, input/output precision, and available
-provider-specific tuning metadata. These fields should be archived with
-benchmark results rather than inferred later from a method label.
-
-The publication benchmark launchers additionally pin the package version and
-40-character source commit. Raw timing rows and exact-reference objects record
-both the required package commit and the commit embedded in the container; the
-freeze audit rejects missing or unequal identities before aggregation.
-The repository's phase-aware HPC submitter preserves one method/backend/metric
-per Slurm launcher and persists its ledger after every submission, including
-partial phases. The compact JSS replication script remains a separate CPU path
-that can be run on an ordinary computer.
-
-`faissR` is MIT licensed. FAISS, CUDA, and cuVS remain external system
-libraries under their own licenses. The package includes a small adaptation of
-the public DLPack C ABI definitions under Apache License 2.0; its installed
-third-party notice and full license are available through:
-
-```{r third-party-notices}
-stopifnot(nzchar(system.file("THIRD-PARTY-NOTICES", package = "faissR")))
-license_file <- system.file(
-    "licenses", "DLPACK-LICENSE.txt", package = "faissR"
-)
-stopifnot(nzchar(license_file))
-cat("Third-party notices installed: TRUE")
-```
+`candidate_knn()` and `fast_kmeans()` are secondary interfaces that reuse the
+same metric and backend infrastructure. Their complete contracts and examples
+are available in `?candidate_knn` and `?fast_kmeans`.
 
 # Session information
 

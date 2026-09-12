@@ -79,9 +79,9 @@ bash harness/linux/build.sh harness/linux/ubuntu24-rcpp11.def ubuntu24-rcpp110
 Point the Ubuntu matrix entry at this image. The distribution's older Rcpp is
 intentionally retained in the base image for negative dependency testing;
 faissR requires Rcpp >= 1.1.0 in both Imports and LinkingTo. The latter is
-essential to reject old headers before compilation; the R >= 3.0.2 dependency
-declares the R feature required for versioned LinkingTo constraints, not a
-claim that the modern native toolchain has been tested on that old R release.
+essential to reject old headers before compilation. The package currently
+declares R >= 4.6.0 because it targets the Bioconductor 3.24 development
+branch; this is a submission baseline rather than an algorithmic requirement.
 The recipes install `checkbashisms` (devscripts) and qpdf for complete checks.
 `check-tools.def` adds these to an older image without replacing the original.
 The Debian custom R must have Cairo support for BiocStyle's SVG device. The

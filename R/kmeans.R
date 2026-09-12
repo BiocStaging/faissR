@@ -6,7 +6,8 @@
 #' when available. Explicit GPU requests fail clearly instead of silently
 #' changing to CPU.
 #'
-#' @param data Numeric matrix with observations in rows.
+#' @param data Dense numeric matrix with observations in rows. Sparse, delayed,
+#'   file-backed, and other matrix-like objects are rejected before conversion.
 #' @param centers Number of clusters.
 #' @param backend Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
 #'   uses CUDA only when CUDA plus FAISS GPU k-means or direct cuVS k-means is
@@ -139,6 +140,7 @@ fast_kmeans <- function(
 }
 
 validate_kmeans_data <- function(data) {
+    validate_dense_matrix_input(data, "data")
     x <- as.matrix(data)
     storage.mode(x) <- "double"
     if (nrow(x) < 1L || ncol(x) < 1L) {

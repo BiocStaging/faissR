@@ -427,11 +427,14 @@ approximate candidate list omitted that identifier, the first $k$ non-self
 candidates are retained rather than discarding another row.
 
 The accepted in-memory contract is a dense numeric matrix/data frame or a
-\pkg{float} matrix, with observations in rows. Sparse, delayed, and file-backed
-representations are not searched in place; generic matrix-like objects passed
-through \code{as.matrix} may be eagerly materialized and densified. Users
-should explicitly materialize or batch such inputs. FAISS/cuVS routes convert
-ordinary R doubles to contiguous row-major float32 storage, requiring a
+\pkg{float} matrix, with observations in rows. \pkg{faissR} does not implement
+sparse nearest-neighbor search. Sparse, delayed, file-backed, and other
+matrix-like representations are rejected before conversion, so the package
+never silently densifies them through \code{as.matrix}. For single-cell
+workflows, the sparse assay should remain sparse during preprocessing and a
+dense, size-checked representation such as PCA coordinates should be supplied
+to \pkg{faissR}. FAISS/cuVS routes convert ordinary R doubles to contiguous
+row-major float32 storage only after the dense-input check, requiring a
 temporary payload of approximately $4np$ bytes in addition to the source R
 matrix and provider-owned index/workspace. Supplying \pkg{float} input can
 avoid the numeric conversion where a direct adapter is available.
@@ -472,7 +475,7 @@ A typical macOS CPU installation is:
 \begin{CodeChunk}
 \begin{CodeInput}
 brew install faiss libomp
-R> install.packages("faissR_0.99.37.tar.gz", repos = NULL, type = "source")
+R> install.packages("faissR_0.99.42.tar.gz", repos = NULL, type = "source")
 R> backend_info()
 R> subset(nn_capabilities(runtime = TRUE), available)
 \end{CodeInput}
@@ -805,7 +808,7 @@ Debian 13, OpenBLAS 0.3.33, and a checksummed Singularity image.
 the supplementary environment table records the principal software identities;
 the supplement provides the remaining environment and hardware details.
 
-The article accompanies \pkg{faissR} 0.99.37. Experiment-specific package,
+The article accompanies \pkg{faissR} 0.99.42. Experiment-specific package,
 provider, container, and data fingerprints are retained in the replication
 archive and are analyzed under their recorded identities rather than relabelled
 as the current build. Timing ratios are computed within their matched

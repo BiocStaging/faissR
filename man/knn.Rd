@@ -24,11 +24,13 @@ type = c("response", "prob"),
 )
 }
 \arguments{
-\item{Xtrain}{Numeric training matrix or optional
+\item{Xtrain}{Dense numeric training matrix or optional
 \code{float::fl()}/\code{float32} matrix with observations in rows. Float32
-inputs are preserved for \code{nn()} methods with direct float32 adapters.}
+inputs are preserved for \code{nn()} methods with direct float32 adapters.
+Sparse, delayed, file-backed, and other matrix-like objects are rejected
+before conversion.}
 \item{Ytrain}{Training labels or numeric response.}
-\item{Xtest}{Optional numeric or float32 query matrix. If supplied,
+\item{Xtest}{Optional dense numeric or float32 query matrix. If supplied,
 \code{knn()} returns predictions for \code{Xtest}; otherwise it returns a
 fitted model.}
 \item{backend}{Device backend passed to \code{nn()}: \code{"auto"},

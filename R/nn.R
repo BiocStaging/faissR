@@ -11588,7 +11588,11 @@ grid_self_knn <- function(
 #'   object of reference observations in rows. FAISS CPU/GPU and RAPIDS cuVS
 #'   nearest-neighbour routes use direct float-pointer adapters for float32
 #'   inputs. Native routes without a direct float32 adapter fail clearly instead
-#'   of silently converting benchmark input back to R double.
+#'   of silently converting benchmark input back to R double. Sparse, delayed,
+#'   file-backed, and other matrix-like objects are rejected before conversion
+#'   to prevent accidental dense materialization; compute a dense
+#'   low-dimensional representation or explicitly materialize a manageable
+#'   block first.
 #' @param points Numeric matrix/data frame or optional `float::fl()`/`float32`
 #'   query object with observations in rows. Defaults to `data`. A float32
 #'   query can be paired with an ordinary R double reference matrix on direct
@@ -11899,8 +11903,9 @@ nn <- function(
 #' `options(faissR.warn_hardware_extrapolation = FALSE)` only after reviewing
 #' the returned `auto_selection` metadata.
 #'
-#' @param data Numeric matrix/data frame or optional `float::fl()`/`float32`
-#'   reference matrix.
+#' @param data Dense numeric matrix/data frame or optional
+#'   `float::fl()`/`float32` reference matrix. Sparse, delayed, file-backed, and
+#'   other matrix-like objects are rejected before conversion.
 #' @param points Optional query matrix. Defaults to `data`.
 #' @param k Number of neighbours.
 #' @param exclude_self Logical; remove each row from its own neighbour list for

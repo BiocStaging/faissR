@@ -25,6 +25,10 @@ prepare_public_nn_request <- function(
     target_recall, output, distances, n_threads, points_missing,
     requested_method_input
 ) {
+    validate_dense_matrix_input(data, "data")
+    if (!points_missing) {
+        validate_dense_matrix_input(points, "points")
+    }
     options <- normalize_public_nn_options(
         exclude_self, backend, method, metric, tuning, target_recall, output,
         distances

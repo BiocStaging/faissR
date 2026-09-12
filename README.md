@@ -192,6 +192,10 @@ headers and libraries discovered by `configure`.
 - `backend_info()`, `faiss_available()`, `faiss_gpu_available()`,
   `cuda_available()`, and `cuvs_available()` to report
   compiled/runtime backend support.
+  These are package-specific checks: a visible accelerator does not prove that
+  faissR was compiled with a compatible provider. Framework-neutral hardware
+  discovery is handled separately by the
+  [gpuinfo project](https://github.com/tkcaccia/gpuinfo).
 - `nn_capabilities()` to report supported nearest-neighbour
   method/backend/metric combinations for benchmark preflight checks.
 - `nn_metric_preflight()` to identify non-finite rows, zero vectors for cosine,
@@ -445,14 +449,14 @@ tarball:
 
 ```sh
 R CMD build .
-R CMD check --as-cran faissR_0.99.41.tar.gz
+R CMD check --as-cran faissR_0.99.42.tar.gz
 ```
 
 and then:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.41.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.42.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA and cuVS are

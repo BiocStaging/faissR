@@ -1,4 +1,5 @@
 nn_gpu_input_dims <- function(x, arg) {
+    validate_dense_matrix_input(x, arg)
     if (is_float32_matrix_input(x)) {
         return(float32_matrix_dims(x, arg))
     }

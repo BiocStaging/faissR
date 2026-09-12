@@ -8,7 +8,7 @@ cuvs_available()
 }
 \value{
 `TRUE` when faissR was compiled and linked against RAPIDS cuVS
-    and the CUDA runtime reports at least one available device.
+  and the CUDA runtime reports at least one available device.
 }
 \description{
 Check whether the RAPIDS cuVS backend is available

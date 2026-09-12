@@ -8,16 +8,28 @@ backend_info()
 }
 \value{
 A data frame with one row per compiled/runtime backend family and
-    columns describing availability, public call hints, public backend names,
-    supported public method/metric summaries, non-public implementation route
-    labels, device/runtime hints, and a short note. Use
-    \code{\link{nn_capabilities}()} for the full method/backend/metric matrix.
+  columns describing availability, public call hints, public backend names,
+  supported public method/metric summaries, non-public implementation route
+  labels, device/runtime hints, and a short note. Use
+  \code{\link{nn_capabilities}()} for the full method/backend/metric matrix.
 }
 \description{
 `backend_info()` reports which `faissR` nearest-neighbour backends can
 currently run. It never silently falls back from an explicit GPU request to
 CPU; this table is informational only.
 }
+\section{Hardware visibility and package capability}{
+
+A visible accelerator or installed driver does not establish that `faissR`
+was compiled with a compatible provider. `backend_info()` reports
+package-specific compiled and runtime capability; [cuda_available()] is
+likewise specific to the current `faissR` installation. Framework-neutral
+hardware discovery is a separate concern, as implemented by the development
+`gpuinfo` project at \url{https://github.com/tkcaccia/gpuinfo}. A hardware
+report from that project complements, but does not replace, these
+package-specific checks.
+}
+
 \examples{
 info <- backend_info()
 info[, c("backend", "available", "public_backends")]

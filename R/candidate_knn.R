@@ -6,12 +6,14 @@
 #' projection. The function does not generate candidates; it only scores and
 #' ranks the candidates that you pass in.
 #'
-#' @param data Numeric reference matrix with observations in rows.
+#' @param data Dense numeric reference matrix with observations in rows.
+#'   Sparse, delayed, file-backed, and other matrix-like objects are rejected
+#'   before conversion.
 #' @param candidates Integer matrix of 1-based candidate reference row indices.
 #'   It must have one row per query. Invalid, missing, zero, or out-of-range
 #'   entries are ignored.
-#' @param points Numeric query matrix with observations in rows. Defaults to
-#'   `data`, i.e. self-query candidate KNN.
+#' @param points Dense numeric query matrix with observations in rows. Defaults
+#'   to `data`, i.e. self-query candidate KNN.
 #' @param k Number of neighbours to return from each candidate row.
 #' @param backend `"auto"`/`"cpu"` for the general CPU implementation,
 #'   `"cuda"` for the native CUDA row-candidate kernel. GPU backends currently
@@ -112,6 +114,9 @@ prepare_candidate_knn_inputs <- function(
 }
 
 prepare_candidate_matrices <- function(data, points, candidates) {
+    validate_dense_matrix_input(data, "data")
+    validate_dense_matrix_input(points, "points")
+    validate_dense_matrix_input(candidates, "candidates")
     x <- as.matrix(data)
     q <- as.matrix(points)
     storage.mode(x) <- storage.mode(q) <- "double"

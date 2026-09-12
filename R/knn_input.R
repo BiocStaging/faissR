@@ -416,6 +416,44 @@ is_float32_matrix_input <- function(x) {
     inherits(x, "float32")
 }
 
+validate_dense_matrix_input <- function(x, arg_name = "data") {
+    if (is_float32_matrix_input(x) || is.matrix(x)) {
+        if (!is_float32_matrix_input(x) && !is.numeric(x)) {
+            stop(
+                "`", arg_name, "` must be a dense numeric matrix.",
+                call. = FALSE
+            )
+        }
+        return(invisible(TRUE))
+    }
+    if (is.data.frame(x)) {
+        numeric_columns <- vapply(x, is.numeric, logical(1L))
+        if (!all(numeric_columns)) {
+            stop(
+                "Every column of `", arg_name,
+                "` must be numeric.",
+                call. = FALSE
+            )
+        }
+        return(invisible(TRUE))
+    }
+
+    class_label <- paste(class(x), collapse = "/")
+    if (!nzchar(class_label)) {
+        class_label <- typeof(x)
+    }
+    stop(
+        "`", arg_name, "` is a ", class_label,
+        " object. faissR accepts dense numeric matrices, numeric data ",
+        "frames, and optional float::fl() matrices only. Sparse, delayed, ",
+        "and file-backed objects are not converted implicitly because ",
+        "`as.matrix()` can allocate a dense copy. Compute a size-checked ",
+        "dense representation such as PCA scores, or explicitly materialize ",
+        "a manageable block before calling faissR.",
+        call. = FALSE
+    )
+}
+
 float32_matrix_dims <- function(x, arg_name = "data") {
     d <- dim(x)
     if ((is.null(d) || length(d) != 2L) && isS4(x)) {

@@ -18,12 +18,15 @@
 #' `attr(prediction, "faissR_nn")$query_source` for `"fitted_index"` versus
 #' `"nn"` and the effective parameters in `approximation`.
 #'
-#' @param Xtrain Numeric training matrix or optional `float::fl()`/`float32`
-#'   matrix with observations in rows. Float32 inputs are preserved for
-#'   \code{\link{nn}()} methods with direct float32 adapters.
+#' @param Xtrain Dense numeric training matrix or optional
+#'   `float::fl()`/`float32` matrix with observations in rows. Float32 inputs
+#'   are preserved for \code{\link{nn}()} methods with direct float32 adapters.
+#'   Sparse, delayed, file-backed, and other matrix-like objects are rejected
+#'   before conversion.
 #' @param Ytrain Training labels or numeric response.
-#' @param Xtest Optional numeric or float32 query matrix. If supplied, `knn()`
-#'   returns predictions for `Xtest`; otherwise it returns a fitted model.
+#' @param Xtest Optional dense numeric or float32 query matrix. If supplied,
+#'   `knn()` returns predictions for `Xtest`; otherwise it returns a fitted
+#'   model.
 #' @param backend Device backend passed to \code{\link{nn}()}: `"auto"`,
 #'   `"cpu"`, or
 #'  `"cuda"`. `"auto"` follows \code{\link{nn}()} backend/method/metric
@@ -1537,6 +1540,7 @@ prepare_knn_model_matrix <- function(
 }
 
 coerce_knn_model_matrix <- function(x, arg_name) {
+    validate_dense_matrix_input(x, arg_name)
     if (is_float32_matrix_input(x)) {
         if (!requireNamespace("float", quietly = TRUE)) {
             stop(

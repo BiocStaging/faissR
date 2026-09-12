@@ -3,9 +3,9 @@
 #' Inspect reference and query rows for values that affect the public distance
 #' contract before calling [nn()]. This function performs no neighbor search.
 #'
-#' @param data Numeric reference matrix, data frame, or optional
+#' @param data Dense numeric reference matrix, data frame, or optional
 #'   `float::fl()`/`float32` matrix.
-#' @param points Optional query object with the same number of columns as
+#' @param points Optional dense query object with the same number of columns as
 #'   `data`. `NULL` represents self-query and reuses the `data` inspection.
 #' @param metric One of `"euclidean"`, `"cosine"`, or `"correlation"`.
 #' @param backend Requested backend (`"auto"`, `"cpu"`, or `"cuda"`). `NULL`
@@ -125,6 +125,7 @@ metric_preflight_result <- function(
 }
 
 metric_preflight_matrix <- function(x, name) {
+    validate_dense_matrix_input(x, name)
     if (is_float32_matrix_input(x)) {
         x <- float32_to_numeric_matrix(x, name)
     } else {

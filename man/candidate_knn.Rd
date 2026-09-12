@@ -5,25 +5,27 @@
 \title{Select nearest neighbours from a candidate matrix}
 \usage{
 candidate_knn(
-    data,
-    candidates,
-    points = data,
-    k,
-    backend = NULL,
-    metric = c("euclidean", "cosine", "correlation"),
-    n_threads = NULL,
-    exclude_self = FALSE
+  data,
+  candidates,
+  points = data,
+  k,
+  backend = NULL,
+  metric = c("euclidean", "cosine", "correlation"),
+  n_threads = NULL,
+  exclude_self = FALSE
 )
 }
 \arguments{
-\item{data}{Numeric reference matrix with observations in rows.}
+\item{data}{Dense numeric reference matrix with observations in rows.
+Sparse, delayed, file-backed, and other matrix-like objects are rejected
+before conversion.}
 
 \item{candidates}{Integer matrix of 1-based candidate reference row indices.
 It must have one row per query. Invalid, missing, zero, or out-of-range
 entries are ignored.}
 
-\item{points}{Numeric query matrix with observations in rows. Defaults to
-`data`, i.e. self-query candidate KNN.}
+\item{points}{Dense numeric query matrix with observations in rows. Defaults
+to `data`, i.e. self-query candidate KNN.}
 
 \item{k}{Number of neighbours to return from each candidate row.}
 
@@ -46,10 +48,10 @@ set. This is valid only for self-query candidate KNN.}
 }
 \value{
 A `faissR_nn` object with `indices` and `distances`. If a row
-    has fewer than `k` valid unique candidates, remaining entries are `NA` and
-    `Inf` on both CPU and CUDA. No neighbors outside the supplied candidate
-    set are added. Distance-contract metadata states whether the values are a
-    metric and comparable across query rows.
+  has fewer than `k` valid unique candidates, remaining entries are `NA` and
+  `Inf` on both CPU and CUDA. No neighbors outside the supplied candidate
+  set are added. Distance-contract metadata states whether the values are a
+  metric and comparable across query rows.
 }
 \description{
 `candidate_knn()` computes exact top-k neighbours restricted to a supplied

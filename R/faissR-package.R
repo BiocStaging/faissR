@@ -16,10 +16,12 @@
 #' `faissR_knn_model` when `Xtest` is omitted, and `fast_kmeans()` returns a
 #' `faissR_kmeans` object.
 #'
-#' Search input is dense: numeric matrices, data frames, and optional
-#' `float::fl()` matrices are supported. Sparse, delayed, and file-backed
-#' representations are not searched in place and may be eagerly materialized
-#' or densified by `as.matrix()`. Duplicate observations remain distinct row
+#' Search input is dense: numeric matrices, numeric data frames, and optional
+#' `float::fl()` matrices are supported. Sparse, delayed, file-backed, and
+#' other matrix-like representations are rejected before conversion so that
+#' faissR cannot accidentally materialize a large dense copy. Compute a
+#' size-checked dense representation such as PCA scores, or explicitly
+#' materialize a manageable block. Duplicate observations remain distinct row
 #' identifiers. With self-search, `exclude_self = TRUE` removes only the query
 #' row identifier.
 #' Host row identifiers and CUDA identifiers use signed 32-bit integers, so the

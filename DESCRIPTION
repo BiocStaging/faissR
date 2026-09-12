@@ -1,7 +1,7 @@
 Package: faissR
 Type: Package
 Title: FAISS-Backed Nearest Neighbours, kNN Models, and k-Means
-Version: 0.99.41
+Version: 0.99.42
 Authors@R: person(given = "Stefano",
     family = "Cacciatore",
     role = c("aut", "cre"),
@@ -40,17 +40,26 @@ biocViews:
     FunctionalPrediction
 Encoding: UTF-8
 Depends:
-    R (>= 3.0.2)
+    R (>= 4.6.0)
 Imports:
     Biobase,
     methods,
     Rcpp (>= 1.1.0)
 Suggests:
+    BiocNeighbors,
+    BiocSingular,
     BiocStyle,
+    S4Vectors,
+    SingleCellExperiment,
+    SummarizedExperiment,
     knitr,
     Matrix,
     float,
     rmarkdown,
+    scater,
+    scRNAseq,
+    scran,
+    scuttle,
     testthat,
     withr
 LinkingTo:
@@ -60,9 +69,9 @@ SystemRequirements: C++20, Fortran on Unix, FAISS C++ development library
     macOS: Homebrew faiss and libomp;
     Windows: an Rtools-compatible FAISS CPU build), OpenMP runtime on macOS
     when FAISS headers include omp.h, complete LP64 BLAS and LAPACK with
-    single-precision routines on Linux and Windows. Optional GPU libraries are documented
-    in the installation guide and are used only when a GPU-enabled build is
-    explicitly requested.
+    single-precision routines on Linux and Windows. Optional GPU libraries
+    are documented in the installation guide and are used only when a
+    GPU-enabled build is explicitly requested.
 VignetteBuilder: knitr
 Config/roxygen2/version: 8.1.0
 Config/testthat/edition: 3

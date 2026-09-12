@@ -1,4 +1,4 @@
-# faissR 0.99.41
+# faissR 0.99.42
 
 ## Initial Bioconductor submission
 
@@ -10,3 +10,6 @@
   interface for downstream packages.
 * Include reference documentation, installation guidance, and Biobase dataset
   examples in the vignette and help pages.
+* Reject sparse, delayed, file-backed, and other matrix-like inputs before
+  conversion, and demonstrate nearest-neighbor search on a documented dense
+  single-cell PCA representation.
