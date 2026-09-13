@@ -1,7 +1,9 @@
-# faissR 0.99.42
+# faissR 0.99.43
 
 ## Initial Bioconductor submission
 
+* Declare the roxygen2 generator and normalize vignette continuation
+    indentation for BiocCheck source-format validation.
 * Provide FAISS-backed CPU nearest-neighbour search with optional CUDA and
   cuVS support, capability inspection, and explicit unsupported-route errors.
 * Support Euclidean, cosine, and correlation search, optional float32 input,

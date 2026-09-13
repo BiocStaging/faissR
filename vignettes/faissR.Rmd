@@ -124,11 +124,11 @@ In `faissR`:
 
 - `faissR_backend()` reads or sets the requested session device;
 - `backend_info()` reports providers compiled into this installation and
-  whether their runtimes are currently usable;
+    whether their runtimes are currently usable;
 - `nn_capabilities(runtime = TRUE)` checks a method, device, and metric
-  combination; and
+    combination; and
 - `cuda_available()` is package-specific: it requires both a CUDA-enabled
-  `faissR` build and a runtime-visible device.
+    `faissR` build and a runtime-visible device.
 
 The separate `gpuinfo` project can provide platform-level hardware diagnosis.
 `faissR` does not currently import it; package-specific provider checks remain
