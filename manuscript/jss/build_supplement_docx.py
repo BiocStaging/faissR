@@ -1,5 +1,6 @@
 """Build an editable Word copy of the JSS supplementary material."""
 
+from copy import deepcopy
 from pathlib import Path
 import re
 import subprocess
@@ -11,6 +12,8 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
 
+from docx_layout import apply_reading_layout, expand_latex_multicolumns
+
 
 HERE = Path(__file__).resolve().parent
 SOURCE = HERE / "faissR_jss_supplement.tex"
@@ -18,8 +21,125 @@ OUTPUT = HERE / "faissR_jss_supplement.docx"
 REFERENCE = HERE / "faissR_jss.docx"
 
 
+def _set_repeating_header(row) -> None:
+    """Mark a Word table row as a repeating header."""
+    properties = row.get_or_add_trPr()
+    if properties.find(qn("w:tblHeader")) is None:
+        repeat = OxmlElement("w:tblHeader")
+        repeat.set(qn("w:val"), "true")
+        properties.append(repeat)
+
+
+def _clear_repeating_header(row) -> None:
+    """Remove a copied repeating-header marker from a Word table row."""
+    properties = row.get_or_add_trPr()
+    for repeat in list(properties.findall(qn("w:tblHeader"))):
+        properties.remove(repeat)
+
+
+def split_comprehensive_dataset_panels(document) -> None:
+    """Give each long comparison panel its own repeatable Word header."""
+    target = None
+    panel_starts = None
+    for table in document.tables:
+        starts = [
+            index for index, row in enumerate(table.rows)
+            if row.cells and row.cells[0].text.strip().startswith("Panel ")
+        ]
+        if len(starts) == 4:
+            target = table
+            panel_starts = starts
+            break
+    if target is None or panel_starts is None:
+        raise ValueError("Could not identify the four comparison panels")
+
+    source_table = target._tbl
+    source_rows = list(source_table.tr_lst)
+    boundaries = panel_starts + [len(source_rows)]
+    replacement_tables = []
+    for start, end in zip(boundaries, boundaries[1:]):
+        panel_table = deepcopy(source_table)
+        for row in list(panel_table.tr_lst):
+            panel_table.remove(row)
+        for row in source_rows[start:end]:
+            panel_table.append(deepcopy(row))
+        for row in panel_table.tr_lst:
+            _clear_repeating_header(row)
+        for row in panel_table.tr_lst[:2]:
+            _set_repeating_header(row)
+        replacement_tables.append(panel_table)
+
+    for index, panel_table in enumerate(replacement_tables):
+        source_table.addprevious(panel_table)
+        if index < len(replacement_tables) - 1:
+            spacer = OxmlElement("w:p")
+            source_table.addprevious(spacer)
+    source_table.getparent().remove(source_table)
+
+
+def merge_multicolumn_headers(document) -> None:
+    """Restore header spans that were expanded for Pandoc's table reader."""
+    for table in document.tables:
+        if not table.rows:
+            continue
+        first = tuple(cell.text.strip() for cell in table.rows[0].cells)
+        if first == ("", "BiocNeighbors", "", "", "RcppHNSW", "", ""):
+            table.cell(0, 1).merge(table.cell(0, 3))
+            table.cell(0, 4).merge(table.cell(0, 6))
+            for index in (1, 4):
+                table.cell(0, index).paragraphs[0].alignment = (
+                    WD_ALIGN_PARAGRAPH.CENTER
+                )
+            for row in table.rows[1:]:
+                for cell in row.cells[1:]:
+                    cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        elif first == (
+            "", "Experimental installed policy", "", "",
+            "Post hoc sensitivity", "", "",
+        ):
+            table.cell(0, 1).merge(table.cell(0, 3))
+            table.cell(0, 4).merge(table.cell(0, 6))
+            for index in (1, 4):
+                table.cell(0, index).paragraphs[0].alignment = (
+                    WD_ALIGN_PARAGRAPH.CENTER
+                )
+        elif first[0].startswith("Panel ") and all(
+            not value for value in first[1:]
+        ):
+            table.cell(0, 0).merge(table.cell(0, len(first) - 1))
+            table.cell(0, 0).paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.LEFT
+            second = tuple(cell.text.strip() for cell in table.rows[1].cells)
+            if second == (
+                "Dataset", "BiocNeighbors HNSW", "", "RcppHNSW HNSW", "",
+            ):
+                table.cell(1, 1).merge(table.cell(1, 2))
+                table.cell(1, 3).merge(table.cell(1, 4))
+            elif second == (
+                "Dataset", "BiocNeighbors Annoy / faissR auto", "",
+                "RcppAnnoy / faissR auto", "",
+            ):
+                table.cell(1, 1).merge(table.cell(1, 2))
+                table.cell(1, 3).merge(table.cell(1, 4))
+            elif second[0] == "Dataset" and second[1].startswith("rnndescent"):
+                table.cell(1, 1).merge(table.cell(1, 4))
+
+
 def word_source(source: str) -> str:
     """Normalize LaTeX constructs that Pandoc does not map cleanly to Word."""
+    source = re.sub(
+        r"\\shortstack(?:\[[^]]*\])?\{([^{}]*)\}",
+        lambda match: match.group(1).replace(r"\\", " "),
+        source,
+    )
+    source = re.sub(r"\\cmidrule(?:\([^)]*\))?\{[^}]*\}", "", source)
+    source = source.replace(r"\paragraph{", r"\paragraph*{")
+    for label, number in re.findall(
+        r"\\newlabel\{([^}]+)\}\{\{([^}]+)\}",
+        SOURCE.with_suffix(".aux").read_text(),
+    ):
+        source = source.replace(f"\\ref{{{label}}}", number)
+    if re.search(r"\\ref\{", source):
+        raise ValueError("Unresolved cross-reference; rebuild the PDF first")
     source = re.sub(
         r"\\path\{([^{}]+)\}",
         lambda match: r"\texttt{" + match.group(1).replace("_", r"\_") + "}",
@@ -28,6 +148,7 @@ def word_source(source: str) -> str:
     source = source.replace(r"\textsuperscript{\(\dagger\)}", " ")
     source = source.replace(r"\dagger", "")
     source = source.replace(r"\ast", "")
+    source = expand_latex_multicolumns(source)
     source = re.sub(r"\$\^\{([^}]+)\}\$", r" (\1)", source)
     source = source.replace(r"\newcolumntype{Y}{>{\raggedright\arraybackslash}X}", "")
     source = source.replace(
@@ -49,6 +170,10 @@ def word_source(source: str) -> str:
     source = source.replace(
         r"\begin{tabularx}{\textwidth}{@{}p{0.19\textwidth}p{0.25\textwidth}X@{}}",
         r"\begin{tabular}{p{0.19\textwidth}p{0.25\textwidth}p{0.46\textwidth}}",
+    )
+    source = source.replace(
+        r"\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.19\textwidth}>{\raggedright\arraybackslash}p{0.43\textwidth}X@{}}",
+        r"\begin{tabular}{p{0.19\textwidth}p{0.43\textwidth}p{0.28\textwidth}}",
     )
     source = source.replace(
         r"\begin{tabularx}{\linewidth}{P{0.30\linewidth}Y}",
@@ -109,6 +234,14 @@ def word_source(source: str) -> str:
         r"\begin{tabular}{@{}p{0.34\textwidth}lrrr@{}}",
     )
     source = source.replace(
+        r"\begin{tabularx}{\textwidth}{@{}l*{4}{>{\centering\arraybackslash}X}@{}}",
+        r"\begin{tabular}{@{}p{0.18\textwidth}p{0.18\textwidth}p{0.18\textwidth}p{0.18\textwidth}p{0.18\textwidth}@{}}",
+    )
+    source = source.replace(
+        r"\begin{tabularx}{\textwidth}{@{}l@{\hspace{1.2em}}*{5}{>{\centering\arraybackslash}X}@{}}",
+        r"\begin{tabular}{@{}p{0.14\textwidth}p{0.15\textwidth}p{0.15\textwidth}p{0.15\textwidth}p{0.15\textwidth}p{0.15\textwidth}@{}}",
+    )
+    source = source.replace(
         r"\begin{longtable}{P{0.22\linewidth}P{0.31\linewidth}P{0.37\linewidth}}",
         r"\begin{longtable}{p{0.22\linewidth}p{0.31\linewidth}p{0.37\linewidth}}",
     )
@@ -132,6 +265,13 @@ def word_source(source: str) -> str:
 
 def polish(path: Path) -> None:
     document = Document(path)
+    table_captions = [
+        paragraph for paragraph in document.paragraphs
+        if paragraph.style.name == "Table Caption"
+    ]
+    for current, following in zip(table_captions, table_captions[1:]):
+        if current.text.strip() == following.text.strip():
+            current._element.getparent().remove(current._element)
     for section in document.sections:
         section.header_distance = Pt(35.4)
         section.footer_distance = Pt(35.4)
@@ -159,6 +299,11 @@ def polish(path: Path) -> None:
             page_break.add_run().add_break(WD_BREAK.PAGE)
         if text.startswith(("CPU IVF", "CUDA IVF")):
             paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        if (
+            "auto_policy_status=" in text
+            or "hardware_extrapolated_unvalidated" in text
+        ):
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
     for table in document.tables:
         if not table.rows:
             continue
@@ -171,7 +316,7 @@ def polish(path: Path) -> None:
         headers = tuple(cell.text.strip() for cell in table.rows[0].cells)
         compact = headers == ("Backend/method", "Metric", "Recall at 15")
         wide_compact = headers == (
-            "Comparator", "Class", "Pairs", "Both OK", "Matched",
+            "Comparator", "Class", "Pairs", "Both successful", "Matched",
             "Timeout", "Median [IQR]",
         )
         table.autofit = False
@@ -248,6 +393,14 @@ def polish(path: Path) -> None:
             ): [1900, 1050, 850, 900, 900, 900, 2850],
             ("Comparison", "Datasets", "Median", "IQR", "Range"):
                 [3900, 1100, 1200, 1580, 1580],
+            (
+                "Dataset", "FNN exact", "RANN exact", "Rnanoflann exact",
+                "BiocNeighbors exact",
+            ): [1680, 1920, 1920, 1920, 1920],
+            (
+                "Dataset", "BiocNeighbors HNSW", "RcppHNSW HNSW",
+                "BiocNeighbors Annoy", "RcppAnnoy Annoy", "rnndescent",
+            ): [1260, 1620, 1620, 1620, 1620, 1620],
         }
         widths = table_widths.get(headers)
         if widths is not None:
@@ -276,6 +429,9 @@ def polish(path: Path) -> None:
                         cell_properties.append(cell_width)
                     cell_width.set(qn("w:type"), "dxa")
                     cell_width.set(qn("w:w"), str(width))
+    apply_reading_layout(document, SOURCE.read_text(), supplementary=True)
+    split_comprehensive_dataset_panels(document)
+    merge_multicolumn_headers(document)
     document.save(path)
 
 
@@ -305,6 +461,10 @@ def main() -> None:
             "--from=latex",
             "--to=docx",
             "--standalone",
+            "--number-sections",
+            "--citeproc",
+            "--metadata=reference-section-title:References",
+            f"--bibliography={HERE / 'faissR_jss.bib'}",
             f"--output={intermediate}",
         ]
         if REFERENCE.exists():

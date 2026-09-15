@@ -1,4 +1,4 @@
-# faissR 0.99.43
+# faissR 0.99.44
 
 ## Initial Bioconductor submission
 
@@ -15,3 +15,5 @@
 * Reject sparse, delayed, file-backed, and other matrix-like inputs before
   conversion, and demonstrate nearest-neighbor search on a documented dense
   single-cell PCA representation.
+* Reconcile the JSS manuscript and replication material with the completed
+  comparison, tuned-HNSW, and query-workload audits.

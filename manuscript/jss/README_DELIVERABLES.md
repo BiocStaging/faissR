@@ -1,6 +1,6 @@
 # faissR JSS deliverables
 
-Package snapshot: faissR 0.99.37
+Package snapshot: faissR 0.99.44
 
 ## Tracked source
 
@@ -11,7 +11,8 @@ Package snapshot: faissR 0.99.37
 - `replication_article.R`: checksummed-result validator and table/figure collation.
 - `build_paired_cpu_figure.R` and `paired_cpu_comparison/`: reproducible
   dataset-level controlled HNSW comparison and checksummed source evidence.
-- `build_docx.py` and `build_supplement_docx.py`: Word reading-copy builders.
+- `build_docx.py`, `build_supplement_docx.py`, and `docx_layout.py`: Word
+  reading-copy builders and shared layout settings.
 - `build_architecture_figures.R`: architecture figure source.
 - `analyze_completed_systems.R` and `completed_systems/`: checksummed tuned
   HNSW and query-workload results and their executable audits.
@@ -30,7 +31,8 @@ version control:
 
 ## Evidence boundary
 
-The manuscript and supplement report the version-pinned calibration, held-out,
+The manuscript and supplement report calibration, independently sampled
+within-dataset recall audits,
 leave-one-dataset-out, route-contract, controlled same-node CPU HNSW,
 independently tuned CPU HNSW, and query-workload evidence. The evaluation
 contains nine real datasets with metric-matched exact references. The
@@ -40,6 +42,29 @@ figure. The complete seven-package public-interface comparison passed its
 216/216-task audit; its separately checksummed paired rows recreate the
 supplementary log-ratio figure and table summaries.
 
-The JSS-layout article is currently 19 pages. Generated PDF and Word reading
-copies, the vignette, and the reference manual must be regenerated from these
-tracked sources for the submission bundle.
+The Word files are editable reading copies; their pagination differs from the
+JSS-layout PDFs. Page counts are recorded from the final build rather than
+hard-coded here because pagination changes as the article is edited.
+
+## Rebuilding the article and supplement
+
+From this directory, build the supplement first so that its table and figure
+numbers are available to the article's cross-references:
+
+```sh
+latexmk -pdf -interaction=nonstopmode -halt-on-error faissR_jss_supplement.tex
+latexmk -pdf -interaction=nonstopmode -halt-on-error faissR_jss.tex
+python3 build_docx.py
+python3 build_supplement_docx.py
+python3 audit_submission.py
+```
+
+The Word builders require Pandoc, python-docx, and the PDF tools used to convert
+figures. Rebuild the PDFs before the Word files, which use the LaTeX auxiliary
+files to resolve cross-references. Regenerate the vignette and reference manual
+separately when preparing the submission bundle.
+
+The source audit requires every supplementary table and figure to be cited in
+both documents, with first citations following the display order. Tables and
+figures each have their own sequence, starting at S1. Keep the LaTeX labels
+when moving material; do not replace references with typed numbers.

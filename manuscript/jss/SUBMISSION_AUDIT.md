@@ -1,6 +1,6 @@
 # Submission audit
 
-Date: 2026-09-09. Package: faissR 0.99.37.
+Date: 2026-09-15. Package: faissR 0.99.44.
 This is a maintenance report, not part of the scientific article.
 
 ## Corrections
@@ -37,10 +37,18 @@ This is a maintenance report, not part of the scientific article.
   one-shot Flat calls rather than versus a reusable exact index.
 - Fixed an invalid rcmdcheck argument in CI and corrected the Valgrind invocation
   to run the R executable through its debugger interface.
+- Recomputed the seven-interface summary by taking medians within datasets
+  before the across-dataset median, and separated same-family comparisons from
+  Annoy task-level alternatives and the experimental derived-route comparison.
+- Rewrote the tuned-HNSW results to distinguish cold calls, direct index builds,
+  and fitted queries, and moved the break-even equation to the supplement.
+- Reconciled the publication evidence matrix with completed audits and removed
+  stale statements that described completed HNSW and query-workload work as
+  pending.
 
 ## Verification
 
-- Functional local installation of 0.99.37 with external FAISS succeeded.
+- Functional local installation of 0.99.44 with external FAISS succeeded.
 - R CMD check --as-cran --no-manual: 0 errors, 0 warnings, 1 note (new
   submission). Tests, examples, compiled-code checks, Rd consistency, online
   incoming checks, and vignette rebuilding passed under a valid UTF-8 locale.
@@ -54,11 +62,12 @@ This is a maintenance report, not part of the scientific article.
 - The complete replication entry point passed checksum validation, archive
   analysis and compact examples. Completed-systems audits passed for 720 tuned
   HNSW repetitions and 60 CPU plus 60 CUDA query-workload cells.
-- Static manuscript/reference/version and asset checks passed. JSS-layout article:
-  19 pages; supplement: 19 pages.
-- A clean `git archive` reproduced checksum-gated evidence analysis, the compact
-  CPU example, both 19-page PDFs, and both editable Word documents without
-  relying on untracked workspace files.
+- Static manuscript/reference/version and asset checks passed. The current
+  JSS-layout article has 20 pages and the supplement has 21 pages. Both editable
+  Word documents were rendered and visually inspected.
+- The checksum-gated archive analyses and compact CPU example pass in the
+  working tree. A clean `git archive` reproduction must be rerun after this
+  revision is committed; no clean-export result is claimed for uncommitted files.
 
 ## Publication boundary
 

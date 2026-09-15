@@ -29,27 +29,32 @@ quantile_or_na <- function(x, probability) {
   if (length(x)) unname(quantile(x, probability, names = FALSE)) else NA_real_
 }
 
-summarize_groups <- function(x, columns) {
+summarize_groups <- function(x, columns, ratio_unit = NULL) {
   key <- interaction(x[columns], drop = TRUE, lex.order = TRUE)
   pieces <- lapply(split(x, key), function(part) {
     values <- as.list(part[1L, columns, drop = FALSE])
+    eligible <- part$recall_equivalent %in% TRUE
+    ratio_values <- part$time_ratio_comparator_over_faissR[eligible]
+    if (!is.null(ratio_unit)) {
+      ratio_values <- vapply(
+        split(ratio_values, as.character(part[[ratio_unit]][eligible])),
+        median_or_na,
+        numeric(1L)
+      )
+    }
+    ratio_values <- ratio_values[is.finite(ratio_values)]
     c(values, list(
       planned_pairs = nrow(part),
       both_successful = sum(part$both_successful),
-      recall_equivalent_pairs = sum(part$recall_equivalent),
+      recall_equivalent_pairs = sum(eligible),
+      ratio_units = length(ratio_values),
       comparator_timeouts = sum(part$status_comparator == "timeout"),
       comparator_failures = sum(part$status_comparator == "failed"),
       faissR_timeouts = sum(part$status_faissR == "timeout"),
       faissR_failures = sum(part$status_faissR == "failed"),
-      median_comparator_over_faissR = median_or_na(
-        part$time_ratio_comparator_over_faissR[part$recall_equivalent]
-      ),
-      q25_comparator_over_faissR = quantile_or_na(
-        part$time_ratio_comparator_over_faissR[part$recall_equivalent], 0.25
-      ),
-      q75_comparator_over_faissR = quantile_or_na(
-        part$time_ratio_comparator_over_faissR[part$recall_equivalent], 0.75
-      ),
+      median_comparator_over_faissR = median_or_na(ratio_values),
+      q25_comparator_over_faissR = quantile_or_na(ratio_values, 0.25),
+      q75_comparator_over_faissR = quantile_or_na(ratio_values, 0.75),
       median_comparator_recall = median_or_na(part$recall_at_k_comparator),
       median_faissR_recall = median_or_na(part$recall_at_k_faissR)
     ))
@@ -146,7 +151,23 @@ pairs$time_ratio_comparator_over_faissR <- ifelse(
 )
 if (any(!pairs$same_node, na.rm = TRUE)) stop("A paired route was not run on the same node")
 
-package_summary <- summarize_groups(pairs, c("package", "comparison_class", "reference_route"))
+package_summary <- summarize_groups(
+  pairs,
+  c("package", "comparison_class", "reference_route"),
+  ratio_unit = "dataset"
+)
+comparison_scope <- c(
+  exact = "same_family",
+  hnsw = "same_family",
+  annoy = "task_level_alternative",
+  nndescent = "experimental_derived"
+)
+package_summary$comparison_scope <- unname(
+  comparison_scope[package_summary$comparison_class]
+)
+if (anyNA(package_summary$comparison_scope)) {
+  stop("A package summary has no declared comparison scope")
+}
 route_summary <- summarize_groups(pairs, c("package", "route", "metric", "comparison_class", "reference_route"))
 dataset_summary <- summarize_groups(pairs, c("dataset", "package", "route", "metric"))
 

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en-US">
+<html lang="">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
@@ -161,14 +161,6 @@ Sys.setenv(FAISSR_JSS_REPLICATION_SCRIPT = normalizePath(replication_script))
 requires no GPU and performs analysis only; <code>all</code> runs both paths.</p>
 <pre><code class="language-r">source(replication_script, chdir = TRUE)
 </code></pre>
-<pre><code>## Probe-by-sample matrix: 500 x 26
-##  requested_tier observed_recall   provider
-##            0.90           0.972 faiss_hnsw
-##            0.95           0.991 faiss_hnsw
-##            0.99           0.998 faiss_hnsw
-##  build_sec first_sec median_reused_sec query_source
-##      0.001     0.002             0.001 fitted_index
-</code></pre>
 <p>The compact example results and the complete software session are printed in
 the rendered report so reviewers can compare an executed <code>code.html</code> with
 the article examples.</p>
@@ -196,8 +188,8 @@ if (file.exists(verification_file)) {
   print(archive_verification, row.names = FALSE)
 }
 </code></pre>
-<pre><code>##                           archive
-##  faissR_jss_frozen_results.tar.gz
+<pre><code>##                              archive
+##  faissR_jss_evidence_snapshot.tar.gz
 ##                                                   expected_sha256
 ##  506bdff17572acb383b635c4490024ed29ff44a2c90c887bc8d57fbb7d7aaa53
 ##                                                   observed_sha256
@@ -254,7 +246,7 @@ if (file.exists(manifest_file)) {
 ##             8        table_08_unavailable_calibration.csv    9
 ##             9            table_09_selection_stability.csv    6
 ##            10         table_10_calibration_validation.csv    4
-##            11                 table_11_evidence_audit.csv    8
+##            11                 table_11_evidence_audit.csv   21
 ##            12                table_12_cpu_per_dataset.csv    9
 ##            13               table_13_cuda_per_dataset.csv    9
 ##            14           table_14_cuda_auto_by_dataset.csv    9
@@ -267,13 +259,13 @@ if (file.exists(manifest_file)) {
 ##  3d5dde5c07562c6be494f3b15c461083f2277e3b98066c816ecb7ad9d610005a
 ##  b041a28c4d937224b2c9f46be8a22a04ce4a590de3e356666085b3fb46dcb37b
 ##  4291a44501470b993dfe3df73d16c6d71d154d3c7c5e3a1c14fc0f177ed75dbe
-##  36897a09fac8f00335eac6d2bf3ca09ef054debc6109697603574e24f7eb2eea
-##  58ac8379eee02f28f6f808c7673d0946627cfebd699280fe25765be5936e24d7
+##  62d89e4e83c97f8c8c5c347e968357e37ea959481abd61e3a933937e7d0eb97e
+##  63255e4ef18223c39c9deefcd41125791dacfcdd2a5b85d8a388f05c11042cd5
 ##  629f95608862b04729122c1bf73069748daad09d713f9cfc3fec7be65f4a1080
 ##  898c3b119c69236dd79f44a74f641d0635619f92aaf73747a0e5a1344380759f
 ##  11f05a97d552d5e20f7b9bab1b58a761ecf9afec9ca5f487bc7443d5abd08acf
 ##  0d2a23d670128ba6f973bf6799de417222692f960cc4b3c67fe4abc65280c2fa
-##  388adc622d5b4b6199271c779502db7f0f90713cee68ca370fe243a1c8ecd988
+##  806cf2ca99abc66181f5352ae45b70d2b4b2af05631f8d9bdf2d502395c55a76
 ##  47d588d3ce78c6474c3d79be13770daa2b416debe07d1a9d02f04854f08099f4
 ##  38ce7012d5a6469df7fbb6c0b6fdb6f1db5aa8346cb003bfddeb63b9efdcb4f5
 ##  dea2dd4ae9c2937619ea49e06c4b1d5524a7061f6921fd962a1f7fee5ba6abc8
@@ -293,7 +285,7 @@ if (file.exists(manifest_file)) {
 ## LAPACK: /Library/Frameworks/R.framework/Versions/4.6/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.1
 ##
 ## locale:
-## [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+## [1] C
 ##
 ## time zone: Africa/Johannesburg
 ## tzcode source: internal
@@ -302,16 +294,10 @@ if (file.exists(manifest_file)) {
 ## [1] stats     graphics  grDevices utils     datasets  methods
 ## [7] base
 ##
-## other attached packages:
-## [1] faissR_0.99.37
-##
 ## loaded via a namespace (and not attached):
-##  [1] compiler_4.6.0       generics_0.1.4       cli_3.6.6
-##  [4] tools_4.6.0          otel_0.2.0           yaml_2.3.12
-##  [7] float_0.3-3          Rcpp_1.1.2           Biobase_2.73.2
-## [10] knitr_1.51           BiocGenerics_0.59.12 xfun_0.60
-## [13] openssl_2.4.2        rlang_1.3.0          evaluate_1.0.5
-## [16] askpass_1.2.1
+##  [1] compiler_4.6.0 cli_3.6.6      tools_4.6.0    otel_0.2.0
+##  [5] yaml_2.3.12    knitr_1.51     xfun_0.60      openssl_2.4.2
+##  [9] rlang_1.3.0    evaluate_1.0.5 askpass_1.2.1
 </code></pre>
 <p>The generated directory contains the example summary, <code>sessionInfo.txt</code>,
 and, in archive mode, checksum verification, analysis outputs, 18 archive-backed numerical summaries, the paired CPU and comprehensive-R comparison figures,

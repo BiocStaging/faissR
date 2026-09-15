@@ -14,6 +14,8 @@ from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
 from PIL import Image, ImageDraw, ImageFont
 
+from docx_layout import apply_reading_layout, expand_latex_multicolumns
+
 
 HERE = Path(__file__).resolve().parent
 SOURCE = HERE / "faissR_jss.tex"
@@ -50,8 +52,16 @@ def normalize_body(body: str) -> str:
     cross_references = dict(re.findall(
         r"\\newlabel\{([^}]+)\}\{\{([^}]+)\}", aux
     ))
+    supplement_aux = (HERE / "faissR_jss_supplement.aux").read_text()
+    cross_references.update({
+        "supp-" + label: number for label, number in re.findall(
+            r"\\newlabel\{([^}]+)\}\{\{([^}]+)\}", supplement_aux
+        )
+    })
     for label, number in cross_references.items():
         body = body.replace(f"\\ref{{{label}}}", number)
+    if re.search(r"\\ref\{", body):
+        raise ValueError("Unresolved cross-reference; rebuild both PDFs first")
 
     def replace_path(match: re.Match[str]) -> str:
         path = match.group(1).replace("_", r"\_")
@@ -70,6 +80,8 @@ def normalize_body(body: str) -> str:
     }
     for source, target in replacements.items():
         body = body.replace(f"\\{source}{{", f"\\{target}{{")
+
+    body = expand_latex_multicolumns(body)
 
     body = body.replace("\\begin{CodeChunk}\n", "")
     body = body.replace("\\end{CodeChunk}\n", "")
@@ -156,7 +168,7 @@ def build_intermediate(source: str, architecture: Path, validation: Path) -> str
     body = replace_flow_figures(body, architecture, validation)
     body = normalize_body(body)
 
-    title = "faissR: CPU and GPU Nearest-Neighbor Search with FAISS and cuVS in R"
+    title = "faissR: Nearest-Neighbor Search with FAISS and cuVS in R"
     authors = (
         "Moussa Kassim (1,2; co-first); Martin Ocharo (1,2; co-first); "
         "Dalia Ahmed (1); Dupe Ojo (1); Alessia Vignoli (3,4); "
@@ -177,46 +189,9 @@ def build_intermediate(source: str, architecture: Path, validation: Path) -> str
 \\begin{{abstract}}
 {normalize_body(abstract)}
 \\end{{abstract}}
-\\paragraph{{Keywords}} {normalize_body(keywords)}
+\\paragraph*{{Keywords}} {normalize_body(keywords)}
 \\section*{{Correspondence and affiliations}}
-1. Bioinformatics Unit, International Centre for Genetic Engineering and
-Biotechnology (ICGEB), Cape Town 7925, South Africa.
-
-2. Department of Integrative Biomedical Sciences, Institute of Infectious
-Disease \\& Molecular Medicine (IDM), University of Cape Town, Cape Town 7925,
-South Africa.
-
-3. Department of Chemistry ``Ugo Schiff'', University of Florence, Sesto
-Fiorentino, Italy.
-
-4. Magnetic Resonance Center (CERM), University of Florence, Sesto Fiorentino,
-Italy.
-
-Moussa Kassim and Martin Ocharo contributed equally and share first authorship.
-
-Corresponding author:
-
-Stefano Cacciatore, \\texttt{{stefano.cacciatore@icgeb.org}}
-
-Author e-mails:
-
-Moussa Kassim, \\texttt{{MOUSSA.KASSIM@ICGEB.ORG}}
-
-Martin Ocharo, \\texttt{{MARTIN.OCHARO@ICGEB.ORG}}
-
-Dalia Ahmed, \\texttt{{DALIA.AHMED@ICGEB.ORG}}
-
-Dupe Ojo, \\texttt{{DUPE.OJO@ICGEB.ORG}}
-
-Alessia Vignoli, \\texttt{{VIGNOLI@CERM.UNIFI.IT}}
-
-Leonardo Tenori, \\texttt{{TENORI@CERM.UNIFI.IT}}
-
-Stefano Cacciatore, \\texttt{{stefano.cacciatore@icgeb.org}}
-
-Stefano Cacciatore ORCID:
-\\url{{https://orcid.org/0000-0001-7052-7156}}.
-Project: \\url{{https://github.com/tkcaccia/faissR}}.
+{normalize_body(extract_braced_command(source, "Address"))}
 """
     return front + body + "\n\\end{document}\n"
 
@@ -234,6 +209,9 @@ def polish_docx(path: Path) -> None:
             paragraph.paragraph_format.line_spacing = 1.0
             paragraph.paragraph_format.keep_with_next = True
         stripped = paragraph.text.strip()
+        if paragraph.style.name == "Title":
+            for run in paragraph.runs:
+                run.font.size = Pt(28)
         if stripped == "Correspondence and affiliations":
             in_correspondence = True
         elif stripped == "Introduction":
@@ -251,6 +229,12 @@ def polish_docx(path: Path) -> None:
     for table in document.tables:
         if not table.rows:
             continue
+        for row in table.rows:
+            row_properties = row._tr.get_or_add_trPr()
+            if row_properties.find(qn("w:cantSplit")) is None:
+                cant_split = OxmlElement("w:cantSplit")
+                cant_split.set(qn("w:val"), "true")
+                row_properties.append(cant_split)
         row_properties = table.rows[0]._tr.get_or_add_trPr()
         if row_properties.find(qn("w:tblHeader")) is None:
             repeat = OxmlElement("w:tblHeader")
@@ -265,10 +249,12 @@ def polish_docx(path: Path) -> None:
             ("Backend", "Method", "Metric", "Data", "Cells",
              "Quality status", "Median (s)"):
                 [1100, 1550, 1550, 1100, 700, 2200, 1000],
-            ("Comparator", "Matched", "Cold call", "Build", "Fitted query"):
+            ("Comparator", "Eligible", "Cold call", "Index build", "Fitted query"):
                 [2800, 1400, 1700, 1500, 1960],
             ("Comparator", "Class", "Matched/pairs", "Timeout", "Median", "IQR"):
                 [2350, 1400, 1550, 1100, 1100, 1860],
+            ("Interface", "Main use", "Result or lifecycle"):
+                [3200, 2350, 3810],
         }
         widths = table_widths.get(tuple(headers))
         if widths is not None:
@@ -298,6 +284,7 @@ def polish_docx(path: Path) -> None:
                         cell_properties.append(cell_width)
                     cell_width.set(qn("w:type"), "dxa")
                     cell_width.set(qn("w:w"), str(width))
+    apply_reading_layout(document, SOURCE.read_text())
     document.save(path)
 
 
@@ -339,7 +326,9 @@ def main() -> None:
             "--from=latex",
             "--to=docx",
             "--standalone",
+            "--number-sections",
             "--citeproc",
+            "--metadata=reference-section-title:References",
             f"--bibliography={HERE / 'faissR_jss.bib'}",
             f"--resource-path={HERE}",
             f"--output={OUTPUT}",

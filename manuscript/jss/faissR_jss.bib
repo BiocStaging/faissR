@@ -1,5 +1,5 @@
 @Manual{R,
-  title        = {\proglang{R}: A Language and Environment for Statistical Computing},
+  title        = {{R}: A Language and Environment for Statistical Computing},
   author       = {{R Core Team}},
   organization = {R Foundation for Statistical Computing},
   address      = {Vienna, Austria},
@@ -7,16 +7,8 @@
   url          = {https://www.R-project.org/}
 }
 
-@Manual{faissR,
-  title  = {\pkg{faissR}: {FAISS}-Backed Nearest Neighbours, kNN Models, and k-Means},
-  author = {Stefano Cacciatore},
-  year   = {2026},
-  note   = {\proglang{R} package version 0.99.37},
-  url    = {https://github.com/tkcaccia/faissR}
-}
-
 @Article{Rcpp,
-  title   = {\pkg{Rcpp}: Seamless \proglang{R} and \proglang{C++} Integration},
+  title   = {{Rcpp}: Seamless {R} and {C++} Integration},
   author  = {Dirk Eddelbuettel and Romain Fran{\c{c}}ois},
   journal = {Journal of Statistical Software},
   year    = {2011},
@@ -78,7 +70,7 @@
 
 @InProceedings{DongMosesLi2011,
   title     = {Efficient k-Nearest Neighbor Graph Construction for Generic Similarity Measures},
-  author    = {Wei Dong and Charikar Moses and Kai Li},
+  author    = {Wei Dong and Moses Charikar and Kai Li},
   booktitle = {Proceedings of the 20th International Conference on World Wide Web},
   year      = {2011},
   pages     = {577--586},
@@ -98,7 +90,7 @@
 
 @InProceedings{SubramanyaEtAl2019,
   title     = {{DiskANN}: Fast Accurate Billion-Point Nearest Neighbor Search on a Single Node},
-  author    = {Suhas Jayaram Subramanya and Devvrit and Rohan Kadekodi and Ravishankar Krishaswamy and Harsha Vardhan Simhadri},
+  author    = {Suhas Jayaram Subramanya and Fnu Devvrit and Harsha Vardhan Simhadri and Ravishankar Krishnawamy and Rohan Kadekodi},
   booktitle = {Advances in Neural Information Processing Systems},
   year      = {2019},
   volume    = {32}
@@ -125,52 +117,56 @@
 }
 
 @Manual{RANN,
-  title  = {\pkg{RANN}: Fast Nearest Neighbour Search},
-  author = {Sunil Arya and David Mount and Samuel E. Kemp and Gregory Jefferis},
+  title  = {{RANN}: Fast Nearest Neighbour Search (Wraps ANN Library) Using L2 Metric},
+  author = {Gregory Jefferis and Samuel E. Kemp and Sunil Arya and David Mount},
   year   = {2025},
-  note   = {\proglang{R} package},
+  note   = {R package version 2.6.2},
+  doi    = {10.32614/CRAN.package.RANN},
   url    = {https://CRAN.R-project.org/package=RANN}
 }
 
 @Manual{FNN,
-  title  = {\pkg{FNN}: Fast Nearest Neighbor Search Algorithms and Applications},
+  title  = {{FNN}: Fast Nearest Neighbor Search Algorithms and Applications},
   author = {Alina Beygelzimer and Sham Kakadet and John Langford and Sunil Arya and David Mount and Shengqiao Li},
   year   = {2024},
-  note   = {\proglang{R} package version 1.1.4.1},
+  note   = {R package version 1.1.4.1},
   doi    = {10.32614/CRAN.package.FNN},
   url    = {https://CRAN.R-project.org/package=FNN}
 }
 
 @Manual{RcppAnnoy,
-  title  = {\pkg{RcppAnnoy}: \proglang{Rcpp} Bindings for Annoy},
-  author = {Dirk Eddelbuettel and Romain Fran{\c{c}}ois and contributors},
+  title  = {{RcppAnnoy}: {Rcpp} Bindings for Annoy, a Library for Approximate Nearest Neighbors},
+  author = {Dirk Eddelbuettel and Erik Bernhardsson},
   year   = {2026},
-  note   = {\proglang{R} package},
+  note   = {R package version 0.0.23},
+  doi    = {10.32614/CRAN.package.RcppAnnoy},
   url    = {https://CRAN.R-project.org/package=RcppAnnoy}
 }
 
 @Manual{RcppHNSW,
-  title  = {\pkg{RcppHNSW}: \proglang{Rcpp} Bindings for hnswlib, a Library for Approximate Nearest Neighbors},
+  title  = {{RcppHNSW}: {Rcpp} Bindings for hnswlib, a Library for Approximate Nearest Neighbors},
   author = {James Melville},
   year   = {2026},
-  note   = {\proglang{R} package version 0.7.0},
+  note   = {R package version 0.7.0},
   doi    = {10.32614/CRAN.package.RcppHNSW},
   url    = {https://CRAN.R-project.org/package=RcppHNSW}
 }
 
 @Manual{Rnanoflann,
-  title  = {\pkg{Rnanoflann}: Nearest Neighbors Using nanoflann},
-  author = {David Cortes},
-  year   = {2026},
-  note   = {\proglang{R} package},
+  title  = {{Rnanoflann}: Extremely Fast Nearest Neighbor Search},
+  author = {Manos Papadakis and Jose Luis Blanco},
+  year   = {2024},
+  note   = {R package version 0.0.3},
+  doi    = {10.32614/CRAN.package.Rnanoflann},
   url    = {https://CRAN.R-project.org/package=Rnanoflann}
 }
 
 @Manual{rnndescent,
-  title  = {\pkg{rnndescent}: Nearest Neighbor Descent},
+  title  = {{rnndescent}: Nearest Neighbor Descent Method for Approximate Nearest Neighbors},
   author = {James Melville},
   year   = {2026},
-  note   = {\proglang{R} package},
+  note   = {R package version 0.2.0},
+  doi    = {10.32614/CRAN.package.rnndescent},
   url    = {https://CRAN.R-project.org/package=rnndescent}
 }
 
@@ -184,36 +180,23 @@
   doi     = {10.12688/f1000research.16619.2}
 }
 
-@Manual{uwot,
-  title  = {\pkg{uwot}: The Uniform Manifold Approximation and Projection Method for Dimensionality Reduction},
-  author = {James Melville},
-  year   = {2026},
-  note   = {\proglang{R} package},
-  url    = {https://CRAN.R-project.org/package=uwot}
-}
-
-@Manual{cudaML,
-  title  = {\pkg{cuda.ml}: \proglang{R} Interface for the RAPIDS cuML Suite of Libraries},
-  author = {Yitao Li and Tomasz Kalinowski and Daniel Falbel},
-  year   = {2026},
-  note   = {\proglang{R} package version 0.3.3},
-  doi    = {10.32614/CRAN.package.cuda.ml},
-  url    = {https://CRAN.R-project.org/package=cuda.ml}
-}
-
 @Manual{float,
-  title  = {\pkg{float}: 32-Bit Floats},
+  title  = {{float}: 32-Bit Floats},
   author = {Drew Schmidt},
-  year   = {2026},
-  note   = {\proglang{R} package},
+  year   = {2025},
+  note   = {R package version 0.3-3},
   url    = {https://CRAN.R-project.org/package=float}
 }
 
-@Manual{Bioconductor,
-  title  = {\pkg{Bioconductor}: Open Software Development for Computational Biology},
-  author = {{Bioconductor Core Team}},
-  year   = {2026},
-  url    = {https://www.bioconductor.org/}
+@Article{HuberEtAl2015,
+  title   = {Orchestrating High-Throughput Genomic Analysis with {Bioconductor}},
+  author  = {Wolfgang Huber and Vincent J. Carey and Robert Gentleman and others},
+  journal = {Nature Methods},
+  year    = {2015},
+  volume  = {12},
+  number  = {2},
+  pages   = {115--121},
+  doi     = {10.1038/nmeth.3252}
 }
 
 @Article{Singularity,
@@ -242,15 +225,6 @@
   howpublished = {Project documentation},
   url          = {https://github.com/facebookresearch/faiss/wiki/GPU-Faiss-with-cuVS}
 }
-@Manual{ALL,
-  title  = {ALL: A Data Package},
-  author = {Xiaochun Li},
-  year   = {2026},
-  note   = {Bioconductor data package},
-  doi    = {10.18129/B9.bioc.ALL},
-  url    = {https://bioconductor.org/packages/ALL}
-}
-
 @TechReport{Nene1996,
   author      = {Sameer A. Nene and Shree K. Nayar and Hiroshi Murase},
   title       = {Columbia Object Image Library ({COIL}-20)},
@@ -287,6 +261,17 @@
   volume  = {14},
   pages   = {100414},
   doi     = {10.1016/j.simpa.2022.100414}
+}
+
+@Article{Hull1994,
+  author  = {Jonathan J. Hull},
+  title   = {A Database for Handwritten Text Recognition Research},
+  journal = {IEEE Transactions on Pattern Analysis and Machine Intelligence},
+  year    = {1994},
+  volume  = {16},
+  number  = {5},
+  pages   = {550--554},
+  doi     = {10.1109/34.291440}
 }
 
 @Article{VanUnen2017,

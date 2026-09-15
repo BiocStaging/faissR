@@ -35,6 +35,10 @@ pretty_dataset <- function(x) {
 }
 
 args <- parse_args(commandArgs(trailingOnly = TRUE))
+script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)
+script_path <- sub("^--file=", "", script_arg[[1L]])
+script_path <- gsub("~+~", " ", script_path, fixed = TRUE)
+script_dir <- dirname(normalizePath(script_path, mustWork = TRUE))
 campaign_root <- normalizePath(args$campaign_root, mustWork = TRUE)
 analysis_dir <- normalizePath(args$analysis_dir, mustWork = TRUE)
 out_dir <- args$out_dir
@@ -140,7 +144,7 @@ environment <- data.frame(
     "NVIDIA L40S; 46,068 MiB; compute capability 8.9", "595.58.03",
     "Direct float32 input for timed calibration, reference, held-out, and CUDA selector rows",
     "Same R double matrix for both routes; faissR conversion included inside its timer",
-    "0.99.37",
+    "0.99.44",
     "1.14.3", "libcuvs 26.06", "13.2",
     "BiocNeighbors 2.4.0; RcppHNSW 0.7.0",
     "SHA-256 0cd4d0df406bd0075046b16d2e8a4d3ae78ee61d98e6d47c639986e28ea6f203"
@@ -235,25 +239,87 @@ grouped_loodo <- read_required(file.path(
 ))
 auto_rows <- summary[summary$method_id == "faissR_cuda_auto", ]
 cpu_rows <- summary[summary$method_id == "faissR_cpu_hnsw", ]
+reference_records <- read_required(file.path(
+  dirname(analysis_dir), "consistency_artifacts", "reference_record_dimensions.csv"
+))
+cpu_loodo <- read_required(file.path(
+  script_dir, "cpu_loodo", "jss_leave_one_dataset_out.csv"
+))
+controlled_pairs <- read.csv(
+  gzfile(file.path(
+    script_dir, "paired_cpu_comparison", "jss_paired_hnsw_pairs.csv.gz"
+  )),
+  stringsAsFactors = FALSE,
+  check.names = FALSE
+)
+systems_dir <- Sys.getenv(
+  "FAISSR_JSS_SYSTEMS_OUT",
+  unset = file.path(dirname(analysis_dir), "completed_systems")
+)
+systems_evidence <- read_required(file.path(
+  systems_dir, "completed_systems_evidence.csv"
+))
+comprehensive_pairs <- read.csv(
+  gzfile(file.path(
+    script_dir, "comprehensive_r_comparison",
+    "jss_comprehensive_r_pairs.csv.gz"
+  )),
+  stringsAsFactors = FALSE,
+  check.names = FALSE
+)
+comprehensive_task_key <- do.call(paste, c(
+  comprehensive_pairs[c("dataset", "metric", "k", "validation_seed")],
+  sep = "\r"
+))
+comprehensive_evidence <- data.frame(
+  evidence = c(
+    "Comprehensive CPU comparison tasks",
+    "Comprehensive CPU paired repetitions",
+    "Comprehensive mean-recall-matched pairs"
+  ),
+  passing_or_completed = c(
+    length(unique(comprehensive_task_key)),
+    nrow(comprehensive_pairs),
+    sum(comprehensive_pairs$recall_equivalent)
+  ),
+  total = c(
+    length(unique(comprehensive_task_key)),
+    nrow(comprehensive_pairs),
+    nrow(comprehensive_pairs)
+  ),
+  stringsAsFactors = FALSE
+)
 evidence <- data.frame(
   evidence = c(
     "CPU route-contract cells", "CUDA route-contract cells",
+    "Public-metric reference records",
     "Completed calibration operating points", "Approximate calibration targets met",
     "CUDA automatic held-out cells", "CPU HNSW held-out cells",
-    "CUDA LOODO operating-point cells", "CUDA LOODO method-family agreement"
+    "CUDA LOODO operating-point cells", "CUDA LOODO method-family agreement",
+    "CPU LOODO operating-point cells", "CPU LOODO method-family agreement",
+    "CPU LOODO abstentions", "Controlled CPU HNSW route pairs",
+    "Successful controlled CPU HNSW pairs"
   ),
   passing_or_completed = c(
-    qa_count("cpu"), qa_count("cuda"), nrow(recommendations),
+    qa_count("cpu"), qa_count("cuda"), nrow(reference_records),
+    nrow(recommendations),
     sum(!recommendations$exact & recommendations$target_met),
     sum(auto_rows$selection_eligible), sum(cpu_rows$selection_eligible),
     sum(loodo$crossfit_operating_point_met, na.rm = TRUE),
-    sum(loodo$crossfit_method_agreement, na.rm = TRUE)
+    sum(loodo$crossfit_method_agreement, na.rm = TRUE),
+    sum(cpu_loodo$crossfit_operating_point_met, na.rm = TRUE),
+    sum(cpu_loodo$crossfit_method_agreement, na.rm = TRUE),
+    sum(cpu_loodo$crossfit_abstained, na.rm = TRUE),
+    nrow(controlled_pairs), sum(controlled_pairs$pair_complete)
   ),
   total = c(
-    48, 52, planned, sum(!recommendations$exact), nrow(auto_rows), nrow(cpu_rows),
-    nrow(loodo), nrow(loodo)
+    48, 52, nrow(reference_records), planned, sum(!recommendations$exact),
+    nrow(auto_rows), nrow(cpu_rows), nrow(loodo), nrow(loodo),
+    nrow(cpu_loodo), sum(!is.na(cpu_loodo$crossfit_method_agreement)),
+    nrow(cpu_loodo), nrow(controlled_pairs), nrow(controlled_pairs)
   ), stringsAsFactors = FALSE
 )
+evidence <- rbind(evidence, systems_evidence, comprehensive_evidence)
 
 auto_cells <- auto_cells_source
 auto_by_dataset <- as.data.frame.matrix(table(
@@ -316,9 +382,16 @@ assert_equal(sum(missing$unavailable_operating_points[missing$failure_reason == 
 assert_equal(sum(missing$unavailable_operating_points[missing$failure_reason == "memory_kill"]),
              45L, "calibration memory kills")
 assert_equal(evidence$passing_or_completed,
-             c(48, 52, 6453, 3653, 324, 304, 324, 300),
+             c(
+               48, 52, 87, 6453, 3653, 324, 304, 324, 300,
+               301, 292, 4, 720, 691, 720, 63, 60, 60, 216, 4104, 1636
+             ),
              "evidence audit numerator")
-assert_equal(evidence$total, c(48, 52, 6804, 4725, 324, 324, 324, 324),
+assert_equal(evidence$total,
+             c(
+               48, 52, 87, 6804, 4725, 324, 324, 324, 324,
+               324, 313, 324, 720, 720, 720, 72, 60, 60, 216, 4104, 4104
+             ),
              "evidence audit denominator")
 assert_equal(nrow(per_cpu), 9L, "CPU per-dataset rows")
 assert_equal(nrow(per_cuda), 9L, "CUDA per-dataset rows")

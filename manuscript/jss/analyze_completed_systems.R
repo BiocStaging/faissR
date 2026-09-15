@@ -32,6 +32,15 @@ run(file.path(validation, "paired_cpu_hnsw_pareto", "audit_validation.R"),
 pairs <- read.csv(file.path(roots[[1L]], "validation_paired_summary.csv"))
 stopifnot(nrow(pairs) == 72L, sum(pairs$both_target_met) == 63L,
           sum(pairs$both_fitted_target_met) == 63L)
+validation_files <- list.files(
+    file.path(roots[[1L]], "validation"),
+    pattern = "^jss_paired_hnsw_raw[.]csv$",
+    recursive = TRUE,
+    full.names = TRUE
+)
+validation_runs <- do.call(rbind, lapply(validation_files, read.csv))
+stopifnot(length(validation_files) == 72L, nrow(validation_runs) == 720L,
+          all(validation_runs$status == "success"))
 tuned <- do.call(rbind, lapply(split(pairs, pairs$comparator), function(x) {
     z <- x[x$both_target_met, ]
     f <- x[x$both_fitted_target_met, ]
@@ -55,6 +64,30 @@ hnsw <- subset(work, backend == "cpu" & requested_method == "hnsw")
 stopifnot(nrow(hnsw) == 15L, all(hnsw$warm_query_sec < hnsw$flat_cold_sec),
           median(hnsw$break_even_batches_vs_rebuilt_flat) == 13)
 write.csv(work, file.path(out, "query_workload_cells.csv"), row.names = FALSE)
+systems_evidence <- data.frame(
+    evidence = c(
+        "Independently tuned HNSW route runs",
+        "Independently tuned HNSW target-matched provider pairs",
+        "CPU query-workload cells",
+        "CUDA query-workload cells"
+    ),
+    passing_or_completed = c(
+        sum(validation_runs$status == "success"),
+        sum(pairs$both_target_met),
+        sum(work$backend == "cpu" & work$status == "complete"),
+        sum(work$backend == "cuda" & work$status == "complete")
+    ),
+    total = c(
+        nrow(validation_runs), nrow(pairs),
+        sum(work$backend == "cpu"), sum(work$backend == "cuda")
+    ),
+    stringsAsFactors = FALSE
+)
+write.csv(
+    systems_evidence,
+    file.path(out, "completed_systems_evidence.csv"),
+    row.names = FALSE
+)
 writeLines("COMPLETED SYSTEMS EVIDENCE AUDIT PASSED",
            file.path(out, "COMPLETED_SYSTEMS_AUDIT.txt"))
 print(tuned, row.names = FALSE)
