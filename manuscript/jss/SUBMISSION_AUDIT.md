@@ -65,9 +65,9 @@ This is a maintenance report, not part of the scientific article.
 - Static manuscript/reference/version and asset checks passed. The current
   JSS-layout article has 20 pages and the supplement has 21 pages. Both editable
   Word documents were rendered and visually inspected.
-- The checksum-gated archive analyses and compact CPU example pass in the
-  working tree. A clean `git archive` reproduction must be rerun after this
-  revision is committed; no clean-export result is claimed for uncommitted files.
+- A clean `git archive` of commit `79f4d6b` reproduced the checksum-gated
+  analyses, compact CPU example, all 18 evidence tables, both figures, the
+  20-page article, the 21-page supplement, and both editable Word documents.
 
 ## Publication boundary
 

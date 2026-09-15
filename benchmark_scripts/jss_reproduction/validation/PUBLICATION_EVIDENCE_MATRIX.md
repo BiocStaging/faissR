@@ -25,7 +25,7 @@ used to support a numerical claim.
 | How are package-owned derived graph routes defined? | Pseudocode, complexity, supported metrics, randomness, and differences from canonical algorithms | Documented in the supplement and marked experimental; excluded from principal performance claims. |
 | Does the policy generalize to other hardware? | Hardware fingerprint and explicit L40S calibration scope | No hardware-independent optimum is claimed. Mismatched hardware is reported as extrapolated. |
 | Can users impose memory or latency budgets? | Current public selector contract | Not implemented; the limitation is stated without implying benchmark support. |
-| Is the replication package self-consistent? | Checksums, source manifests, executable audits, and `audit_submission.py` | Archive and source audits pass. A clean-export audit must be rerun after the current revision is committed. |
+| Is the replication package self-consistent? | Checksums, source manifests, executable audits, and `audit_submission.py` | Archive and source audits pass. A clean export of commit `79f4d6b` reproduced the analyses and submission documents. |
 
 ## Interpretation boundaries
 
