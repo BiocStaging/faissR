@@ -82,7 +82,7 @@ failures, not silently replaced with CPU timings.
 Large benchmarks should save KNN output once:
 
 ```r
-knn <- nn(x, k = 100, backend = "auto", metric = "euclidean", n_threads = 4)
+knn <- nn(x, k = 100, backend = "cpu", metric = "euclidean", n_threads = 4)
 saveRDS(knn, "knn_k100.rds")
 ```
 
@@ -96,8 +96,8 @@ method-specific `tuning = "auto"` defaults rather than to produce a single
 leaderboard. Each tuning run uses one explicit method and one explicit backend,
 float32 dataset files, Euclidean distance, `k = 15, 30, 50, 100`, target recall
 tiers `0.90`, `0.95`, and `0.99`, and a 2000-second timeout per candidate.
-CPU and CUDA are run separately; `backend = "auto"` is intentionally avoided so
-the resulting tables can define CPU and CUDA policies independently.
+CPU and CUDA are run separately so the resulting tables can define device-
+specific method policies independently.
 
 Run the exact-reference job once before the method sweeps:
 
@@ -456,7 +456,8 @@ current runtime availability notes. Runtime-unavailable faissR rows are
 recorded as skipped before loading dataset matrices.
 Successful faissR rows in `benchmark1_nn_speed_results.csv` also record the
 result-facing backend, requested public backend/method/tuning, resolved
-implementation backend, auto-selected method/device, compact
+implementation backend, automatically selected method within the requested
+device, compact
 `route_parameters`, and `tuning_status`. The compact route metadata includes
 deterministic no-pilot tuning flags for approximate FAISS/cuVS routes, including
 HNSW, IVF, PQ/IVFPQ, CAGRA, NSG, and NN-descent, plus explicit backend/method
@@ -501,7 +502,7 @@ follows the same positive-integer validation as the newer NN metric benchmark.
 ## NN Metric Cycles
 
 `benchmark_scripts/benchmark_nn_metrics.R` focuses on faissR's public `nn()`
-method matrix. It benchmarks `backend = "auto"`, `"cpu"`, and `"cuda"` across
+method matrix. It benchmarks explicit `backend = "cpu"` and `"cuda"` across
 the public methods, the three public metrics (`"euclidean"`, `"cosine"`,
 centered cosine similarity versus raw dot product. Only the canonical metric
 labels are accepted before preflight and reporting. Unknown or legacy metric
@@ -594,8 +595,8 @@ ratio, median recall gap, CPU thread count, preflight route,
 route-parameter/tuning metadata, backend/implementation agreement, and the
 recommendation basis used for the recommended row. Speed ratios and recall gaps
 are `NA` when the required timing or recall values are unavailable or invalid.
-`nn_metric_global_recommendations_from_cycles.csv` pools requested CPU, CUDA,
-and auto backends before selecting the fastest row at the recall threshold for
+`nn_metric_global_recommendations_from_cycles.csv` pools requested CPU and CUDA
+backends before selecting the fastest row at the recall threshold for
 each dataset/metric/k combination. `nn_metric_auto_vs_global_recommendation.csv`
 compares aggregate auto rows with those global recommendations, making it the
 main audit for whether no-pilot `method = "auto"` selected the fastest observed
@@ -646,7 +647,7 @@ Rscript benchmark_scripts/benchmark_nn_metrics.R \
 `benchmark_scripts/benchmark_nn_metrics.R` is a faissR-only nearest-neighbour
 metric matrix. It runs public `nn()` combinations over:
 
-- backends: `"auto"`, `"cpu"`, `"cuda"`, or any subset passed with
+- backends: `"cpu"`, `"cuda"`, or either subset passed with
   `--backends`;
 - methods: `"auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`,
 `"hnsw"`, `"ivf"`, `"ivfpq"`, `"vamana"`, `"nsg"`,
@@ -670,15 +671,13 @@ without parsing the prose error message. The run configuration is saved as
 `nn_metric_benchmark_config.csv`, the raw row-level result table is saved as
 `nn_metric_benchmark_results.csv`, and the runtime-aware capability table used
 for the run is saved as `nn_metric_capabilities.csv`, including public
-`backend = "auto"`, `"cpu"`, and `"cuda"` rows plus `resolved_backend`,
+`backend = "cpu"` and `"cuda"` rows plus `resolved_backend`,
 `runtime_available`, `runtime_reason`, and `runtime_notes`. Provider-specific
 CAGRA preflight tables are also saved as `nn_metric_cagra_capabilities.csv`
 with a `cagra_implementation` column, so FAISS GPU CAGRA and direct RAPIDS
 cuVS CAGRA expected skips can be audited separately when
-`--cagra_implementations=faiss_gpu,cuvs` is used. For
-`backend = "auto"`, the
-preflight first checks the explicit auto capability row, then checks the
-resolved CPU/CUDA route and records expected skips when that route requires
+`--cagra_implementations=faiss_gpu,cuvs` is used. Preflight checks the
+requested device route and records expected skips when that route requires
 unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.
 The config includes `available_datasets`, the validated real plus simulated
 dataset names accepted by the `--datasets` selector, which makes partial or
@@ -864,13 +863,13 @@ Rscript benchmark_scripts/benchmark_nn_metrics.R \
 ## K-Means
 
 `benchmark_scripts/benchmark_kmeans.R` compares `fast_kmeans()` with
-`backend = "auto"`, `"cpu"`, and `"cuda"` against base `stats::kmeans` by
+`backend = "cpu"` and `"cuda"` against base `stats::kmeans` by
 default. It records elapsed time, peak resident memory when available, backend
 used, total within-cluster sum of squares, iterations, `converged`,
 `hit_max_iter`, selected k-means
 parameters, tuning policy, benchmark cycle, and ARI against `dataset$labels` when labels are
 available. The result table separates `requested_backend`, `resolved_backend`,
-and `backend_used`, so `"auto"` device policy and the actual implementation
+and `backend_used`, so the requested device and the actual implementation
 (`"faiss"`, `"cpu"`, `"cuda_faiss"`, `"cuda_cuvs"`, or `"stats"`) can be
 audited directly. The run configuration is saved as
 `kmeans_benchmark_config.csv`, and the raw row-level result table is saved as
@@ -919,7 +918,7 @@ break the tie. When ARI is unavailable it selects the fastest median-time row. T
 `recommendation_basis` column records whether the row was selected as
 `"fastest_within_ari_tolerance"` or `"speed_only_no_ari"`.
 `kmeans_backend_recommendations_from_cycles.csv` applies the same rule within
-each dataset/centers/backend group, so CPU, CUDA, auto, and stats results can
+each dataset/centers/backend group, so CPU, CUDA, and stats results can
 be tuned or reported separately without losing the overall recommendation.
 `kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()`
 rows with those recommendations and reports median speed ratio, median ARI gap,
@@ -929,11 +928,6 @@ metadata, backend/implementation agreement, and the recommendation basis used
 for the recommended row. Speed
 ratios, ARI gaps, and withinss ratios are `NA` when the required timing or
 quality values are missing or invalid.
-`kmeans_auto_vs_global_recommendation.csv` compares aggregate
-`fast_kmeans(backend = "auto")` rows with the pooled global recommendation for
-the same dataset/centers combination and records requested-backend,
-resolved-backend, implementation, timing, ARI, withinss, deterministic tuning,
-and static no-pilot backend-selection agreement.
 `MATERIALS_AND_METHODS_kmeans.md` records the corresponding paper-ready
 methods text, including centers selection, ARI/withinss reporting, tuning
 policy, expected-skip policy, and output-file definitions.
@@ -941,17 +935,13 @@ Explicit CUDA/library combinations that are known unavailable before execution
 are recorded as `status = "expected_skip"` with `expected_skip = TRUE`, while
 `resolved_backend` remains `"cuda"` so the skipped public device request is
 auditable. The skip decision is derived from `kmeans_runtime_capabilities.csv`.
-`backend = "auto"` resolves to CPU instead of becoming an expected
-skip when no k-means-capable CUDA route is available, and it can also resolve
-to CPU for small k-means jobs or many-cluster jobs with too few observations
-per center where the deterministic shape gate estimates that GPU launch/copy
-overhead would dominate. `centers = 1` is resolved to the exact CPU column-mean
+`centers = 1` is resolved to the exact CPU column-mean
 solution, and `centers = nrow(data)` is resolved to the exact singleton
 assignment, because no iterative CPU or CUDA k-means backend can improve either
 objective. Unexpected runtime errors remain failed rows and are not replaced
 with CPU timings.
-The package records the same decision in
-`parameters$tuning$backend_policy`, including a reason string such as
+The package records shape diagnostics in `parameters$tuning$backend_policy`,
+including a reason string such as
 `small_cpu_preferred`, `few_points_per_center_cpu_preferred`,
 `work_at_least_1e8`, `input_at_least_256MiB`, or
 `large_high_dimensional_input`, plus `single_cluster_exact_mean` and
@@ -960,14 +950,13 @@ bytes, and float32 GPU transfer bytes. The size gate uses
 `gpu_transfer_nbytes`, while `nbytes` stays available as the R double input
 footprint for compatibility, plus the
 deterministic threshold values (`work_threshold`, `nbytes_threshold`,
-`large_n_threshold`, `large_p_threshold`, and `min_n_per_center`) used for the
-CPU/CUDA decision.
+`large_n_threshold`, `large_p_threshold`, and `min_n_per_center`).
 Benchmark rows also record `selection_*` columns from
 `parameters$tuning$selection`, including the predicted backend, backend-policy
 reason, explicit-backend flag, backend decision label, runtime capability
 flags, work/input-size estimates, and `selection_slow_tuning = FALSE`.
-Benchmark summaries can therefore separate explicit CPU/CUDA requests from
-automatic CPU/CUDA selection without running extra pilot jobs.
+Benchmark summaries can therefore audit explicit CPU and CUDA requests without
+running extra pilot jobs.
 For CUDA k-means rows, the benchmark also records `cuda_provider_selection`,
 `faiss_gpu_error`, and `backend_resolution_note` from `fast_kmeans()`. These
 columns distinguish FAISS GPU k-means from direct cuVS k-means and preserve the

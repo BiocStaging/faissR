@@ -2,6 +2,16 @@
 
 set -eu
 
+# System-library metadata follows the common R "anticonf" convention. These
+# names are used only in diagnostics; configure never invokes a package manager.
+PKG_CONFIG_NAME="faiss"
+PKG_DEB_NAME="libfaiss-dev libblas-dev liblapack-dev"
+PKG_RPM_NAME="faiss-devel blas-devel lapack-devel"
+PKG_APK_NAME="no generally available FAISS development package"
+PKG_TEST_HEADER="<faiss/IndexFlat.h>"
+PKG_LIBS="-lfaiss"
+PKG_CFLAGS=""
+
 wasm_build=0
 require_faiss=${FAISSR_REQUIRE_FAISS:-0}
 for arg in "$@"; do
@@ -35,6 +45,9 @@ if [ "$wasm_build" = "1" ]; then
   exit 0
 fi
 
+config_log="$(pwd)/config.log"
+printf '%s\n' 'faissR native configuration probes' > "$config_log"
+
 use_cuda=${FAISSR_USE_CUDA:-}
 if [ -z "$use_cuda" ]; then use_cuda=auto; fi
 if [ "${FAISSR_REQUIRE_CUDA:-0}" = "1" ]; then use_cuda=1; fi
@@ -65,6 +78,19 @@ if [ "$use_cuda" = "1" ] && [ -z "$cuda_home" ]; then
   exit 1
 fi
 
+cuda_version=""
+if [ -n "$nvcc" ]; then
+  cuda_version=$(
+    "$nvcc" --version 2>/dev/null |
+      sed -n 's/.*release \([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1.\2/p' |
+      sed -n '1p'
+  )
+  if [ -z "$cuda_version" ] && [ "$use_cuda" = "1" ]; then
+    echo "CUDA was requested, but the toolkit version could not be read from '$nvcc --version'." >&2
+    exit 1
+  fi
+fi
+
 cppflags=""
 libs="-pthread"
 extra_cxxflags=""
@@ -77,33 +103,20 @@ faiss_libdir=""
 libomp_home=${LIBOMP_HOME:-${FAISSR_LIBOMP_HOME:-}}
 libomp_cppflags=""
 libomp_libs=""
-brew_cmd=""
+macos_recipe_prefix=""
 
-find_brew() {
-  if [ -n "${BREW:-}" ] && [ -x "${BREW:-}" ]; then
-    brew_cmd=$BREW
-    return 0
-  fi
-  candidate_brew=$(command -v brew 2>/dev/null || true)
-  if [ -n "$candidate_brew" ] && [ -x "$candidate_brew" ]; then
-    brew_cmd=$candidate_brew
-    return 0
-  fi
-  for candidate_brew in /opt/homebrew/bin/brew /usr/local/bin/brew; do
-    if [ -x "$candidate_brew" ]; then
-      brew_cmd=$candidate_brew
-      return 0
-    fi
-  done
-  return 1
-}
+if { [ -n "${INCLUDE_DIR:-}" ] && [ -z "${LIB_DIR:-}" ]; } || \
+   { [ -z "${INCLUDE_DIR:-}" ] && [ -n "${LIB_DIR:-}" ]; }; then
+  echo "INCLUDE_DIR and LIB_DIR must be supplied together." >&2
+  exit 1
+fi
 
-macos_auto_install_faiss() {
-  if [ "$(uname -s 2>/dev/null || echo unknown)" != "Darwin" ]; then
-    return 1
+if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ]; then
+  macos_arch=$(uname -m 2>/dev/null || true)
+  if [ -n "$macos_arch" ] && [ -d "/opt/R/$macos_arch" ]; then
+    macos_recipe_prefix="/opt/R/$macos_arch"
   fi
-  [ "${FAISSR_AUTO_INSTALL_FAISS:-0}" = "1" ]
-}
+fi
 
 runiverse_macos_diagnostic_stubs_allowed() {
   if [ "$(uname -s 2>/dev/null || echo unknown)" != "Darwin" ]; then
@@ -146,48 +159,50 @@ try_libomp_prefix() {
   return 1
 }
 
-try_homebrew_libomp() {
-  if find_brew; then
-    brew_libomp_prefix=$("$brew_cmd" --prefix libomp 2>/dev/null || true)
-    if try_libomp_prefix "$brew_libomp_prefix"; then
-      return 0
-    fi
-    brew_prefix=$("$brew_cmd" --prefix 2>/dev/null || true)
-    if try_libomp_prefix "$brew_prefix/opt/libomp"; then
-      return 0
-    fi
+try_faiss_dirs() {
+  faiss_include_dir=$1
+  candidate_faiss_libdir=$2
+  if [ -z "$faiss_include_dir" ] || [ -z "$candidate_faiss_libdir" ] || \
+     [ ! -f "$faiss_include_dir/faiss/IndexFlat.h" ]; then
+    return 1
+  fi
+  candidate_faiss_file=""
+  candidate_faiss_rpath=""
+  if [ -f "$candidate_faiss_libdir/libfaiss.dylib" ]; then
+    candidate_faiss_file="$candidate_faiss_libdir/libfaiss.dylib"
+    candidate_faiss_rpath="-Wl,-rpath,$candidate_faiss_libdir"
+  elif [ -f "$candidate_faiss_libdir/libfaiss.so" ]; then
+    candidate_faiss_file="$candidate_faiss_libdir/libfaiss.so"
+    candidate_faiss_rpath="-Wl,-rpath,$candidate_faiss_libdir"
+  elif [ -f "$candidate_faiss_libdir/libfaiss.a" ]; then
+    candidate_faiss_file="$candidate_faiss_libdir/libfaiss.a"
+  fi
+  if [ -n "$candidate_faiss_file" ]; then
+    faiss_cppflags="-I$faiss_include_dir"
+    faiss_libdir="$candidate_faiss_libdir"
+    faiss_libs="-L$faiss_libdir $candidate_faiss_rpath $PKG_LIBS"
+    return 0
   fi
   return 1
 }
 
 try_faiss_prefix() {
   faiss_prefix=$1
-  if [ -n "$faiss_prefix" ] && [ -f "$faiss_prefix/include/faiss/IndexFlat.h" ]; then
-    if [ -d "$faiss_prefix/lib64" ]; then
-      candidate_faiss_libdir="$faiss_prefix/lib64"
-    else
-      candidate_faiss_libdir="$faiss_prefix/lib"
-    fi
-    if [ -f "$candidate_faiss_libdir/libfaiss.dylib" ] || \
-       [ -f "$candidate_faiss_libdir/libfaiss.so" ] || \
-       [ -f "$candidate_faiss_libdir/libfaiss.a" ]; then
-      faiss_cppflags="-I$faiss_prefix/include"
-      faiss_libdir="$candidate_faiss_libdir"
-      faiss_libs="-L$faiss_libdir -Wl,-rpath,$faiss_libdir -lfaiss"
+  if [ -z "$faiss_prefix" ]; then
+    return 1
+  fi
+  for candidate_faiss_libdir in "$faiss_prefix/lib64" "$faiss_prefix/lib"; do
+    if try_faiss_dirs "$faiss_prefix/include" "$candidate_faiss_libdir"; then
       return 0
     fi
-  fi
+  done
   return 1
 }
 
 try_faiss_system() {
   if [ -f /usr/include/faiss/IndexFlat.h ]; then
     for candidate_faiss_libdir in /usr/lib /usr/lib/* /lib /lib/*; do
-      if [ -f "$candidate_faiss_libdir/libfaiss.so" ] || \
-         [ -f "$candidate_faiss_libdir/libfaiss.a" ]; then
-        faiss_cppflags="-I/usr/include"
-        faiss_libdir="$candidate_faiss_libdir"
-        faiss_libs="-L$faiss_libdir -Wl,-rpath,$faiss_libdir -lfaiss"
+      if try_faiss_dirs /usr/include "$candidate_faiss_libdir"; then
         return 0
       fi
     done
@@ -195,25 +210,17 @@ try_faiss_system() {
   return 1
 }
 
-try_homebrew_faiss() {
-  if find_brew; then
-    brew_faiss_prefix=$("$brew_cmd" --prefix faiss 2>/dev/null || true)
-    if try_faiss_prefix "$brew_faiss_prefix"; then
-      return 0
-    fi
-    brew_prefix=$("$brew_cmd" --prefix 2>/dev/null || true)
-    if try_faiss_prefix "$brew_prefix/opt/faiss"; then
-      return 0
-    fi
-  fi
-  return 1
-}
-
 if try_faiss_prefix "$faiss_home"; then
   :
-elif command -v pkg-config >/dev/null 2>&1 && pkg-config --exists faiss 2>/dev/null; then
-  faiss_cppflags=$(pkg-config --cflags faiss)
-  faiss_libs=$(pkg-config --libs faiss)
+elif [ -n "${INCLUDE_DIR:-}" ] && [ -n "${LIB_DIR:-}" ] && \
+     try_faiss_dirs "$INCLUDE_DIR" "$LIB_DIR"; then
+  :
+elif command -v pkg-config >/dev/null 2>&1 && \
+     pkg-config --exists "$PKG_CONFIG_NAME" 2>/dev/null; then
+  faiss_cppflags=$(pkg-config --cflags "$PKG_CONFIG_NAME")
+  faiss_libs=$(pkg-config --libs "$PKG_CONFIG_NAME")
+elif try_faiss_prefix "$macos_recipe_prefix"; then
+  :
 elif [ -n "${CONDA_PREFIX:-}" ] && try_faiss_prefix "$CONDA_PREFIX"; then
   :
 elif try_faiss_prefix /opt/homebrew; then
@@ -222,48 +229,31 @@ elif try_faiss_prefix /usr/local; then
   :
 elif try_faiss_system; then
   :
-elif try_homebrew_faiss; then
-  :
-fi
-
-if [ -z "$faiss_cppflags" ] || [ -z "$faiss_libs" ]; then
-  if macos_auto_install_faiss; then
-    if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ] && \
-       find_brew; then
-      if [ "${FAISSR_AUTO_INSTALL_FAISS:-}" = "1" ]; then
-        echo "FAISSR_AUTO_INSTALL_FAISS=1: installing FAISS and libomp with Homebrew." >&2
-      fi
-      "$brew_cmd" install faiss libomp
-      if ! try_homebrew_faiss; then
-        echo "Homebrew FAISS installation finished, but configure still could not find include/faiss and lib/libfaiss." >&2
-      fi
-    else
-      if ! runiverse_macos_diagnostic_stubs_allowed; then
-        echo "Automatic FAISS installation was requested, but it is supported only on macOS with Homebrew." >&2
-      fi
-    fi
-  fi
 fi
 
 if [ -z "$faiss_cppflags" ] || [ -z "$faiss_libs" ]; then
   if runiverse_macos_diagnostic_stubs_allowed; then
     echo "r-universe/BiocStaging macOS binary worker detected without FAISS." >&2
-    echo "Building diagnostic stubs because this worker removes Homebrew and does not provide FAISS." >&2
+    echo "Building diagnostic stubs because this worker does not provide FAISS." >&2
     echo "Linux and user macOS source builds still require real FAISS." >&2
     write_diagnostic_makevars "-DFAISSR_MACOS_CI_NO_FAISS"
     exit 0
   fi
   echo "FAISS is required to build faissR, but FAISS headers/library were not found." >&2
   if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ]; then
-    echo "On macOS with Homebrew, install FAISS and OpenMP with:" >&2
-    echo "  brew install faiss libomp" >&2
-    echo "Then retry, or set FAISS_HOME=\"\$(brew --prefix faiss)\" before installing faissR." >&2
-    echo "For an explicit GitHub-install convenience path, run:" >&2
-    echo "  Sys.setenv(FAISSR_AUTO_INSTALL_FAISS = \"1\")" >&2
-    echo "  remotes::install_github(\"tkcaccia/faissR\")" >&2
+    echo "Bioconductor/macOS binaries should use the static FAISS dependency supplied" >&2
+    echo "through the R-macos recipes system. For a source build, set FAISS_HOME" >&2
+    echo "or INCLUDE_DIR and LIB_DIR to a compatible FAISS installation." >&2
+  elif [ -f /etc/debian_version ]; then
+    echo "On Debian/Ubuntu, install: $PKG_DEB_NAME" >&2
+  elif command -v dnf >/dev/null 2>&1 || command -v rpm >/dev/null 2>&1; then
+    echo "On RPM-based systems, install when available: $PKG_RPM_NAME" >&2
+  elif command -v apk >/dev/null 2>&1; then
+    echo "On Alpine, $PKG_APK_NAME; build FAISS and set FAISS_HOME." >&2
   else
     echo "Install FAISS or set FAISS_HOME to a prefix containing include/faiss and lib/libfaiss." >&2
   fi
+  echo "Alternatively use R CMD INSTALL --configure-vars='INCLUDE_DIR=... LIB_DIR=...'." >&2
   echo "NVIDIA CUDA/cuVS libraries are not required for a CPU-only FAISS build." >&2
   echo "For a NVIDIA GPU build, set FAISSR_REQUIRE_CUDA=1 and, if needed, FAISSR_REQUIRE_CUVS=1 so missing GPU libraries are fatal." >&2
   exit 1
@@ -272,9 +262,11 @@ fi
 if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ]; then
   if try_libomp_prefix "$libomp_home"; then
     :
-  elif [ -n "${CONDA_PREFIX:-}" ] && try_libomp_prefix "$CONDA_PREFIX"; then
+  elif try_libomp_prefix "$macos_recipe_prefix"; then
     :
-  elif try_homebrew_libomp; then
+  elif try_libomp_prefix "${R_HOME:-}"; then
+    :
+  elif [ -n "${CONDA_PREFIX:-}" ] && try_libomp_prefix "$CONDA_PREFIX"; then
     :
   elif try_libomp_prefix /opt/homebrew/opt/libomp; then
     :
@@ -287,24 +279,9 @@ if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ]; then
   fi
 
   if [ -z "$libomp_cppflags" ] || [ -z "$libomp_libs" ]; then
-    if macos_auto_install_faiss && find_brew; then
-      if [ "${FAISSR_AUTO_INSTALL_FAISS:-}" = "1" ]; then
-        echo "FAISSR_AUTO_INSTALL_FAISS=1: installing libomp with Homebrew." >&2
-      fi
-      "$brew_cmd" install libomp
-      try_homebrew_libomp || true
-    fi
-  fi
-
-  if [ -z "$libomp_cppflags" ] || [ -z "$libomp_libs" ]; then
     echo "FAISS was found, but macOS OpenMP headers/library were not found." >&2
-    echo "Homebrew FAISS headers include <omp.h>, so Apple clang needs Homebrew libomp." >&2
-    echo "Install it with:" >&2
-    echo "  brew install libomp" >&2
-    echo "Then retry, or set LIBOMP_HOME=\"\$(brew --prefix libomp)\" before installing faissR." >&2
-    echo "For an explicit GitHub-install convenience path, run:" >&2
-    echo "  Sys.setenv(FAISSR_AUTO_INSTALL_FAISS = \"1\")" >&2
-    echo "  remotes::install_github(\"tkcaccia/faissR\")" >&2
+    echo "Use the OpenMP runtime supplied with the R-macos recipe/toolchain, or set" >&2
+    echo "LIBOMP_HOME to a prefix containing include/omp.h and lib/libomp.*." >&2
     exit 1
   fi
 
@@ -317,22 +294,142 @@ libs="$libs $faiss_libs $libomp_libs"
 cuda_objects="nn_cuda_stub.o"
 cuda_rule=""
 if [ "$use_cuda" != "0" ] && [ -n "$nvcc" ] && [ -n "$cuda_home" ]; then
-  cuda_arch_flags=""
-  for arch in ${FAISSR_CUDA_ARCH:-}; do
-    cuda_arch_flags="$cuda_arch_flags -gencode=arch=compute_$arch,code=sm_$arch"
+  cuda_cppflags="-I$cuda_home/include"
+  cuda_ldflags="-L$cuda_home/lib64 -L$cuda_home/lib"
+  for cuda_target_include in "$cuda_home"/targets/*/include; do
+    if [ -d "$cuda_target_include" ]; then
+      cuda_cppflags="$cuda_cppflags -I$cuda_target_include"
+    fi
   done
+  for cuda_target_lib in "$cuda_home"/targets/*/lib; do
+    if [ -d "$cuda_target_lib" ]; then
+      cuda_ldflags="$cuda_ldflags -L$cuda_target_lib"
+    fi
+  done
+  cuda_arch_flags=""
+  cuda_max_arch=""
+  for arch in ${FAISSR_CUDA_ARCH:-}; do
+    case "$arch" in
+      *[!0-9]*|'')
+        echo "FAISSR_CUDA_ARCH must contain space-separated numeric compute capabilities, for example '80 90 120'." >&2
+        exit 1
+        ;;
+    esac
+    cuda_arch_flags="$cuda_arch_flags -gencode=arch=compute_$arch,code=sm_$arch"
+    if [ -z "$cuda_max_arch" ] || [ "$arch" -gt "$cuda_max_arch" ]; then
+      cuda_max_arch=$arch
+    fi
+  done
+  cuda_ptx_arch=${FAISSR_CUDA_PTX_ARCH:-$cuda_max_arch}
+  if [ -n "$cuda_ptx_arch" ] && [ "$cuda_ptx_arch" != "none" ]; then
+    case "$cuda_ptx_arch" in
+      *[!0-9]*)
+        echo "FAISSR_CUDA_PTX_ARCH must be a numeric compute capability or 'none'." >&2
+        exit 1
+        ;;
+    esac
+    cuda_arch_flags="$cuda_arch_flags -gencode=arch=compute_$cuda_ptx_arch,code=compute_$cuda_ptx_arch"
+  fi
   cuda_extra_flags=${FAISSR_CUDA_FLAGS:-}
-  cuda_objects="nn_cuda_impl.o nn_cuda_kernels.o"
-  cppflags="$cppflags -DFAISSR_HAS_CUDA -I$cuda_home/include"
-  libs="$libs -L$cuda_home/lib64 -L$cuda_home/lib -lcudart"
-  cuda_rule="
-.DEFAULT_GOAL := all
+  cuda_probe_dir=$(mktemp -d "${TMPDIR:-/tmp}/faissR-cuda-XXXXXX")
+  cat > "$cuda_probe_dir/conftest.cu" <<'EOF'
+#include <cuda_runtime_api.h>
+#include <cstdio>
+
+int main() {
+  int driver = 0;
+  int runtime = 0;
+  int count = 0;
+  int compute_major = -1;
+  int compute_minor = -1;
+  const cudaError_t driver_status = cudaDriverGetVersion(&driver);
+  const cudaError_t runtime_status = cudaRuntimeGetVersion(&runtime);
+  const cudaError_t device_status = cudaGetDeviceCount(&count);
+  cudaError_t property_status = cudaErrorNoDevice;
+  if (device_status == cudaSuccess && count > 0) {
+    cudaDeviceProp property{};
+    property_status = cudaGetDeviceProperties(&property, 0);
+    if (property_status == cudaSuccess) {
+      compute_major = property.major;
+      compute_minor = property.minor;
+    }
+  }
+  std::printf(
+    "compiled=%d driver_status=%d driver=%d runtime_status=%d "
+    "runtime=%d device_status=%d devices=%d property_status=%d "
+    "capability=%d.%d\n",
+    CUDART_VERSION,
+    static_cast<int>(driver_status),
+    driver,
+    static_cast<int>(runtime_status),
+    runtime,
+    static_cast<int>(device_status),
+    count,
+    static_cast<int>(property_status),
+    compute_major,
+    compute_minor
+  );
+  return 0;
+}
+EOF
+  {
+    printf '\nCUDA toolkit probe\n'
+    printf 'NVCC: %s\n' "$nvcc"
+    printf 'CUDA_HOME: %s\n' "$cuda_home"
+    printf 'Reported toolkit: %s\n' "${cuda_version:-unknown}"
+    printf 'Architecture flags: %s\n' "${cuda_arch_flags:-nvcc-default}"
+  } >> "$config_log"
+  cuda_probe_ok=1
+  if ! "$nvcc" -std=c++17 $cuda_arch_flags $cuda_extra_flags \
+      "$cuda_probe_dir/conftest.cu" \
+      $cuda_ldflags -lcudart \
+      -o "$cuda_probe_dir/conftest" >> "$config_log" 2>&1; then
+    cuda_probe_ok=0
+  fi
+  cuda_probe_output=""
+  if [ "$cuda_probe_ok" = "1" ]; then
+    cuda_probe_output=$(
+      "$cuda_probe_dir/conftest" 2>> "$config_log" || true
+    )
+    printf 'Runtime probe: %s\n' "${cuda_probe_output:-unavailable}" >> "$config_log"
+  fi
+  rm -rf "$cuda_probe_dir"
+
+  if [ "$cuda_probe_ok" = "0" ]; then
+    if [ "$use_cuda" = "1" ]; then
+      echo "CUDA was requested, but a CUDA compiler/linker probe failed." >&2
+      echo "Check CUDA_HOME, NVCC, FAISSR_CUDA_ARCH, and config.log." >&2
+      exit 1
+    fi
+    echo "A CUDA compiler was found, but its compile/link probe failed; building without CUDA." >&2
+    echo "Set FAISSR_REQUIRE_CUDA=1 to make this condition fatal. See config.log." >&2
+  else
+    if [ "${FAISSR_REQUIRE_CUDA_RUNTIME:-0}" = "1" ]; then
+      case "$cuda_probe_output" in
+        *"device_status=0 devices="[1-9]*) ;;
+        *)
+          echo "FAISSR_REQUIRE_CUDA_RUNTIME=1, but no usable CUDA device was visible during configuration." >&2
+          echo "Runtime probe: ${cuda_probe_output:-unavailable}" >&2
+          exit 1
+          ;;
+      esac
+    fi
+    echo "CUDA compile/link probe passed (toolkit ${cuda_version:-unknown})."
+    if [ -n "$cuda_probe_output" ]; then
+      echo "CUDA runtime probe: $cuda_probe_output"
+    fi
+    cuda_objects="nn_cuda_impl.o nn_cuda_kernels.o"
+    cppflags="$cppflags -DFAISSR_HAS_CUDA $cuda_cppflags"
+    libs="$libs $cuda_ldflags -lcudart"
+    cuda_rule="
+all: \$(SHLIB)
 
 CUDA_NVCCFLAGS = -std=c++17 -x cu -Xcompiler -fPIC$cuda_arch_flags $cuda_extra_flags
 
 nn_cuda_kernels.o: nn_cuda_kernels.cpp
 	\$(NVCC) \$(CUDA_NVCCFLAGS) -c \$< -o \$@
 "
+  fi
 fi
 
 use_cuvs=${FAISSR_USE_CUVS:-}
@@ -450,8 +547,8 @@ if [ "$(uname -s 2>/dev/null || echo unknown)" = "Linux" ]; then
   probe_dir=$(mktemp -d "${TMPDIR:-/tmp}/faissR-link-XXXXXX")
   trap 'rm -rf "$probe_dir"' 0
   trap 'exit 1' HUP INT QUIT TERM
-  probe_log="$(pwd)/config.log"
-  printf '%s\n' 'FAISS numerical-library compile/load probes' > "$probe_log"
+  probe_log="$config_log"
+  printf '\n%s\n' 'FAISS numerical-library compile/load probes' >> "$probe_log"
   cat > "$probe_dir/conftest.cpp" <<'EOF'
 #include <faiss/IndexFlat.h>
 extern "C" {

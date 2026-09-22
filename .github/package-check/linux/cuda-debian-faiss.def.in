@@ -1,0 +1,107 @@
+Bootstrap: docker
+From: debian:trixie-slim
+
+%post
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        build-essential gfortran cmake ninja-build pkg-config git curl \
+        ca-certificates bzip2 xz-utils file tzdata \
+        libuv1-dev libnode-dev \
+        libopenblas-dev liblapack-dev libgomp1 \
+        libcurl4-openssl-dev libssl-dev libxml2-dev libicu-dev \
+        libpcre2-dev libreadline-dev libbz2-dev liblzma-dev zlib1g-dev \
+        libcairo2-dev libxt-dev libjpeg-dev libpng-dev libtiff-dev \
+        pandoc qpdf devscripts texinfo texlive-latex-base \
+        texlive-latex-recommended texlive-fonts-recommended
+
+    CMAKE_VERSION=3.31.8
+    curl -fsSL \
+        "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz" \
+        -o /tmp/cmake.tar.gz
+    mkdir -p /opt/cmake
+    tar -xzf /tmp/cmake.tar.gz -C /opt/cmake --strip-components=1
+
+    export PATH=/opt/cmake/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+    curl -fsSL https://cran.r-project.org/src/base/R-4/R-4.6.0.tar.gz \
+        -o /tmp/R.tar.gz
+    tar -xzf /tmp/R.tar.gz -C /tmp
+    cd /tmp/R-4.6.0
+    ./configure --prefix=/opt/R --enable-R-shlib --with-x=no \
+        --with-cairo=yes --with-readline=yes --with-blas --with-lapack
+    make -j4
+    make install
+
+    /opt/R/bin/Rscript -e \
+        'packages <- c("BiocManager", "Rcpp", "float", "knitr",
+        "rmarkdown", "testthat", "withr", "Matrix");
+        install.packages(packages, repos = "https://cloud.r-project.org");
+        stopifnot(all(vapply(packages, requireNamespace, logical(1),
+        quietly = TRUE)))'
+    /opt/R/bin/Rscript -e \
+        'packages <- c("Biobase", "BiocNeighbors",
+        "BiocSingular", "BiocStyle", "S4Vectors",
+        "SingleCellExperiment", "SummarizedExperiment", "scater",
+        "scRNAseq", "scran", "scuttle");
+        BiocManager::install(packages, update = FALSE, ask = FALSE);
+        stopifnot(all(vapply(packages, requireNamespace, logical(1),
+        quietly = TRUE)))'
+
+    # Keep the conda CUDA prefix out of R's configure and package builds. Its
+    # compiler runtime can otherwise shadow Debian system libraries.
+    curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | \
+        tar -xj -C /usr/local bin/micromamba
+    MAMBA_ROOT_PREFIX=/opt/micromamba /usr/local/bin/micromamba create -y \
+        -p /opt/cuda -c nvidia -c conda-forge \
+        "cuda-toolkit=@CUDA_VERSION@.*"
+    export PATH=/opt/cmake/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/cuda/bin
+    export LD_LIBRARY_PATH=/opt/cuda/lib:/opt/cuda/lib64
+    export NVCC_CCBIN=/usr/bin/g++
+
+    curl -fsSL \
+        https://github.com/facebookresearch/faiss/archive/refs/tags/v1.14.3.tar.gz \
+        -o /tmp/faiss.tar.gz
+    tar -xzf /tmp/faiss.tar.gz -C /tmp
+    rm -rf /tmp/faiss-build
+    cmake -S /tmp/faiss-1.14.3 -B /tmp/faiss-build -G Ninja \
+        -DFAISS_ENABLE_GPU:BOOL=ON \
+        -DFAISS_ENABLE_CUVS:BOOL=OFF \
+        -DFAISS_ENABLE_PYTHON:BOOL=OFF \
+        -DFAISS_ENABLE_EXTRAS:BOOL=OFF \
+        -DBUILD_TESTING:BOOL=OFF \
+        -DBUILD_SHARED_LIBS:BOOL=ON \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DFAISS_OPT_LEVEL=generic \
+        -DBLA_VENDOR=OpenBLAS \
+        -DBLAS_LIBRARIES=/usr/lib/x86_64-linux-gnu/libopenblas.so \
+        -DLAPACK_LIBRARIES=/usr/lib/x86_64-linux-gnu/libopenblas.so \
+        -DCMAKE_C_COMPILER=/usr/bin/gcc \
+        -DCMAKE_CXX_COMPILER=/usr/bin/g++ \
+        -DCUDAToolkit_ROOT=/opt/cuda \
+        -DCMAKE_CUDA_COMPILER=/opt/cuda/bin/nvcc \
+        -DCMAKE_CUDA_HOST_COMPILER=/usr/bin/g++ \
+        -DCMAKE_CUDA_ARCHITECTURES="@CUDA_ARCHS@"
+    cmake --build /tmp/faiss-build --parallel 4
+    cmake --install /tmp/faiss-build
+    /sbin/ldconfig
+
+    rm -rf /tmp/R* /tmp/faiss* /var/lib/apt/lists/*
+
+%environment
+    export PATH=/opt/cmake/bin:/opt/R/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/cuda/bin
+    export CUDA_HOME=/opt/cuda
+    export NVCC_CCBIN=/usr/bin/g++
+    export LD_LIBRARY_PATH=/opt/cuda/lib:/opt/cuda/lib64:/usr/local/lib
+    export FAISS_HOME=/usr/local
+    export OMP_NUM_THREADS=2
+    export OPENBLAS_NUM_THREADS=1
+    export LANG=C.UTF-8
+
+%test
+    /opt/R/bin/Rscript -e \
+        'stopifnot(getRversion() >= "4.6.0", requireNamespace("Rcpp"),
+        requireNamespace("Biobase"), requireNamespace("scRNAseq"),
+        requireNamespace("testthat"))'
+    test -x /opt/cuda/bin/nvcc
+    test -f /usr/local/include/faiss/IndexFlat.h

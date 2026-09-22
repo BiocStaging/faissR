@@ -39,16 +39,17 @@ test_that("metric preflight reports query and non-finite rows separately", {
   expect_identical(out$action, "error_non_finite_all_backends")
 })
 
-test_that("metric preflight validates dimensions and auto ambiguity", {
+test_that("metric preflight validates dimensions and backend labels", {
   expect_error(
     nn_metric_preflight(matrix(1:4, 2), matrix(1:6, 2)),
     "same number of columns"
   )
-  out <- nn_metric_preflight(
-    matrix(0, 2, 2),
-    metric = "cosine",
-    backend = "auto"
+  expect_error(
+    nn_metric_preflight(
+      matrix(0, 2, 2),
+      metric = "cosine",
+      backend = "auto"
+    ),
+    "backend"
   )
-  expect_true(is.na(out$would_succeed))
-  expect_match(out$action, "backend_dependent")
 })

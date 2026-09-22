@@ -8,7 +8,7 @@
 #' @param points Optional dense query object with the same number of columns as
 #'   `data`. `NULL` represents self-query and reuses the `data` inspection.
 #' @param metric One of `"euclidean"`, `"cosine"`, or `"correlation"`.
-#' @param backend Requested backend (`"auto"`, `"cpu"`, or `"cuda"`). `NULL`
+#' @param backend Requested backend (`"cpu"` or `"cuda"`). `NULL`
 #'   follows the package backend option and environment-variable policy.
 #'
 #' @return A list containing one-based `data_degenerate_rows` and
@@ -16,8 +16,7 @@
 #'   corresponding non-finite row indices, `would_succeed`, and a stable
 #'   `action` label. `data_rows` and `points_rows` are retained as compatibility
 #'   aliases. CPU cosine and correlation use the documented zero-normalized
-#'   convention; CUDA rejects affected rows. An automatic backend is reported
-#'   as backend-dependent.
+#'   convention; CUDA rejects affected rows.
 #'
 #' @details
 #' For cosine, a degenerate row is exactly all zero after conversion to the
@@ -189,10 +188,6 @@ metric_preflight_decision <- function(
         cuda = list(
             would_succeed = FALSE,
             action = "error_degenerate_cuda"
-        ),
-        auto = list(
-            would_succeed = NA,
-            action = "backend_dependent_resolve_backend_before_search"
         )
     )
 }

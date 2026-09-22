@@ -60,7 +60,7 @@ matrix was created.
 ## `nn()`
 
 ```r
-nn(data, points = data, k = NULL, exclude_self = FALSE, backend = "auto",
+nn(data, points = data, k = NULL, exclude_self = FALSE, backend = NULL,
    method = "auto", metric = "euclidean", tuning = "auto",
    target_recall = 0.99,
    cagra_implementation = NULL, cagra_build_algo = NULL,
@@ -74,12 +74,12 @@ nn(data, points = data, k = NULL, exclude_self = FALSE, backend = "auto",
 | `points` | Optional query matrix/data frame/float32 matrix with the same number of columns as `data`. Defaults to `data` for self-search. Float32 reference/query inputs can be mixed with ordinary R double matrices; direct FAISS/cuVS adapters convert only the double side once to row-major float32. |
 | `k` | Number of neighbours to return. If `NULL`, faissR chooses an automatic neighbourhood size. |
 | `exclude_self` | Logical; if `TRUE`, remove each query row from its own neighbour list. This is valid only for self-query calls where `points` is omitted or identical to `data`. The flag is passed into the compiled backend path, so self-neighbour removal is handled in C++/CUDA rather than by R-side row filtering. |
-| `backend` | Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses a validated CUDA route only when supported and otherwise resolves to CPU. Explicit `"cuda"` fails when CUDA support is unavailable. |
+| `backend` | Device backend: `"cpu"` or `"cuda"`. `NULL` follows `options(faissR.backend)`, then `FAISSR_BACKEND`, and finally uses CPU. CUDA requests fail when CUDA support is unavailable. |
 | `method` | Algorithm selector: `"auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"vamana_style"`, `"nsg_style"`, `"nndescent_style"`, `"ivfpq_fastscan"`, or `"cagra"` [1-6,13-16,22-24,34]. The shorter graph-family names remain compatibility aliases. Resolved implementation labels are metadata, not public values. `method = "grid"` maps to native CPU or CUDA code according to `backend`; unsupported combinations stop clearly. |
 | `metric` | Canonical distance metric: `"euclidean"`, `"cosine"`, or `"correlation"`. Euclidean output is ordinary L2, not squared L2. Legacy aliases are rejected. |
 | `tuning` | Tuning policy: `"auto"`, `"cache"`, `"pilot"`, `"fixed"`, `"off"`, or `"none"`. Automatic policies are selected in compiled code. |
 | `target_recall` | Requested recall tier: exactly `0.9`, `0.95`, or `0.99`. Other values error; faissR does not round or interpolate. The tier is not a guarantee for a new dataset. |
-| `cagra_implementation` | CUDA CAGRA provider for this call. `NULL` uses `options(faissR.cagra_implementation = ...)`; `"auto"` uses a deterministic shape-aware provider rule, selecting direct cuVS CAGRA for compact high-dimensional self-KNN and otherwise keeping FAISS GPU CAGRA as the default when both providers are available; `"faiss_gpu"` or `"cuvs"` force one provider for benchmark rows. This affects `backend = "cuda", method = "cagra"` and CUDA-auto routes that select CAGRA. |
+| `cagra_implementation` | CUDA CAGRA provider for this call. `NULL` uses `options(faissR.cagra_implementation = ...)`; `"auto"` uses a deterministic shape-aware provider rule, selecting direct cuVS CAGRA for compact high-dimensional self-KNN and otherwise keeping FAISS GPU CAGRA as the default when both providers are available; `"faiss_gpu"` or `"cuvs"` force one provider for benchmark rows. This affects `backend = "cuda", method = "cagra"` and CUDA `method = "auto"` routes that select CAGRA. |
 | `cagra_build_algo` | Direct RAPIDS cuVS CAGRA graph-build algorithm for this call. `NULL` uses `options(faissR.cuvs_cagra_build_algo = "auto")`; for direct cuVS CAGRA, `"auto"` applies faissR's deterministic shape-aware build rule, choosing iterative CAGRA construction for compact high-dimensional self-KNN cases and IVF-PQ construction otherwise. `"ivf_pq"` requests the IVF-PQ graph builder, `"nn_descent"` requests cuVS NN-descent graph construction, and `"iterative_cagra_search"` requests cuVS iterative CAGRA graph building. This is a CAGRA construction parameter, not a fallback to a different public method, and successful results record it in `route_parameters`. |
 | `output` | Distance storage type: `"double"` returns the default R numeric matrix; `"float"` returns `distances` as a `float::fl()`/`float32` matrix and records `distance_type = "float32"` plus `attr(result, "distance_type") = "float32"`. Direct FAISS/cuVS float routes can construct float distances without first materializing an R double distance matrix, including CPU FAISS Flat/IVF/IVFPQ/FastScan, cached CPU FAISS fitted indexes, FAISS GPU Flat/IVF/IVFPQ, and direct Euclidean RAPIDS cuVS routes. Float32-route results expose `input_layout`, `input_owns_data`, and `float32_compatibility_conversion` so callers can distinguish direct float payload use from one-time double-to-float adaptation; unsupported native float32 routes error. The `float` package is optional and used only when this output is requested or a float32 input object is supplied. |
 | `distances` | Optional alias for `output`; use `distances = "float"` when downstream code wants the returned distance matrix to remain float32. |
@@ -243,7 +243,7 @@ number of retained FAISS external pointers.
 
 ```r
 candidate_knn(data, candidates, points = data, k,
-              backend = "auto", metric = "euclidean",
+              backend = NULL, metric = "euclidean",
               n_threads = NULL, exclude_self = FALSE)
 ```
 
@@ -253,7 +253,7 @@ candidate_knn(data, candidates, points = data, k,
 | `candidates` | Integer matrix of 1-based candidate reference row indices. It must have one row per query. Invalid, missing, zero, or out-of-range entries are ignored. |
 | `points` | Optional query matrix. Defaults to `data` for self-query candidate scoring. |
 | `k` | Number of best neighbours to keep from each candidate row. Must be no larger than `ncol(candidates)`. |
-| `backend` | `"auto"`/`"cpu"` for exact CPU scoring inside candidates, or `"cuda"` for the native CUDA row-candidate kernel. |
+| `backend` | `"cpu"` for exact CPU scoring inside candidates or `"cuda"` for the native CUDA row-candidate kernel. `NULL` follows the package backend configuration. |
 | `metric` | Canonical distance metric: `"euclidean"`, `"cosine"`, or `"correlation"`. Legacy aliases are rejected. |
 | `n_threads` | CPU worker threads. |
 | `exclude_self` | If `TRUE`, remove each row from its own candidate list. This requires `points = data`. |
@@ -269,7 +269,7 @@ produce an explicit error rather than CPU-side repair.
 ## `fast_kmeans()`
 
 ```r
-fast_kmeans(data, centers, backend = "auto",
+fast_kmeans(data, centers, backend = NULL,
             max_iter = "auto", n_init = "auto", tol = "auto",
             seed = 1L, n_threads = NULL,
             streaming_batch_size = 0L, init = "kmeans++",
@@ -280,7 +280,7 @@ fast_kmeans(data, centers, backend = "auto",
 | --- | --- |
 | `data` | Numeric matrix with observations in rows. |
 | `centers` | Number of clusters. Must be between 1 and `nrow(data)`. |
-| `backend` | `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses CUDA only when CUDA plus FAISS GPU k-means or direct cuVS k-means is compiled and available and the shape rule estimates enough work to offset GPU launch and copy overhead; otherwise it resolves to CPU [7-8]. |
+| `backend` | `"cpu"` or `"cuda"`. `NULL` follows the package backend configuration. CUDA requests fail when no CUDA k-means provider is available [7-8]. |
 | `max_iter` | Maximum number of Lloyd iterations, or `"auto"` for a deterministic shape-aware default computed by the compiled C++ tuning helper. |
 | `n_init` | Number of random restarts where the selected backend supports it, or `"auto"` for a deterministic shape-aware default computed by the compiled C++ tuning helper. |
 | `tol` | Non-negative convergence tolerance where supported, or `"auto"` for a deterministic shape-aware default computed by the compiled C++ tuning helper. |
@@ -305,30 +305,15 @@ resolved; `parameters$tuning$effective_max_iter`,
 expose the same values as flat fields for benchmark summaries.
 When `centers = 1`, `fast_kmeans()` returns the exact column mean, records
 `single_cluster_exact_mean`, and avoids iterative work on every backend.
-`parameters$tuning$backend_policy` records the deterministic `backend = "auto"`
-shape decision, including `prefer_cuda`, `reason`, estimated work, ordinary R
-input bytes, float32 GPU transfer bytes, and `n_per_center`. The CUDA auto gate
-uses `gpu_transfer_nbytes` for the size threshold because FAISS/cuVS consume
-float32 data; `nbytes` remains the R double input footprint for compatibility
-and auditing. The k-means auto parameter rule is computed by
-`kmeans_auto_params_cpp()`, while the backend policy and final CUDA/CPU gate are
-computed by `kmeans_auto_backend_policy_cpp()` and
-`kmeans_auto_select_backend_cpp()`; they record `tuning_source = "cpp"` in
-returned metadata. The CUDA auto gate can be adjusted for a benchmarked machine
-with `options(faissR.kmeans_cuda_work_threshold = ...)`,
-`options(faissR.kmeans_cuda_nbytes_threshold = ...)`,
-`options(faissR.kmeans_cuda_large_n_threshold = ...)`, and
-`options(faissR.kmeans_cuda_large_p_threshold = ...)`, and
-`options(faissR.kmeans_cuda_min_n_per_center = ...)`; these options only
-change the static threshold rule and do not run pilot tuning.
-`parameters$tuning$selection` records the compact no-pilot device decision;
-`selection$explicit_backend` and `selection$backend_decision` distinguish
-explicit `"cpu"`/`"cuda"` calls from automatic shape-policy choices.
+The k-means automatic parameter rule is computed by
+`kmeans_auto_params_cpp()` and records `tuning_source = "cpp"` in returned
+metadata. `parameters$tuning$selection` records the explicit device, input
+shape, runtime capability flags, and effective parameters.
 `hit_max_iter` records whether the run reached the effective iteration cap; this
 helps benchmark cycles identify fast settings that may be under-iterating.
 `parameters$requested_backend` records the public backend argument,
-`parameters$resolved_backend` records the public device policy after resolving
-`"auto"`, and `backend` records the implementation
+`parameters$resolved_backend` records the selected device, and `backend`
+records the implementation
 that actually ran, such as `"faiss"`, `"cpu"`, `"cuda_faiss"`, or `"cuda_cuvs"`.
 CUDA runs also record `parameters$cuda_provider_selection` as `"faiss_gpu"`,
 `"direct_cuvs"`, or `"direct_cuvs_after_faiss_gpu_unavailable_or_failed"`;
@@ -339,7 +324,7 @@ GPU route was unavailable or failed.
 ## `knn()`
 
 ```r
-model <- knn(Xtrain, Ytrain, backend = "auto", method = "auto",
+model <- knn(Xtrain, Ytrain, backend = "cpu", method = "auto",
              tuning = "auto", target_recall = 0.99,
              cagra_implementation = NULL,
              cagra_build_algo = NULL, k = 15L)
@@ -352,7 +337,7 @@ prob  <- knn(Xtrain, Ytrain, Xtest, type = "prob")
 | `Xtrain` | Numeric training matrix or optional `float::fl()`/`float32` matrix with observations in rows. Float32 training data is preserved for `nn()` methods with direct float32 adapters. |
 | `Ytrain` | Training labels for classification or numeric response for regression. Must have one value per row of `Xtrain`. |
 | `Xtest` | Optional query matrix. If supplied, `knn()` fits and predicts immediately; otherwise it returns a reusable model. |
-| `backend` | Device backend passed to `nn()`: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` follows `nn()` backend/method/metric resolution, using CUDA only for validated CUDA combinations when CUDA/cuVS runtime support is available, and CPU otherwise. |
+| `backend` | Device backend passed to `nn()`: `"cpu"` or `"cuda"`. `NULL` follows the package backend configuration. |
 | `method` | Nearest-neighbour algorithm selector passed to `nn()`. `"auto"` chooses the most appropriate method for the selected backend. |
 | `metric` | Canonical distance metric: `"euclidean"`, `"cosine"`, or `"correlation"`. Legacy aliases are rejected. |
 | `tuning` | Tuning policy: `"auto"`, `"cache"`, `"pilot"`, `"fixed"`, `"off"`, or `"none"`. Automatic policies are selected in compiled code. |
@@ -404,7 +389,7 @@ recomputes its calibrated settings. The prediction records `query_source =
 
 ```r
 predict(object, newdata, k = NULL,
-        backend = "auto", tuning = "auto", target_recall = NULL,
+        backend = NULL, tuning = "auto", target_recall = NULL,
         cagra_implementation = NULL, cagra_build_algo = NULL,
         vote = "majority", type = "response", ...)
 ```
@@ -414,7 +399,7 @@ predict(object, newdata, k = NULL,
 | `object` | A fitted model returned by `knn(Xtrain, Ytrain, ...)`. |
 | `newdata` | Numeric query matrix or optional `float::fl()`/`float32` matrix with the same number of columns as the training matrix. Float32 query data is preserved for direct-adapter NN methods. |
 | `k` | Number of neighbours for this prediction call. If `NULL`, uses the model default. |
-| `backend` | Device backend for the prediction-time neighbour search: `"auto"`, `"cpu"`, or `"cuda"`. The fitted model's method and metric are reused. |
+| `backend` | Device backend for the prediction-time neighbour search: `"cpu"` or `"cuda"`. `NULL` follows the package backend configuration. The fitted model's method and metric are reused. |
 | `tuning` | Tuning policy: `"auto"`, `"cache"`, `"pilot"`, `"fixed"`, `"off"`, or `"none"`. Automatic policies are selected in compiled code. |
 | `target_recall` | Requested recall tier: exactly `0.9`, `0.95`, or `0.99`; no rounding or interpolation. |
 | `cagra_implementation` | CUDA CAGRA provider for this prediction call. `NULL` reuses the fitted model setting, then the global option. |

@@ -316,10 +316,18 @@ cuda_native_summary <- function() {
     if (isTRUE(available)) {
         device <- json_get_string(text, "name")
         compute <- json_get_string(text, "compute_capability")
+        compiled_toolkit <- json_get_string(text, "compiled_toolkit")
+        runtime_version <- json_get_string(text, "runtime_version")
+        driver_version <- json_get_string(text, "driver_version")
         total_memory <- json_get_number(text, "total_memory")
         free_memory <- json_get_number(text, "free_memory")
         memory <- cuda_memory_summary(free_memory, total_memory)
         runtime <- combine_nonempty(
+            cuda_version_summary(
+                compiled_toolkit,
+                runtime_version,
+                driver_version
+            ),
             if (!is.na(compute)) {
                 paste0("compute capability ", compute)
             } else {
@@ -331,7 +339,32 @@ cuda_native_summary <- function() {
     }
 
     reason <- json_get_string(text, "reason")
-    list(device = NA_character_, runtime = reason)
+    list(
+        device = NA_character_,
+        runtime = combine_nonempty(
+            cuda_version_summary(
+                json_get_string(text, "compiled_toolkit"),
+                json_get_string(text, "runtime_version"),
+                json_get_string(text, "driver_version")
+            ),
+            reason
+        )
+    )
+}
+
+cuda_version_summary <- function(compiled, runtime, driver) {
+    fields <- c(
+        if (!is.na(compiled) && compiled != "unknown") {
+            paste0("compiled CUDA ", compiled)
+        },
+        if (!is.na(runtime) && runtime != "unknown") {
+            paste0("runtime ", runtime)
+        },
+        if (!is.na(driver) && driver != "unknown") {
+            paste0("driver API ", driver)
+        }
+    )
+    if (!length(fields)) NA_character_ else paste(fields, collapse = ", ")
 }
 
 faiss_summary <- function() {
@@ -343,10 +376,15 @@ faiss_summary <- function() {
     gpu <- json_get_bool(text, "gpu")
     gpu_cagra <- json_get_bool(text, "gpu_cagra")
     fastscan <- json_get_bool(text, "fastscan")
+    version <- json_get_string(text, "version")
     reason <- json_get_string(text, "reason")
     runtime <- if (isTRUE(available)) {
         combine_nonempty(
-            "FAISS C++ library",
+            if (!is.na(version)) {
+                paste0("FAISS C++ library ", version)
+            } else {
+                "FAISS C++ library"
+            },
             if (isTRUE(gpu)) "FAISS GPU headers" else "CPU-only FAISS headers",
             if (isTRUE(gpu_cagra)) "GpuIndexCagra available" else NA_character_,
             if (isTRUE(fastscan)) "FastScan available" else NA_character_

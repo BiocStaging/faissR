@@ -16,15 +16,15 @@ reports affected rows before search.
 [References](references.md)
 
 This page describes the `method` argument used by `nn()`, `nn(..., exclude_self = TRUE)`,
-and `knn()`. In faissR, `backend` chooses the device family (`"auto"`, `"cpu"`,
-or `"cuda"`), while `method` chooses the nearest-neighbour algorithm family.
+and `knn()`. In faissR, `backend` chooses the device family (`"cpu"` or
+`"cuda"`), while `method` chooses the nearest-neighbour algorithm family.
 Distance choices belong in `metric`, not in `method`.
 
 ## Quick Selection Guide
 
 | Goal | Suggested call |
 | --- | --- |
-| Let faissR choose a balanced route | `nn(x, k, backend = "auto", method = "auto")` |
+| Let faissR choose a method on CPU | `nn(x, k, backend = "cpu", method = "auto")` |
 | Exact CPU reference | `nn(x, k, backend = "cpu", method = "exact")` |
 | Exact FAISS CPU/GPU route | `nn(x, k, backend = "cpu", method = "flat")` or `nn(x, k, backend = "cuda", method = "flat")` |
 | Exact CUDA route through cuVS when available | `nn(x, k, backend = "cuda", method = "bruteforce")` |
@@ -38,7 +38,7 @@ Use `backend_info()` to inspect which compiled CPU, FAISS, CUDA, cuVS, and
 cuVS capabilities are available on a given machine.
 Use `nn_capabilities()` to return the same method/backend/metric support matrix
 as a data frame for benchmark preflight checks, including rows for
-`backend = "auto"`, `"cpu"`, and `"cuda"`. Use
+`backend = "cpu"` and `"cuda"`. Use
 `nn_capabilities(runtime = TRUE)` when a benchmark script also needs the
 current build/runtime status; it appends `resolved_backend`,
 `runtime_available`, `runtime_reason`, and `runtime_notes` columns so FAISS
@@ -200,9 +200,6 @@ expected skips, not algorithmic failures.
 `nn_auto_select_backend_cpp()` selector after the R wrapper has normalized
 arguments and collected runtime capability flags:
 
-- `backend = "auto"` first resolves the device family: CUDA/cuVS only when the
-  selected method and metric have a validated CUDA route and CUDA/cuVS runtime
-  support is available, CPU otherwise.
 - CPU auto uses exact CPU for small work, native grid for large 2D/3D
   Euclidean/cosine/correlation self-search, FAISS IVF for some million-row low-dimensional cases,
   FAISS HNSW for large high-dimensional self-search, including non-Euclidean

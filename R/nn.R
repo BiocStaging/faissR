@@ -5361,7 +5361,7 @@ resolve_double_auto_backend <- function(
             !isTRUE(cuda_available()) && !isTRUE(cuvs_available())) {
         stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
     }
-    if (backend %in% c("auto", "cpu_auto", "cuda_auto", "gpu_auto")) {
+    if (backend %in% c("cpu_auto", "cuda_auto", "gpu_auto")) {
         route <- auto_selection %||% nn_auto_selection_for_backend(
             backend, self_query, nrow(data), ncol(data), nrow(points), k,
             prod(as.double(c(nrow(data), nrow(points), ncol(data)))),
@@ -5558,78 +5558,12 @@ normalize_scalar_logical_arg <- function(x, arg, default = FALSE) {
     isTRUE(x)
 }
 
-normalize_public_compute_backend <- function(backend, arg = "backend") {
-    backend <- normalize_scalar_choice_arg(
-        backend,
-        arg = arg,
-        default = "auto",
-        formal_choices = c("auto", "cpu", "cuda")
-    )
-    if (is.na(backend) || !nzchar(backend)) {
-        backend <- "auto"
-    }
-    backend <- tolower(backend)
-    if (!backend %in% c("auto", "cpu", "cuda")) {
-        stop(
-            "`",
-            arg,
-            "` must be one of \"auto\", \"cpu\", or \"cuda\".",
-            call. = FALSE
-        )
-    }
-    if (identical(backend, "auto")) {
-        if (isTRUE(cuda_available()) || isTRUE(cuvs_available())) {
-            return("cuda")
-        }
-        return("cpu")
-    }
-    backend
-}
-
 normalize_public_backend_arg <- function(backend, arg = "backend") {
-    backend <- resolve_faissr_environment_backend(backend, allow_auto = TRUE)
-    backend <- normalize_scalar_choice_arg(
-        backend,
-        arg = arg,
-        default = "auto",
-        formal_choices = c("auto", "cpu", "cuda")
-    )
-    if (is.na(backend) || !nzchar(backend)) {
-        backend <- "auto"
-    }
-    backend <- tolower(backend)
-    if (!backend %in% c("auto", "cpu", "cuda")) {
-        stop(
-            "`",
-            arg,
-            "` must be one of \"auto\", \"cpu\", or \"cuda\".",
-            call. = FALSE
-        )
-    }
-    backend
+    resolve_faissr_environment_backend(backend)
 }
 
 normalize_nn_backend_arg <- function(backend, arg = "backend") {
-    backend <- resolve_faissr_environment_backend(backend, allow_auto = TRUE)
-    backend <- normalize_scalar_choice_arg(
-        backend,
-        arg = arg,
-        default = "auto",
-        formal_choices = c("auto", "cpu", "cuda")
-    )
-    if (is.na(backend) || !nzchar(backend)) {
-        backend <- "auto"
-    }
-    backend <- tolower(backend)
-    if (!backend %in% c("auto", "cpu", "cuda")) {
-        stop(
-            "`",
-            arg,
-            "` must be one of \"auto\", \"cpu\", or \"cuda\".",
-            call. = FALSE
-        )
-    }
-    backend
+    resolve_faissr_environment_backend(backend)
 }
 
 normalize_nn_method <- function(method) {
@@ -6084,8 +6018,8 @@ cuda_cagra_route_available <- function(
 #'   `"missing_faiss"`, `"missing_faiss_gpu"`, `"missing_cuda"`,
 #'   `"missing_cuda_route"`, and `"missing_cuvs"` for benchmark preflight
 #'   tables.
-#' @return A data frame with one row per public `method`, `backend` (`"auto"`,
-#'   `"cpu"`, or `"cuda"`), and `metric` combination. Columns include
+#' @return A data frame with one row per public `method`, `backend` (`"cpu"`
+#'   or `"cuda"`), and `metric` combination. Columns include
 #'   `supported`, `exact`, `implementation`, `implementation_status`, and
 #'   `notes`. Package-owned `*_style` routes are marked `"experimental"`;
 #'   external-provider NN-descent is identified separately. If
@@ -6097,7 +6031,7 @@ cuda_cagra_route_available <- function(
 nn_capabilities <- function(runtime = FALSE) {
     runtime <- normalize_scalar_logical_arg(runtime, "runtime", default = FALSE)
     methods <- nn_public_method_labels()
-    backends <- c("auto", "cpu", "cuda")
+    backends <- c("cpu", "cuda")
     metrics <- nn_metric_labels()
     rows <- vector("list", length(methods) * length(backends) * length(metrics))
     i <- 0L
@@ -6396,11 +6330,7 @@ nn_cuvs_hnsw_availability <- function() {
 
 nn_capability_row <- function(method, backend, metric) {
     internal_method <- normalize_nn_method(method)
-    capability <- if (identical(backend, "auto")) {
-        nn_auto_backend_capability(internal_method, metric)
-    } else {
-        nn_method_capability(internal_method, backend, metric)
-    }
+    capability <- nn_method_capability(internal_method, backend, metric)
     data.frame(
         method = method,
         backend = backend,
@@ -6427,8 +6357,7 @@ nn_capability_implementation_status <- function(method, backend) {
         return(switch(
             backend,
             cpu = "experimental",
-            cuda = "external_provider",
-            auto = "provider_dependent"
+            cuda = "external_provider"
         ))
     }
     "supported"
@@ -6507,27 +6436,11 @@ resolve_public_nn_backend <- function(
     k = NULL,
     self_query = NULL
 ) {
-    backend_label <- normalize_scalar_choice_arg(
-        backend,
-        arg = "backend",
-        default = "auto",
-        formal_choices = c("auto", "cpu", "cuda")
-    )
-    if (!tolower(backend_label) %in% c("auto", "cpu", "cuda")) {
-        stop(
-            "`backend` should be one of \"auto\", \"cpu\", or \"cuda\".",
-            call. = FALSE
-        )
-    }
+    device <- normalize_nn_backend_arg(backend)
     method <- normalize_nn_method(method)
     metric <- normalize_nn_metric(metric)
-    requested_device <- tolower(backend_label)
-    device <- normalize_public_compute_backend(backend)
-    if (identical(requested_device, "auto") && !identical(method, "auto")) {
-        device <- resolve_auto_public_nn_device(method, metric)
-    }
     if (identical(method, "auto")) {
-        return(resolve_public_auto_method_backend(requested_device, device))
+        return(resolve_public_auto_method_backend(device))
     }
     if (identical(device, "cpu")) {
         return(resolve_cpu_nn_backend(method, metric))
@@ -6623,8 +6536,11 @@ nn_resolved_backend_device <- function(backend) {
     if (is.na(backend) || !nzchar(backend)) {
         return(NA_character_)
     }
-    if (backend %in% c("auto", "cpu_auto", "cuda_auto", "gpu_auto")) {
-        return("auto")
+    if (identical(backend, "cpu_auto")) {
+        return("cpu")
+    }
+    if (backend %in% c("cuda_auto", "gpu_auto")) {
+        return("cuda")
     }
     if (
         startsWith(backend, "cuda") ||
@@ -6635,47 +6551,6 @@ nn_resolved_backend_device <- function(backend) {
         return("cuda")
     }
     "cpu"
-}
-
-resolve_auto_knn_gpu_backend <- function(
-    backend,
-    self_query,
-    n_points,
-    n,
-    p,
-    k,
-    work_size,
-    metric = "euclidean",
-    cuda_available_value = cuda_available(),
-    cuvs_available_value = cuvs_available(),
-    faiss_gpu_available_value = faiss_gpu_available()
-) {
-    if (!identical(backend, "auto")) {
-        return(NA_character_)
-    }
-    route <- nn_auto_select_shape_cpp(
-        resolved_backend = "auto",
-        requested_backend = "auto",
-        requested_method = "auto",
-        shape = list(
-            n = as.integer(n),
-            p = as.integer(p),
-            n_points = as.integer(n_points),
-            k = as.integer(k),
-            metric = normalize_nn_metric(metric),
-            self_query = isTRUE(self_query),
-            exclude_self = FALSE,
-            work_size = as.double(work_size)
-        ),
-        cuda_available_value = cuda_available_value,
-        cuvs_available_value = cuvs_available_value,
-        faiss_gpu_available_value = faiss_gpu_available_value
-    )
-    if (identical(route$reason, "auto_cuda_preselector")) {
-        route$selected_backend
-    } else {
-        NA_character_
-    }
 }
 
 select_cuda_auto_backend <- function(
@@ -6929,48 +6804,6 @@ public_nn_cuda_normalized_available <- function(method, cuda, cuvs, faiss_gpu) {
     FALSE
 }
 
-resolve_auto_public_nn_device <- function(
-    method,
-    metric,
-    cuda_available_value = cuda_available(),
-    cuvs_available_value = cuvs_available(),
-    faiss_gpu_available_value = faiss_gpu_available()
-) {
-    method <- normalize_nn_method(method)
-    metric <- normalize_nn_metric(metric)
-    if (identical(method, "cagra")) {
-        return("cuda")
-    }
-    if (
-        identical(method, "nsg") &&
-            !public_nn_cpu_route_supported(method, metric)
-    ) {
-        return("cuda")
-    }
-    if (
-        public_nn_cuda_route_available(
-            method,
-            metric,
-            cuda_available_value = cuda_available_value,
-            cuvs_available_value = cuvs_available_value,
-            faiss_gpu_available_value = faiss_gpu_available_value
-        )
-    ) {
-        return("cuda")
-    }
-    if (public_nn_cpu_route_supported(method, metric)) {
-        return("cpu")
-    }
-    stop(
-        "`backend = \"auto\"`, method = \"",
-        method,
-        "\", metric = \"",
-        metric,
-        "\" has no supported CPU route and no available CUDA route.",
-        call. = FALSE
-    )
-}
-
 select_cpu_approx_backend <- function(n, p, k) {
     if (
         should_use_grid2d_self_knn(
@@ -7054,7 +6887,7 @@ nn_auto_default_k <- function(n, self_query, exclude_self) {
 
 nn_auto_select_shape_cpp <- function(
     resolved_backend,
-    requested_backend = "auto",
+    requested_backend,
     requested_method = "auto",
     shape,
     tuning = "auto",
@@ -7339,7 +7172,7 @@ nn_auto_selection_for_backend <- function(
         cpu_auto = "cpu",
         cuda_auto = "cuda",
         gpu_auto = "cuda",
-        "auto"
+        nn_resolved_backend_device(backend)
     )
     nn_auto_select_shape_cpp(
         resolved_backend = backend,
@@ -7376,20 +7209,6 @@ nn_auto_selected_backend <- function(route, fallback_backend) {
     if (is.na(selected) || !nzchar(selected)) fallback_backend else selected
 }
 
-nn_auto_route_for_shape <- function(shape, resolved_backend) {
-    route <- nn_auto_select_shape_cpp(
-        resolved_backend = resolved_backend,
-        requested_backend = "auto",
-        requested_method = "auto",
-        shape = shape
-    )
-    list(
-        selected_backend = route$selected_backend,
-        reason = route$reason,
-        error = route$error
-    )
-}
-
 nn_auto_selection_metadata <- function(
     data,
     points,
@@ -7403,13 +7222,12 @@ nn_auto_selection_metadata <- function(
     exclude_self = FALSE,
     target_recall = 0.99
 ) {
-    explicit_backend <- !identical(requested_backend, "auto")
+    explicit_backend <- TRUE
     explicit_method <- !identical(requested_method, "auto")
     if (
         explicit_backend &&
             explicit_method &&
-            !resolved_backend %in%
-                c("auto", "cpu_auto", "cuda_auto", "gpu_auto")
+            !resolved_backend %in% c("cpu_auto", "cuda_auto", "gpu_auto")
     ) {
         return(NULL)
     }
@@ -11513,8 +11331,8 @@ grid_self_knn <- function(
 #'
 #' `nn()` provides a package-native nearest-neighbor entry point compatible with
 #' the common `nn(data, points, k)` use case. The public API separates device
-#' selection from algorithm selection. `backend` is one of `"auto"`, `"cpu"`,
-#' or `"cuda"`; `method` chooses the algorithm. For example,
+#' selection from algorithm selection. `backend` is either `"cpu"` or
+#' `"cuda"`; `method` chooses the algorithm. For example,
 #' `backend = "cpu", method = "grid"` uses the CPU grid implementation, while
 #' `backend = "cuda", method = "grid"` uses the CUDA grid implementation.
 #' Invalid combinations stop clearly before computation; for example,
@@ -11606,13 +11424,12 @@ grid_self_knn <- function(
 #'   compiled backend path rather than repaired by R-side post-processing. CUDA
 #'   graph routes that do not yet expose compiled include-self output shaping
 #'   require `exclude_self = TRUE` and fail clearly instead of reshaping in R.
-#' @param backend Requested execution device: `"auto"`, `"cpu"`, or `"cuda"`.
-#'   The historical result field `backend_used` instead names the concrete
-#'   resolved provider/route and is retained for API compatibility. `"auto"`
-#'   uses a validated CUDA route only when the requested method/metric
-#'   combination is supported and CUDA/cuVS runtime support is available, and
-#'   otherwise resolves to CPU. Explicit `"cuda"` fails clearly when CUDA
-#'   support or the selected CUDA combination is unavailable.
+#' @param backend Requested execution device: `"cpu"` or `"cuda"`. `NULL`
+#'   follows `options(faissR.backend)`, then `FAISSR_BACKEND`, with CPU as the
+#'   final default. The historical result field `backend_used` instead names
+#'   the concrete resolved provider/route and is retained for API
+#'   compatibility. CUDA requests fail clearly when CUDA support or the
+#'   selected CUDA combination is unavailable.
 #' @param method Algorithm selector. `"auto"` chooses a shape-aware default for
 #'   the selected backend. Other values include `"exact"`, `"flat"`,
 #'   `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`,
@@ -11703,7 +11520,7 @@ grid_self_knn <- function(
 #'   FAISS GPU CAGRA remains the default for other shapes. `"faiss_gpu"` and
 #'   `"cuvs"` force one provider for benchmarking.
 #'   This argument affects only public `backend = "cuda", method = "cagra"`
-#'   requests and CUDA-auto routes that select CAGRA.
+#'   requests and CUDA `method = "auto"` routes that select CAGRA.
 #' @param cagra_build_algo Direct RAPIDS cuVS CAGRA graph-build algorithm for
 #'   this call. `NULL` uses `options(faissR.cuvs_cagra_build_algo = "auto")`.
 #'   For direct cuVS CAGRA, `"auto"` applies faissR's deterministic shape-aware
@@ -11757,18 +11574,19 @@ grid_self_knn <- function(
 #'   backend, metric, exact/approximate flag, and self-query flag are stored in
 #'   attributes including `attr(result, "requested_backend")`,
 #'   `attr(result, "requested_method")`, `attr(result, "tuning")`, and
-#'   `attr(result, "resolved_backend")`. Auto requests also include
+#'   `attr(result, "resolved_backend")`. `method = "auto"` requests also include
 #'   `attr(result, "auto_selection")`, a static workload/shape/k/metric decision
 #'   record. It includes reference rows and variables, query-row count,
 #'   self-query status, the `n * n_points * p` work estimate, and the predicted
 #'   internal backend, public method class, device
 #'   class, explicit backend/method flags, backend/method decision reasons, and
-#'   hardware provenance. CPU auto
+#'   hardware provenance. CPU `method = "auto"`
 #'   records `auto_policy_status =
 #'   "calibration_informed_not_independently_validated"` and
 #'   `auto_policy_evidence_scope = "cpu_static_policy_experimental"`. CUDA
-#'   auto is a separately evaluated but still experimental L40S-calibrated
-#'   policy for cold full-self-search and records `auto_policy_status =
+#'   `method = "auto"` is a separately evaluated but still experimental
+#'   L40S-calibrated policy for cold full-self-search and records
+#'   `auto_policy_status =
 #'   "experimental_l40s_calibrated_cold_full_self_search"`; neither label
 #'   implies general workload or hardware validation.
 #'   Expected future query batches are not an input; use a
@@ -11777,7 +11595,8 @@ grid_self_knn <- function(
 #'   keeps the compiled policy but is labelled
 #'   `hardware_extrapolated_unvalidated`. If either hardware identity cannot be
 #'   determined, the label is `hardware_unidentified`. Hardware identity alone
-#'   never causes a silent method or device fallback. CUDA auto emits one
+#'   never causes a silent method or device fallback. CUDA method selection
+#'   emits one
 #'   warning per confirmed, unmatched runtime GPU model unless
 #'   `options(faissR.warn_hardware_extrapolation = FALSE)` is set. Pilot/cache
 #'   tuning adjusts parameters within a method and does not install a new

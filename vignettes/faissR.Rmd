@@ -251,11 +251,13 @@ c(
 
 # Automatic selection
 
-Three arguments control different decisions:
+The execution device is selected with `backend = "cpu"` or
+`backend = "cuda"`. If `backend` is omitted, faissR follows the package option,
+then `FAISSR_BACKEND`, and finally uses CPU. Two other arguments control
+different decisions:
 
 | Argument | Decision |
 |---|---|
-| `backend = "auto"` | choose CPU or CUDA |
 | `method = "auto"` | choose a method family |
 | `tuning = "auto"` | choose parameters within that method |
 

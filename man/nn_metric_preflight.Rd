@@ -20,7 +20,7 @@ nn_metric_preflight(
 
 \item{metric}{One of `"euclidean"`, `"cosine"`, or `"correlation"`.}
 
-\item{backend}{Requested backend (`"auto"`, `"cpu"`, or `"cuda"`). `NULL`
+\item{backend}{Requested backend (`"cpu"` or `"cuda"`). `NULL`
 follows the package backend option and environment-variable policy.}
 }
 \value{
@@ -29,8 +29,7 @@ A list containing one-based `data_degenerate_rows` and
   corresponding non-finite row indices, `would_succeed`, and a stable
   `action` label. `data_rows` and `points_rows` are retained as compatibility
   aliases. CPU cosine and correlation use the documented zero-normalized
-  convention; CUDA rejects affected rows. An automatic backend is reported
-  as backend-dependent.
+  convention; CUDA rejects affected rows.
 }
 \description{
 Inspect reference and query rows for values that affect the public distance

@@ -13,10 +13,17 @@ EOF
 }
 
 faiss_prefix=${FAISS_HOME:-${CONDA_PREFIX:-}}
-faiss_include=""
-faiss_libdir=""
+faiss_include=${INCLUDE_DIR:-}
+faiss_libdir=${LIB_DIR:-}
 
-if [ -n "$faiss_prefix" ]; then
+if { [ -n "$faiss_include" ] && [ -z "$faiss_libdir" ]; } || \
+   { [ -z "$faiss_include" ] && [ -n "$faiss_libdir" ]; }; then
+  echo "INCLUDE_DIR and LIB_DIR must be supplied together." >&2
+  exit 1
+fi
+
+if [ -z "$faiss_include" ] && [ -z "$faiss_libdir" ] && \
+   [ -n "$faiss_prefix" ]; then
   for candidate in "$faiss_prefix/include" "$faiss_prefix/Library/include"; do
     if [ -f "$candidate/faiss/IndexFlat.h" ]; then
       faiss_include=$candidate
@@ -113,6 +120,7 @@ if [ "${FAISSR_REQUIRE_FAISS:-0}" = "1" ]; then
   echo "FAISSR_REQUIRE_FAISS=1, but a compatible Windows FAISS CPU build was not found." >&2
   echo "Set FAISS_HOME to a prefix containing include/faiss/IndexFlat.h and" >&2
   echo "lib/libfaiss.a (or libfaiss.dll.a) built for the active Rtools toolchain." >&2
+  echo "Alternatively set INCLUDE_DIR and LIB_DIR to those two directories." >&2
   exit 1
 fi
 

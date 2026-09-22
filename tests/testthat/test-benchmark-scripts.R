@@ -377,7 +377,6 @@ test_that("benchmark materials document key row-level and summary outputs", {
       "kmeans_recommendations_from_cycles.csv",
       "kmeans_backend_recommendations_from_cycles.csv",
       "kmeans_fast_vs_cycle_recommendation.csv",
-      "kmeans_auto_vs_global_recommendation.csv",
       "kmeans_fast_vs_stats.csv",
       "MATERIALS_AND_METHODS_kmeans.md"
     )
@@ -758,8 +757,12 @@ test_that("NN metric benchmark validates public backend labels", {
   )
 
   expect_equal(
-    env$validate_backend_values(c("auto", "cpu", "cuda", "cpu")),
-    c("auto", "cpu", "cuda")
+    env$validate_backend_values(c("cpu", "cuda", "cpu")),
+    c("cpu", "cuda")
+  )
+  expect_error(
+    env$validate_backend_values("auto"),
+    "Invalid value\\(s\\): auto"
   )
   expect_error(
     env$validate_backend_values(c("cpu", "gpu")),
@@ -1569,7 +1572,7 @@ test_that("k-means benchmark defaults cover fast_kmeans stats and public backend
   )
   expect_equal(
     env$default_kmeans_backend_values(),
-    c("auto", "cpu", "cuda")
+    c("cpu", "cuda")
   )
   expect_equal(env$default_kmeans_cycles(), 10L)
   expect_equal(
@@ -1591,7 +1594,7 @@ test_that("k-means benchmark records runtime capability preflight", {
     "runtime_reason", "runtime_notes", "cuda_available",
     "faiss_gpu_available", "cuvs_available"
   ) %in% names(caps)))
-  expect_equal(caps$backend, c("auto", "cpu", "cuda", "stats"))
+  expect_equal(caps$backend, c("cpu", "cuda", "stats"))
 
   cuda <- env$kmeans_runtime_status("fast_kmeans", "cuda", caps)
   expect_equal(cuda$resolved_backend, "cuda")
@@ -1658,11 +1661,19 @@ test_that("k-means benchmark validates method and backend selectors", {
   )
   expect_equal(
     env$validate_choice_values(
-      c("auto", "cpu", "cuda"),
+      c("cpu", "cuda", "cpu"),
       env$default_kmeans_backend_values(),
       "backends"
     ),
-    c("auto", "cpu", "cuda")
+    c("cpu", "cuda")
+  )
+  expect_error(
+    env$validate_choice_values(
+      "auto",
+      env$default_kmeans_backend_values(),
+      "backends"
+    ),
+    "Invalid value\\(s\\): auto"
   )
   expect_error(
     env$validate_choice_values(c("fast_kmeans", "kmeanspp"), env$default_kmeans_method_values(), "methods"),
@@ -1830,13 +1841,13 @@ test_that("k-means benchmark fallback auto params mirror package metadata", {
   }
 
   tiny_selection <- env$kmeans_selection_metadata(
-    backend = "auto",
+    backend = "cpu",
     n = 120L,
     p = 4L,
     centers = 3L
   )
   expect_equal(tiny_selection$resolved_backend, "cpu")
-  expect_equal(tiny_selection$runtime_decision, "cpu_preferred_by_shape")
+  expect_equal(tiny_selection$runtime_decision, "explicit_backend_no_auto_fallback")
   expect_equal(tiny_selection$tuning_source, "cpp")
 })
 

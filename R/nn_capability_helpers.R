@@ -11,30 +11,6 @@ nn_capability <- function(supported, exact, implementation, notes) {
     )
 }
 
-nn_auto_backend_capability <- function(method, metric) {
-    cpu <- nn_capability_row(method, "cpu", metric)
-    cuda <- nn_capability_row(method, "cuda", metric)
-    supported <- isTRUE(cpu$supported[[1L]]) || isTRUE(cuda$supported[[1L]])
-    exact <- c(
-        if (isTRUE(cpu$supported[[1L]])) cpu$exact[[1L]] else NA,
-        if (isTRUE(cuda$supported[[1L]])) cuda$exact[[1L]] else NA
-    )
-    exact <- exact[!is.na(exact)]
-    nn_capability(
-        supported,
-        if (length(exact)) all(as.logical(exact)) else NA,
-        "runtime CPU/CUDA selector",
-        if (supported) {
-            paste(
-                "Auto uses a validated CUDA route when its runtime is",
-                "available, and otherwise uses a supported CPU route."
-            )
-        } else {
-            "No CPU or CUDA route is exposed for this method/metric."
-        }
-    )
-}
-
 nn_auto_method_capability <- function(backend, metric, all_metrics, euclidean) {
     if (identical(backend, "cpu")) {
         return(nn_capability(

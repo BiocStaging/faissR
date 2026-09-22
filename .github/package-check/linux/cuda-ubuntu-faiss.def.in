@@ -1,0 +1,87 @@
+Bootstrap: docker
+From: @CUDA_IMAGE@
+
+%post
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        build-essential gfortran cmake ninja-build pkg-config git curl \
+        ca-certificates bzip2 xz-utils file tzdata \
+        libuv1-dev \
+        libopenblas-dev liblapack-dev libgomp1 \
+        libcurl4-openssl-dev libssl-dev libxml2-dev libicu-dev \
+        libpcre2-dev libreadline-dev libbz2-dev liblzma-dev zlib1g-dev \
+        libcairo2-dev libxt-dev libjpeg-dev libpng-dev libtiff-dev \
+        pandoc qpdf devscripts texinfo texlive-latex-base \
+        texlive-latex-recommended texlive-fonts-recommended
+
+    CMAKE_VERSION=3.31.8
+    curl -fsSL \
+        "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz" \
+        -o /tmp/cmake.tar.gz
+    mkdir -p /opt/cmake
+    tar -xzf /tmp/cmake.tar.gz -C /opt/cmake --strip-components=1
+    export PATH=/opt/cmake/bin:/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+    curl -fsSL https://cran.r-project.org/src/base/R-4/R-4.6.0.tar.gz \
+        -o /tmp/R.tar.gz
+    tar -xzf /tmp/R.tar.gz -C /tmp
+    cd /tmp/R-4.6.0
+    ./configure --prefix=/opt/R --enable-R-shlib --with-x=no \
+        --with-cairo=yes --with-readline=yes --with-blas --with-lapack
+    make -j4
+    make install
+
+    /opt/R/bin/Rscript -e \
+        'packages <- c("BiocManager", "Rcpp", "float", "knitr",
+        "rmarkdown", "testthat", "withr", "Matrix");
+        install.packages(packages, repos = "https://cloud.r-project.org");
+        stopifnot(all(vapply(packages, requireNamespace, logical(1),
+        quietly = TRUE)))'
+    /opt/R/bin/Rscript -e \
+        'packages <- c("Biobase", "BiocNeighbors",
+        "BiocSingular", "BiocStyle", "S4Vectors",
+        "SingleCellExperiment", "SummarizedExperiment", "scater",
+        "scRNAseq", "scran", "scuttle");
+        BiocManager::install(packages, update = FALSE, ask = FALSE);
+        stopifnot(all(vapply(packages, requireNamespace, logical(1),
+        quietly = TRUE)))'
+
+    curl -fsSL \
+        https://github.com/facebookresearch/faiss/archive/refs/tags/v1.14.3.tar.gz \
+        -o /tmp/faiss.tar.gz
+    tar -xzf /tmp/faiss.tar.gz -C /tmp
+    cmake -S /tmp/faiss-1.14.3 -B /tmp/faiss-build -G Ninja \
+        -DFAISS_ENABLE_GPU=ON \
+        -DFAISS_ENABLE_CUVS=OFF \
+        -DFAISS_ENABLE_PYTHON=OFF \
+        -DBUILD_TESTING=OFF \
+        -DBUILD_SHARED_LIBS=ON \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DFAISS_OPT_LEVEL=generic \
+        -DCMAKE_CUDA_ARCHITECTURES="@CUDA_ARCHS@"
+    cmake --build /tmp/faiss-build --parallel 4
+    cmake --install /tmp/faiss-build
+    /sbin/ldconfig
+
+@INSTALL_CUVS@
+
+    rm -rf /tmp/R* /tmp/faiss* /var/lib/apt/lists/*
+
+%environment
+    export PATH=/opt/cmake/bin:/usr/local/cuda/bin:/opt/R/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    export CUDA_HOME=/usr/local/cuda
+    export LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/lib:/opt/cuvs/lib:/opt/cuvs/lib64
+    export FAISS_HOME=/usr/local
+    export CUVS_HOME=/opt/cuvs
+    export OMP_NUM_THREADS=2
+    export OPENBLAS_NUM_THREADS=1
+    export LANG=C.UTF-8
+
+%test
+    /opt/R/bin/Rscript -e \
+        'stopifnot(getRversion() >= "4.6.0", requireNamespace("Rcpp"),
+        requireNamespace("Biobase"), requireNamespace("scRNAseq"),
+        requireNamespace("testthat"))'
+    test -x /usr/local/cuda/bin/nvcc
+    test -f /usr/local/include/faiss/IndexFlat.h

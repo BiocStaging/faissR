@@ -806,7 +806,7 @@ test_that("public NN results preserve requested and resolved routing metadata", 
   out <- nn(
     x,
     k = 3L,
-    backend = "auto",
+    backend = "cpu",
     method = "exact",
     metric = "euclidean",
     tuning = "off",
@@ -815,48 +815,27 @@ test_that("public NN results preserve requested and resolved routing metadata", 
   without_self <- nn(exclude_self = TRUE,
     x,
     k = 3L,
-    backend = "auto",
+    backend = "cpu",
     method = "exact",
     metric = "cosine",
     tuning = "off",
     n_threads = 2L
   )
 
-  expect_equal(attr(out, "requested_backend"), "auto")
+  expect_equal(attr(out, "requested_backend"), "cpu")
   expect_equal(attr(out, "requested_method"), "exact")
   expect_equal(attr(out, "resolved_backend"), attr(out, "backend"))
   expect_equal(attr(out, "metric"), "euclidean")
   expect_equal(attr(out, "tuning"), "off")
-  expect_equal(attr(without_self, "requested_backend"), "auto")
+  expect_equal(attr(without_self, "requested_backend"), "cpu")
   expect_equal(attr(without_self, "requested_method"), "exact")
   expect_equal(attr(without_self, "resolved_backend"), attr(without_self, "backend"))
   expect_equal(attr(without_self, "metric"), "cosine")
   expect_equal(attr(without_self, "tuning"), "off")
-  auto_meta <- attr(out, "auto_selection")
-  expect_equal(auto_meta$policy, "cpp_static_shape_k_metric_selector")
-  expect_false(auto_meta$slow_tuning)
-  expect_equal(auto_meta$requested_backend, "auto")
-  expect_equal(auto_meta$requested_method, "exact")
-  expect_false(auto_meta$explicit_backend)
-  expect_true(auto_meta$explicit_method)
-  expect_equal(auto_meta$backend_decision, "explicit_route")
-  expect_equal(auto_meta$method_decision, "explicit_exact")
-  expect_equal(auto_meta$predicted_backend, attr(out, "backend"))
-  expect_equal(
-    auto_meta$predicted_method,
-    faissR:::nn_resolved_backend_public_method(attr(out, "backend"))
-  )
-  expect_equal(
-    auto_meta$predicted_device,
-    faissR:::nn_resolved_backend_device(attr(out, "backend"))
-  )
-  expect_equal(auto_meta$metric, "euclidean")
-  expect_equal(auto_meta$k, 3L)
-  expect_equal(auto_meta$n, nrow(x))
-  expect_equal(auto_meta$p, ncol(x))
+  expect_null(attr(out, "auto_selection"))
 })
 
-test_that("top-level auto records the metric-aware auto selector decision", {
+test_that("method auto records a decision within an explicit backend", {
   skip_if_not(faiss_available())
   old <- options(
     faissR.cpu_auto_exact_work = 1,
@@ -870,37 +849,33 @@ test_that("top-level auto records the metric-aware auto selector decision", {
   q <- x[1:3, , drop = FALSE]
 
   cpu_auto <- nn(x, q, k = 3L, backend = "cpu", method = "auto", metric = "cosine")
-  top_auto <- nn(x, q, k = 3L, backend = "auto", method = "auto", metric = "cosine")
-
   expect_equal(attr(cpu_auto, "backend"), "faiss_flat_cosine")
-  expect_equal(attr(top_auto, "metric"), "cosine")
-  expect_equal(attr(top_auto, "requested_backend"), "auto")
-  expect_equal(attr(top_auto, "requested_method"), "auto")
-  auto_meta <- attr(top_auto, "auto_selection")
+  expect_equal(attr(cpu_auto, "metric"), "cosine")
+  expect_equal(attr(cpu_auto, "requested_backend"), "cpu")
+  expect_equal(attr(cpu_auto, "requested_method"), "auto")
+  auto_meta <- attr(cpu_auto, "auto_selection")
   expect_equal(auto_meta$policy, "cpp_static_shape_k_metric_selector")
-  expect_false(auto_meta$explicit_backend)
+  expect_true(auto_meta$explicit_backend)
   expect_false(auto_meta$explicit_method)
-  expect_equal(auto_meta$backend_decision, auto_meta$reason)
+  expect_equal(auto_meta$backend_decision, "explicit_cpu")
   expect_equal(auto_meta$method_decision, auto_meta$reason)
-  expect_equal(auto_meta$predicted_backend, attr(top_auto, "backend"))
+  expect_equal(auto_meta$predicted_backend, attr(cpu_auto, "backend"))
   expect_equal(
     auto_meta$predicted_method,
-    faissR:::nn_resolved_backend_public_method(attr(top_auto, "backend"))
+    faissR:::nn_resolved_backend_public_method(attr(cpu_auto, "backend"))
   )
   expect_equal(
     auto_meta$predicted_device,
-    faissR:::nn_resolved_backend_device(attr(top_auto, "backend"))
+    faissR:::nn_resolved_backend_device(attr(cpu_auto, "backend"))
   )
-  if (isTRUE(faiss_gpu_available())) {
-    expect_equal(attr(top_auto, "backend"), "faiss_gpu_flat_cosine")
-    expect_equal(auto_meta$reason, "auto_cuda_preselector")
-  } else {
-    expect_equal(attr(top_auto, "backend"), attr(cpu_auto, "backend"))
-    expect_equal(auto_meta$reason, "auto_cpu_fallback")
-  }
   expect_equal(auto_meta$metric, "cosine")
   expect_false(auto_meta$self_query)
   expect_false(auto_meta$slow_tuning)
+})
+
+test_that("automatic device selection is rejected", {
+  x <- matrix(rnorm(24), ncol = 3)
+  expect_error(nn(x, k = 2L, backend = "auto"), "backend")
 })
 
 test_that("auto metadata labels hardware extrapolation without changing selection", {
@@ -1062,7 +1037,7 @@ test_that("resolved backend labels map to stable auto-selection method and devic
   expect_equal(faissR:::nn_resolved_backend_device("cuda_cuvs_bruteforce"), "cuda")
   expect_equal(faissR:::nn_resolved_backend_device("cuda_cuvs_hnsw"), "cuda")
   expect_equal(faissR:::nn_resolved_backend_device("cuvs_ivfpq"), "cuda")
-  expect_equal(faissR:::nn_resolved_backend_device("cpu_auto"), "auto")
+  expect_equal(faissR:::nn_resolved_backend_device("cpu_auto"), "cpu")
 })
 
 test_that("public NN APIs require scalar backend method metric and tuning choices", {
@@ -1302,7 +1277,7 @@ test_that("runtime-available CPU core methods execute across benchmark k grid", 
 
 test_that("nn_capabilities agrees with public backend resolver", {
   caps <- nn_capabilities()
-  expect_equal(sort(unique(caps$backend)), c("auto", "cpu", "cuda"))
+  expect_equal(sort(unique(caps$backend)), c("cpu", "cuda"))
   for (i in seq_len(nrow(caps))) {
     row <- caps[i, , drop = FALSE]
     resolved <- tryCatch(
@@ -1329,24 +1304,9 @@ test_that("nn_capabilities agrees with public backend resolver", {
   }
 })
 
-test_that("nn_capabilities exposes auto backend as CPU/CUDA support union", {
+test_that("nn_capabilities does not expose automatic device selection", {
   caps <- nn_capabilities()
-  keys <- unique(caps[, c("method", "metric"), drop = FALSE])
-  for (i in seq_len(nrow(keys))) {
-    method <- keys$method[[i]]
-    metric <- keys$metric[[i]]
-    auto <- caps[caps$backend == "auto" & caps$method == method & caps$metric == metric, , drop = FALSE]
-    cpu <- caps[caps$backend == "cpu" & caps$method == method & caps$metric == metric, , drop = FALSE]
-    cuda <- caps[caps$backend == "cuda" & caps$method == method & caps$metric == metric, , drop = FALSE]
-    expect_equal(nrow(auto), 1L)
-    expect_equal(nrow(cpu), 1L)
-    expect_equal(nrow(cuda), 1L)
-    expect_equal(
-      auto$supported[[1L]],
-      isTRUE(cpu$supported[[1L]]) || isTRUE(cuda$supported[[1L]]),
-      info = sprintf("%s/%s", method, metric)
-    )
-  }
+  expect_false("auto" %in% caps$backend)
 })
 
 test_that("faissR options use the faissR namespace only", {
@@ -1831,7 +1791,7 @@ test_that("subset landmark candidate KNN matches full candidate rows", {
 
 test_that("clustered self KNN is not selected automatically", {
   expect_false(faissR:::should_use_clustered_self_knn(
-    backend = "auto",
+    backend = "cpu",
     self_query = TRUE,
     n = 6000L,
     p = 20L,
@@ -1847,7 +1807,7 @@ test_that("clustered self KNN is not selected automatically", {
     work_size = 7.2e8
   ))
   expect_false(faissR:::should_use_clustered_self_knn(
-    backend = "auto",
+    backend = "cpu",
     self_query = FALSE,
     n = 6000L,
     p = 20L,
@@ -1882,43 +1842,6 @@ test_that("CPU approximate selector chooses FAISS HNSW or native CPU", {
   )
 })
 
-test_that("auto GPU preselector does not require CUDA when only CPU FAISS is available", {
-  if (!cuda_available() && !cuvs_available()) {
-    expect_equal(
-      faissR:::resolve_auto_knn_gpu_backend(
-        backend = "auto",
-        self_query = TRUE,
-        n_points = 20000L,
-        n = 20000L,
-        p = 50L,
-        k = 50L,
-        work_size = 20000 * 20000 * 50,
-        metric = "euclidean"
-      ),
-      NA_character_
-    )
-  } else {
-    skip("CUDA/cuVS runtime is available; CPU-only auto fallback is not exercised here.")
-  }
-
-  expect_equal(
-    faissR:::resolve_auto_knn_gpu_backend(
-      backend = "auto",
-      self_query = TRUE,
-      n_points = 400000L,
-      n = 400000L,
-      p = 50L,
-      k = 50L,
-      work_size = as.double(400000L) * as.double(400000L) * 50,
-      metric = "cosine",
-      cuda_available_value = TRUE,
-      cuvs_available_value = TRUE,
-      faiss_gpu_available_value = FALSE
-    ),
-    "cuda_cuvs_bruteforce"
-  )
-})
-
 cpp_cuda_auto_route <- function(metric,
                                 requested_backend = "cuda",
                                 self_query = FALSE,
@@ -1931,7 +1854,7 @@ cpp_cuda_auto_route <- function(metric,
                                 cuvs_available_value = FALSE,
                                 faiss_gpu_available_value = TRUE) {
   faissR:::nn_auto_select_shape_cpp(
-    resolved_backend = if (identical(requested_backend, "auto")) "auto" else "cuda_auto",
+    resolved_backend = "cuda_auto",
     requested_backend = requested_backend,
     requested_method = "auto",
     shape = list(
@@ -2498,7 +2421,7 @@ test_that("CPU auto selector rejects legacy metric aliases", {
   )
 })
 
-test_that("CUDA auto selector is shape-aware", {
+test_that("CUDA auto selector follows the calibrated shape policy", {
   skip_if_not(cuda_available() || cuvs_available())
 
   medium <- faissR:::select_cuda_auto_backend(
@@ -2529,14 +2452,14 @@ test_that("CUDA auto selector is shape-aware", {
     k = 50L,
     work_size = 500000 * 500000 * 512
   )
-  expect_true(large %in% c("faiss_gpu_cagra", "cuda_cuvs_nndescent", "cuda"))
-  if (faiss_gpu_available()) expect_equal(large, "faiss_gpu_cagra")
+  expect_true(large %in% c("faiss_gpu_flat_l2", "cuda_cuvs_bruteforce", "cuda"))
+  if (faiss_gpu_available()) expect_equal(large, "faiss_gpu_flat_l2")
 })
 
-test_that("C++ auto selector prefers cuVS brute force for compact very-wide self-KNN", {
+test_that("CUDA method auto uses Flat for compact very-wide self-KNN", {
   route <- faissR:::nn_auto_select_shape_cpp(
-    resolved_backend = "auto",
-    requested_backend = "auto",
+    resolved_backend = "cuda_auto",
+    requested_backend = "cuda",
     requested_method = "auto",
     shape = list(
       n = 1440L,
@@ -2554,13 +2477,13 @@ test_that("C++ auto selector prefers cuVS brute force for compact very-wide self
   )
   expect_equal(route$selected_backend, "faiss_gpu_flat_l2")
   expect_equal(route$predicted_method, "flat")
-  expect_equal(route$reason, "auto_cuda_preselector")
+  expect_equal(route$reason, "cuda_auto_exact_measured_shape_fastest")
 })
 
-test_that("C++ auto selector prefers cuVS brute force for compact exact CUDA self-KNN", {
+test_that("CUDA method auto uses Flat for compact exact self-KNN", {
   route <- faissR:::nn_auto_select_shape_cpp(
-    resolved_backend = "auto",
-    requested_backend = "auto",
+    resolved_backend = "cuda_auto",
+    requested_backend = "cuda",
     requested_method = "auto",
     shape = list(
       n = 7291L,
@@ -2578,13 +2501,13 @@ test_that("C++ auto selector prefers cuVS brute force for compact exact CUDA sel
   )
   expect_equal(route$selected_backend, "faiss_gpu_flat_l2")
   expect_equal(route$predicted_method, "flat")
-  expect_equal(route$reason, "auto_cuda_preselector")
+  expect_equal(route$reason, "cuda_auto_exact_measured_shape_fastest")
 })
 
-test_that("C++ auto selector keeps FAISS GPU Flat for larger exact CUDA self-KNN", {
+test_that("CUDA method auto keeps FAISS GPU Flat for larger exact self-KNN", {
   route <- faissR:::nn_auto_select_shape_cpp(
-    resolved_backend = "auto",
-    requested_backend = "auto",
+    resolved_backend = "cuda_auto",
+    requested_backend = "cuda",
     requested_method = "auto",
     shape = list(
       n = 60000L,
@@ -2602,7 +2525,7 @@ test_that("C++ auto selector keeps FAISS GPU Flat for larger exact CUDA self-KNN
   )
   expect_equal(route$selected_backend, "faiss_gpu_flat_l2")
   expect_equal(route$predicted_method, "flat")
-  expect_equal(route$reason, "auto_cuda_preselector")
+  expect_equal(route$reason, "cuda_auto_exact_measured_shape_fastest")
 })
 
 
@@ -2695,7 +2618,6 @@ test_that("FAISS GPU backends are explicit and do not fall back to CPU", {
 
   for (backend in c(
     "faiss_gpu_flat_l2",
-    "faiss_gpu_flat_ip",
     "faiss_gpu_ivf_flat",
     "faiss_gpu_ivfpq"
   )) {
@@ -3013,7 +2935,10 @@ test_that("CUDA backend reports unavailable runtime clearly", {
   skip_if(cuda_available())
 
   x <- matrix(rnorm(30), ncol = 3)
-  expect_error(nn(x, x, k = 2, backend = "cuda"), "No CUDA GPU backend")
+  expect_error(
+    nn(x, x, k = 2, backend = "cuda", method = "exact"),
+    "No CUDA GPU backend"
+  )
   expect_error(nn(x, x, k = 2, backend = "gpu"), "must be one of")
   expect_error(nn(x, x, k = 2, backend = "cuda_ivf"), "must be one of")
   expect_error(nn(x, x, k = 2, backend = "cuda_faiss"), "must be one of")

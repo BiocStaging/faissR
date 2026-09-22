@@ -121,7 +121,7 @@ std::string cpu_metric_flat_backend(const std::string& metric) {
 }
 
 std::string public_method_from_backend(const std::string& backend) {
-  if (backend == "auto" || backend == "cpu_auto" ||
+  if (backend == "cpu_auto" ||
       backend == "cuda_auto" || backend == "gpu_auto") return "auto";
   if (backend == "cpu" || backend == "cuda") return "exact";
   if (backend == "cuda_cuvs_bruteforce") return "bruteforce";
@@ -168,8 +168,8 @@ std::string public_method_from_backend(const std::string& backend) {
 }
 
 std::string device_from_backend(const std::string& backend) {
-  if (backend == "auto" || backend == "cpu_auto" ||
-      backend == "cuda_auto" || backend == "gpu_auto") return "auto";
+  if (backend == "cpu_auto") return "cpu";
+  if (backend == "cuda_auto" || backend == "gpu_auto") return "cuda";
   if (backend.rfind("cuda", 0) == 0 ||
       backend.rfind("gpu", 0) == 0 ||
       backend.rfind("cuvs", 0) == 0 ||
@@ -178,7 +178,6 @@ std::string device_from_backend(const std::string& backend) {
 }
 
 std::string cuda_non_euclidean_backend(const std::string& metric,
-                                       const std::string& requested_device,
                                        bool self_query,
                                        int n,
                                        int p,
@@ -216,7 +215,6 @@ std::string cuda_non_euclidean_backend(const std::string& metric,
     "faiss_gpu_flat_ip";
   if (faiss_gpu_available) return flat_backend;
   if (cuvs_available) return "cuda_cuvs_bruteforce";
-  if (requested_device == "auto") return "cpu_auto";
   return "__cuda_non_euclidean_unavailable__";
 }
 
@@ -311,7 +309,7 @@ std::string select_cuda(bool self_query,
   (void)cuvs_bruteforce_work_threshold;
   if (k > 256) {
     auto_rule = "cuda_auto_k_limit";
-    error = "CUDA auto backends currently support `k <= 256`.";
+    error = "CUDA `method = \"auto\"` currently supports `k <= 256`.";
     return "cuda_auto";
   }
   if (!cuda_available && !cuvs_available) {
@@ -325,7 +323,7 @@ std::string select_cuda(bool self_query,
     return "cuda_grid";
   }
   const std::string metric_backend = cuda_non_euclidean_backend(
-    metric, "cuda", self_query, n, p, n_points, k, work_size,
+    metric, self_query, n, p, n_points, k, work_size,
     cuda_available, cuvs_available, faiss_gpu_available, cagra_preference,
     metric_graph_n, metric_graph_min_k, metric_graph_work,
     cagra_compact_n, cagra_high_dim_p, cagra_compact_max_k
@@ -334,8 +332,7 @@ std::string select_cuda(bool self_query,
     auto_rule = "cuda_auto_non_euclidean_unavailable";
     error = "CUDA auto for non-Euclidean metrics requires FAISS GPU Flat support "
       "for exact routes or CAGRA/cuVS support for large self-KNN graph routes. "
-      "Use `backend = \"auto\"` to fall back to CPU, or rebuild faissR with "
-      "FAISS GPU/cuVS support.";
+      "Use `backend = \"cpu\"`, or rebuild faissR with FAISS GPU/cuVS support.";
     return "cuda_auto";
   }
   if (!metric_backend.empty()) {
@@ -1318,6 +1315,12 @@ List nn_auto_select_backend_cpp(std::string resolved_backend,
                                 double cpu_faiss_flat_work,
                                 double target_recall_option,
                                 std::string tuning) {
+  if (!(requested_backend == "cpu" || requested_backend == "cuda")) {
+    stop("`requested_backend` must be one of \"cpu\" or \"cuda\".");
+  }
+  if (resolved_backend == "auto") {
+    stop("Automatic device selection is not supported; choose CPU or CUDA.");
+  }
   const double work_size = static_cast<double>(n) *
     static_cast<double>(n_points) * static_cast<double>(p);
   const double target_recall = hnsw_target_recall_cpp(target_recall_option);
@@ -1328,37 +1331,7 @@ List nn_auto_select_backend_cpp(std::string resolved_backend,
   std::string cuda_auto_rule;
   std::string cuda_auto_shape_group;
 
-  if (resolved_backend == "auto") {
-    std::string cuda_error;
-    std::string gpu;
-    std::string gpu_rule;
-    std::string gpu_shape_group;
-    if (self_query && k <= 256 && work_size >= 5e8 &&
-        (cuda_available || cuvs_available)) {
-      gpu = select_cuda(
-        self_query, n, p, n_points, k, work_size, metric,
-        cuda_available, cuvs_available, faiss_gpu_available,
-        cagra_preference, cuda_exact_n, cuda_exact_work,
-        metric_graph_n, metric_graph_min_k, metric_graph_work,
-        cagra_compact_n, cagra_high_dim_p, cagra_compact_max_k,
-        cuvs_bruteforce_work_threshold, target_recall_code,
-        gpu_rule, gpu_shape_group, cuda_error
-      );
-    }
-    if (!gpu.empty() && cuda_error.empty() && gpu != "cpu_auto") {
-      selected = gpu;
-      reason = "auto_cuda_preselector";
-      cuda_auto_rule = gpu_rule;
-      cuda_auto_shape_group = gpu_shape_group;
-    } else {
-      selected = select_cpu(
-        self_query, n, p, n_points, k, work_size, metric,
-        faiss_available,
-        cpu_exact_work, cpu_faiss_flat_work, target_recall_code
-      );
-      reason = "auto_cpu_fallback";
-    }
-  } else if (resolved_backend == "cpu_auto") {
+  if (resolved_backend == "cpu_auto") {
     selected = select_cpu(
       self_query, n, p, n_points, k, work_size, metric,
       faiss_available,
@@ -1385,7 +1358,7 @@ List nn_auto_select_backend_cpp(std::string resolved_backend,
     }
   }
 
-  const bool explicit_backend = requested_backend != "auto";
+  const bool explicit_backend = true;
   const bool explicit_method = requested_method != "auto";
   const std::string backend_decision = explicit_backend ?
     ("explicit_" + requested_backend) : reason;
@@ -3938,10 +3911,9 @@ List kmeans_auto_select_backend_cpp(std::string requested_backend,
                                     int effective_n_init = NA_INTEGER,
                                     double effective_tol = NA_REAL,
                                     std::string tuning = "auto") {
-  if (!(requested_backend == "auto" ||
-        requested_backend == "cpu" ||
+  if (!(requested_backend == "cpu" ||
         requested_backend == "cuda")) {
-    stop("`requested_backend` must be one of \"auto\", \"cpu\", or \"cuda\".");
+    stop("`requested_backend` must be one of \"cpu\" or \"cuda\".");
   }
 
   List policy = kmeans_auto_backend_policy_cpp(
@@ -3950,30 +3922,13 @@ List kmeans_auto_select_backend_cpp(std::string requested_backend,
   );
   const bool prefer_cuda = as<bool>(policy["prefer_cuda"]);
   const std::string policy_reason = as<std::string>(policy["reason"]);
-  const bool explicit_backend = requested_backend != "auto";
+  const bool explicit_backend = true;
   const bool cuda_kmeans_route_available =
     cuda_available && (faiss_gpu_available || cuvs_available);
 
-  std::string resolved_backend = requested_backend;
-  std::string runtime_decision;
-  if (explicit_backend) {
-    runtime_decision = "explicit_backend_no_auto_fallback";
-  } else if (prefer_cuda && cuda_kmeans_route_available) {
-    resolved_backend = "cuda";
-    runtime_decision = "cuda_kmeans_route_available";
-  } else {
-    resolved_backend = "cpu";
-    if (!prefer_cuda) {
-      runtime_decision = "cpu_preferred_by_shape";
-    } else if (!cuda_available) {
-      runtime_decision = "cuda_runtime_unavailable";
-    } else {
-      runtime_decision = "cuda_kmeans_provider_unavailable";
-    }
-  }
-
-  const std::string backend_decision = explicit_backend ?
-    ("explicit_" + requested_backend) : policy_reason;
+  const std::string resolved_backend = requested_backend;
+  const std::string runtime_decision = "explicit_backend_no_auto_fallback";
+  const std::string backend_decision = "explicit_" + requested_backend;
 
   return List::create(
     _["policy"] = "static_shape_center_backend_selector",

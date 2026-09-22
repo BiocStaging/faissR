@@ -40,7 +40,7 @@ default_kmeans_method_values <- function() {
 }
 
 default_kmeans_backend_values <- function() {
-  c("auto", "cpu", "cuda")
+  c("cpu", "cuda")
 }
 
 default_kmeans_cycles <- function() {
@@ -586,7 +586,7 @@ kmeans_selection_metadata <- function(backend, n, p, centers,
   }
 
   backend_policy <- kmeans_auto_backend_policy(n, p, centers)
-  explicit_backend <- !identical(backend, "auto")
+  explicit_backend <- TRUE
   route_available <- isTRUE(cuda_ok) && (isTRUE(faiss_gpu_ok) || isTRUE(cuvs_ok))
   prefer_cuda <- isTRUE(backend_policy$prefer_cuda)
   resolved_backend <- backend
@@ -1157,41 +1157,25 @@ kmeans_runtime_capabilities <- function() {
   )
   cuda_ok <- identical(cuda_reason, "available")
   data.frame(
-    method = c("fast_kmeans", "fast_kmeans", "fast_kmeans", "stats"),
-    backend = c("auto", "cpu", "cuda", "stats"),
-    supported = c(TRUE, TRUE, TRUE, TRUE),
-    runtime_available = c(TRUE, TRUE, cuda_ok, TRUE),
-    resolved_backend = c(
-      if (cuda_ok) "shape_aware_auto_cpu_or_cuda" else "cpu",
-      "cpu",
-      "cuda",
-      "stats"
-    ),
+    method = c("fast_kmeans", "fast_kmeans", "stats"),
+    backend = c("cpu", "cuda", "stats"),
+    supported = c(TRUE, TRUE, TRUE),
+    runtime_available = c(TRUE, cuda_ok, TRUE),
+    resolved_backend = c("cpu", "cuda", "stats"),
     implementation = c(
-      if (cuda_ok) "faiss CPU/FAISS GPU/cuVS selected by shape gate" else "faiss/native CPU",
       "faiss/native CPU",
       "FAISS GPU k-means or direct cuVS k-means",
       "stats::kmeans"
     ),
-    runtime_reason = c(
-      if (cuda_ok) "auto_shape_gate_cuda_available" else "auto_resolves_cpu_no_cuda_kmeans",
-      "available",
-      cuda_reason,
-      "available"
-    ),
+    runtime_reason = c("available", cuda_reason, "available"),
     runtime_notes = c(
-      if (cuda_ok) {
-        "Auto may select CUDA for sufficiently large shape/work estimates."
-      } else {
-        "Auto resolves to CPU because no k-means-capable CUDA route is available."
-      },
       "CPU k-means route is available.",
       kmeans_cuda_runtime_notes(cuda_reason),
       "Base stats::kmeans is available."
     ),
-    cuda_available = c(cuda_runtime, cuda_runtime, cuda_runtime, cuda_runtime),
-    faiss_gpu_available = c(faiss_gpu, faiss_gpu, faiss_gpu, faiss_gpu),
-    cuvs_available = c(cuvs, cuvs, cuvs, cuvs),
+    cuda_available = rep(cuda_runtime, 3L),
+    faiss_gpu_available = rep(faiss_gpu, 3L),
+    cuvs_available = rep(cuvs, 3L),
     stringsAsFactors = FALSE
   )
 }
@@ -1558,15 +1542,6 @@ if (nrow(ok)) {
     )
   }
 
-  auto_fast <- compare_auto_kmeans_to_recommendations(cycle_summary, recommendations)
-  if (nrow(auto_fast)) {
-    utils::write.csv(
-      auto_fast,
-      file.path(out_dir, "kmeans_auto_vs_global_recommendation.csv"),
-      row.names = FALSE
-    )
-  }
-
   comparison <- compare_fast_kmeans_to_stats(ok)
   if (nrow(comparison)) {
     utils::write.csv(
@@ -1596,15 +1571,14 @@ materials <- c(
   "",
   "`kmeans_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `kmeans_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, timings, memory, selected parameters, convergence flags (`converged`, `hit_max_iter`), ARI, within-cluster sums of squares, backend metadata, C++ selector metadata, categorical `tuning_rule`, and detailed `tuning_rule_detail` shape metadata.",
   "`kmeans_runtime_capabilities.csv` records the runtime availability table used for k-means preflight, including CUDA, FAISS GPU, and cuVS availability, `runtime_reason`, human-readable `runtime_notes`, and whether explicit CUDA k-means requests can run in the current build. The `runtime_reason` field distinguishes available routes from `missing_cuda_runtime` and `missing_gpu_kmeans_backend` preflight skips.",
-  "The result table records cycle, elapsed time, peak resident memory when available, requested backend, resolved backend, implementation backend used, CUDA provider selection/fallback metadata when CUDA k-means is used, total within-cluster sum of squares, iterations, selected k-means parameters, deterministic tuning policy/rule/shape metadata, C++ `selection_*` no-pilot backend decision metadata, and ARI against dataset labels when labels are available. `selection_explicit_backend` and `selection_backend_decision` distinguish explicit CPU/CUDA requests from automatic shape-policy choices; `selection_runtime_decision`, `selection_tuning_source`, and `selection_cuda_kmeans_route_available` expose the package selector's runtime branch and CUDA k-means route availability. `cuda_provider_selection`, `faiss_gpu_error`, and `backend_resolution_note` distinguish FAISS GPU k-means from direct cuVS k-means and preserve the reason when the CUDA route falls back from FAISS GPU to direct cuVS. `tuning_rule` is a stable grouping label such as `small_low_work_multistart`, while `tuning_rule_detail` preserves the exact shape/work values that produced the rule.",
+  "The result table records cycle, elapsed time, peak resident memory when available, requested backend, resolved backend, implementation backend used, CUDA provider selection/fallback metadata when CUDA k-means is used, total within-cluster sum of squares, iterations, selected k-means parameters, deterministic tuning policy/rule/shape metadata, C++ `selection_*` backend decision metadata, and ARI against dataset labels when labels are available. `selection_runtime_decision`, `selection_tuning_source`, and `selection_cuda_kmeans_route_available` expose the package selector's runtime branch and CUDA k-means route availability. `cuda_provider_selection`, `faiss_gpu_error`, and `backend_resolution_note` distinguish FAISS GPU k-means from direct cuVS k-means and preserve the reason when the CUDA route falls back from FAISS GPU to direct cuVS. `tuning_rule` is a stable grouping label such as `small_low_work_multistart`, while `tuning_rule_detail` preserves the exact shape/work values that produced the rule.",
   "`kmeans_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI, elapsed time, and total within-cluster sum of squares for a compact backwards-compatible summary. `kmeans_best_by_dataset_centers.csv` keeps the best successful row per dataset/centers combination so different requested cluster counts remain auditable.",
   "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset, cycle, and number of centers, recording speedup, ARI delta, and withinss ratio. Speedups, ARI deltas, and withinss ratios are `NA` when the required timing or quality values are missing or invalid. The k-means benchmark defaults to 10 repeated cycles; `--cycles` can override this for smoke tests or longer stability runs.",
   "`kmeans_cycle_summary.csv` aggregates successful rows across cycles by dataset/method/backend/centers and reports success counts, median/min/max elapsed time, ARI stability, withinss stability, iteration counts, whether any cycle hit `max_iter`, whether all cycles converged before the iteration cap, selected parameter medians, deterministic tuning rule/shape metadata, C++ selector metadata, resolved backend metadata, and CUDA provider-selection metadata when CUDA k-means is used.",
   "`kmeans_recommendations_from_cycles.csv` selects the fastest row within `ari_tolerance` of the best median ARI for each dataset/centers combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median times are broken by higher median ARI, higher minimum ARI across cycles, and then lower median total within-cluster sum of squares. When ARI is unavailable it selects the fastest median-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
-  "`kmeans_backend_recommendations_from_cycles.csv` applies the same rule within each dataset/centers/backend group, so CPU, CUDA, auto, and stats rows can be tuned or reported separately without changing the overall recommendation file.",
+  "`kmeans_backend_recommendations_from_cycles.csv` applies the same rule within each dataset/centers/backend group, so CPU, CUDA, and stats rows can be reported separately without changing the overall recommendation file.",
   "`kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median ARI gap, withinss ratio, selected tuning metadata, requested/resolved backend metadata, CPU thread count, C++ selector metadata, and backend/implementation agreement. Speed ratios, ARI gaps, and withinss ratios are `NA` when the required timing or quality values are missing or invalid.",
-  "`kmeans_auto_vs_global_recommendation.csv` filters that comparison to aggregate `fast_kmeans(backend = \"auto\")` rows and compares them with the pooled global recommendation for the same dataset/centers combination. It records requested-backend, resolved-backend, implementation, speed, ARI, withinss, deterministic tuning, and C++ no-pilot backend-selection agreement so the k-means auto backend selector can be refined from benchmark evidence.",
-  "Explicit CUDA requests whose required CUDA, FAISS GPU, or cuVS k-means runtime is unavailable are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`; `resolved_backend` remains `cuda` so the skipped public device request is auditable. `backend = \"auto\"` resolves to CPU instead of becoming an expected skip when no k-means-capable CUDA route is available, and also resolves to CPU for small k-means shapes where the deterministic shape gate estimates that GPU launch/copy overhead would dominate. `centers = 1` is resolved to the exact CPU column-mean solution and records `single_cluster_exact_mean`, even for large matrices, because no iterative CPU or CUDA k-means backend can improve that objective. Unexpected runtime errors remain failed rows rather than being replaced with CPU timings."
+  "Explicit CUDA requests whose required CUDA, FAISS GPU, or cuVS k-means runtime is unavailable are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`; `resolved_backend` remains `cuda` so the skipped public device request is auditable. `centers = 1` is resolved to the exact CPU column-mean solution and records `single_cluster_exact_mean`, even for large matrices, because no iterative CPU or CUDA k-means backend can improve that objective. Unexpected runtime errors remain failed rows rather than being replaced with CPU timings."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_kmeans.md"))
 

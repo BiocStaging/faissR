@@ -267,7 +267,8 @@ and was not compiled or is not available at runtime, faissR reports an error
 instead of silently running CPU code and labelling it as GPU.
 
 For public nearest-neighbour APIs, `backend` selects the device family:
-`"auto"`, `"cpu"`, or `"cuda"`. The `method` argument selects the algorithm,
+`"cpu"` or `"cuda"`. When omitted, it follows the package option, then the
+environment variable, and finally defaults to CPU. The `method` argument selects the algorithm,
 for example `method = "grid"`, `method = "ivfpq_fastscan"`, or `method = "cagra"`. Thus
 `nn(x, backend = "cuda", method = "grid")` uses the CUDA grid route, while
 `nn(x, backend = "cpu", method = "cagra")` stops because CAGRA is CUDA-only.
@@ -307,7 +308,7 @@ Unsupported method/backend/metric combinations fail without changing the
 requested metric, method, or device; use `nn_capabilities(runtime = TRUE)` to
 preflight both design support and locally available providers. Use
 `nn_metric_preflight()` to inspect the data-dependent contract and obtain the
-affected row indices before selecting a backend.
+affected row indices before starting the requested backend.
 
 Every KNN result makes the value contract machine-readable through
 `distance_is_metric`, `distance_semantics`,
@@ -354,10 +355,12 @@ remotes::install_github("tkcaccia/faissR")
 FAISS is required and is not vendored. Rcpp >= 1.1.0 is required; update an
 older distribution-provided Rcpp before compiling. `faissR` compiles with C++20 because
 recent FAISS headers use C++20 syntax. On systems where FAISS is not visible
-through `pkg-config` or standard compiler paths, set `FAISS_HOME`:
+through `pkg-config` or standard compiler paths, set `FAISS_HOME`, or provide
+separate include and library directories:
 
 ```sh
 FAISS_HOME=/path/to/faiss R CMD INSTALL .
+R CMD INSTALL --configure-vars='INCLUDE_DIR=/path/include LIB_DIR=/path/lib' .
 ```
 
 On Debian/Ubuntu, also install `libblas-dev` and `liblapack-dev` alongside
@@ -377,36 +380,18 @@ configuration. WSL2 remains the practical route for CUDA/cuVS. Automated
 Windows builders that do not provide FAISS compile a diagnostic build that
 loads and reports the missing system capability. Set
 `FAISSR_REQUIRE_FAISS=1` when installation must fail unless a functional FAISS
-backend is linked. Recognized r-universe/BiocStaging macOS workers without
-FAISS produce a diagnostic-only build that reports the missing system
-capability. Other macOS source installs require FAISS and remain supported with
-Homebrew or an active conda/mamba environment.
+backend is linked. macOS binary builders should obtain a static FAISS library
+through the [R-macos recipes](https://github.com/R-macos/recipes) system.
+`configure` detects recipe installations under `/opt/R/<architecture>` before
+generic system locations. Source builds can use any ABI-compatible prefix.
 
 For repeatable native Windows/macOS and multi-distribution Linux checks, see
 the [cross-platform test lab](docs/package-testing.md). Functional and
 diagnostic-only results are reported separately.
 
-On macOS with Homebrew, install FAISS and the OpenMP runtime first:
-
-```sh
-brew install faiss libomp
-```
-
-or explicitly allow the GitHub install to call Homebrew for you:
-
-```r
-Sys.setenv(FAISSR_AUTO_INSTALL_FAISS = "1")
-remotes::install_github("tkcaccia/faissR")
-```
-
-The Homebrew step runs only after the user explicitly sets
-`FAISSR_AUTO_INSTALL_FAISS=1`; generic CI variables do not trigger package
-manager changes. Bioconductor/r-universe macOS binary workers may not provide
-FAISS, so those workers use the documented diagnostic build rather than a
-hidden dependency manager.
-
-If Homebrew is not available on a user macOS machine, an already-active
-conda/mamba environment is also supported:
+For a macOS source build outside the binary-builder environment, point
+`FAISS_HOME` and `LIBOMP_HOME` at compatible installations. An already-active
+conda/mamba environment is one possible local prefix:
 
 ```sh
 conda install -c conda-forge faiss-cpu libomp
@@ -416,8 +401,8 @@ R CMD INSTALL .
 ```
 
 `configure` detects `CONDA_PREFIX` passively when FAISS and libomp are already
-installed there. It does not install conda automatically, which keeps
-Bioconductor and shared-machine builds explicit.
+installed there. It never invokes a system package manager. This keeps
+Bioconductor and shared-machine builds explicit and reproducible.
 
 Optional CUDA/cuVS builds are enabled only when requested or auto-detected:
 
@@ -449,14 +434,14 @@ tarball:
 
 ```sh
 R CMD build .
-R CMD check --as-cran faissR_0.99.44.tar.gz
+R CMD check --as-cran faissR_0.99.45.tar.gz
 ```
 
 and then:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.44.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.45.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA and cuVS are
@@ -476,16 +461,12 @@ Until the upstream r-universe resolver includes FAISS, the repository-level
 `.prepare` hook installs those three development packages for r-universe source builds and is
 excluded from the package tarball.
 
-For macOS r-universe/BiocStaging binary builds, FAISS is not currently available
-in the worker system-library bundle and Homebrew is deliberately removed before
-package installation. Those automated macOS binary builds therefore provide
-diagnostics rather than real FAISS execution until FAISS is provided by the
-builder.
-Because the r-universe workflow may still launch the macOS binary job, the
-configure script builds diagnostic stubs only for that worker when FAISS is
-absent. `backend_info()` then reports FAISS as unavailable with reason
-`runiverse_macos_diagnostic_stub_no_faiss`. Linux builds and ordinary user
-macOS source installs still require real FAISS.
+For macOS binary builds, the intended solution is a static FAISS dependency
+from the R-macos recipes system. Until that dependency is available on a given
+r-universe/BiocStaging worker, the configure script builds diagnostic stubs only
+for that explicitly recognized worker. `backend_info()` then reports FAISS as
+unavailable with reason `runiverse_macos_diagnostic_stub_no_faiss`. Functional
+Linux and macOS builds still require real FAISS.
 
 For r-universe/WebAssembly, `configure` detects the
 `wasm32-unknown-emscripten` target and builds diagnostic stubs rather than
@@ -657,7 +638,7 @@ cuVS with the patch. See the copy-ready upstream report in
 library(faissR)
 
 x <- scale(as.matrix(iris[, 1:4]))
-nn_res <- nn(x, k = 15, backend = "auto", metric = "euclidean", n_threads = 4)
+nn_res <- nn(x, k = 15, backend = "cpu", metric = "euclidean", n_threads = 4)
 nn_res$indices[1:3, 1:5]
 ```
 

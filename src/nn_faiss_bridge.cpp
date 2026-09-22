@@ -386,8 +386,7 @@ List faissR_nn_float32_call_impl(SEXP x,
       "`metric` must be one of \"euclidean\", \"cosine\", or \"correlation\""
     );
   }
-  if (backend_value != "auto" &&
-      backend_value != "cpu" &&
+  if (backend_value != "cpu" &&
       backend_value != "faiss" &&
       backend_value != "cpu_faiss" &&
       backend_value != "cpu_faiss_flat" &&

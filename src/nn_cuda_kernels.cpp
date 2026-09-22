@@ -1,4 +1,5 @@
 #include <cuda_runtime.h>
+#include <math_constants.h>
 
 #include <algorithm>
 #include <cfloat>
@@ -138,7 +139,32 @@ std::string json_escape_cuda(const char* text) {
   return out;
 }
 
-__device__ void insert_candidate(float dist,
+std::string cuda_version_string(const int version) {
+  if (version <= 0) return "unknown";
+  const int major = version / 1000;
+  const int minor = (version % 1000) / 10;
+  const int patch = version % 10;
+  std::ostringstream out;
+  out << major << "." << minor;
+  if (patch > 0) out << "." << patch;
+  return out.str();
+}
+
+void append_cuda_versions(std::ostringstream& out,
+                          const int driver_version,
+                          const int runtime_version) {
+  out << ",\"compiled_toolkit\":\""
+      << cuda_version_string(CUDART_VERSION) << "\""
+      << ",\"compiled_toolkit_raw\":" << CUDART_VERSION
+      << ",\"driver_version\":\""
+      << cuda_version_string(driver_version) << "\""
+      << ",\"driver_version_raw\":" << driver_version
+      << ",\"runtime_version\":\""
+      << cuda_version_string(runtime_version) << "\""
+      << ",\"runtime_version_raw\":" << runtime_version;
+}
+
+__device__ __forceinline__ void insert_candidate(float dist,
                                  int idx,
                                  float* best_dist,
                                  int* best_idx,
@@ -159,7 +185,7 @@ __device__ void insert_candidate(float dist,
   best_idx[pos] = idx;
 }
 
-__device__ bool contains_candidate(int idx,
+__device__ __forceinline__ bool contains_candidate(int idx,
                                    const int* best_idx,
                                    int k) {
   for (int j = 0; j < k; ++j) {
@@ -168,7 +194,7 @@ __device__ bool contains_candidate(int idx,
   return false;
 }
 
-__device__ void insert_unique_candidate(float dist,
+__device__ __forceinline__ void insert_unique_candidate(float dist,
                                         int idx,
                                         float* best_dist,
                                         int* best_idx,
@@ -177,22 +203,25 @@ __device__ void insert_unique_candidate(float dist,
   insert_candidate(dist, idx, best_dist, best_idx, k);
 }
 
-__device__ int grid_coord_device(float value, float min_value, float cell_size, int bins) {
+__device__ __forceinline__ int grid_coord_device(float value,
+                                                 float min_value,
+                                                 float cell_size,
+                                                 int bins) {
   int out = static_cast<int>((value - min_value) / cell_size);
   if (out < 0) out = 0;
   if (out >= bins) out = bins - 1;
   return out;
 }
 
-__device__ int grid2d_cell_device(int ix, int iy, int bins) {
+__device__ __forceinline__ int grid2d_cell_device(int ix, int iy, int bins) {
   return iy * bins + ix;
 }
 
-__device__ int grid3d_cell_device(int ix, int iy, int iz, int bins) {
+__device__ __forceinline__ int grid3d_cell_device(int ix, int iy, int iz, int bins) {
   return (iz * bins + iy) * bins + ix;
 }
 
-__device__ float grid2d_lower_outside_device(float x,
+__device__ __forceinline__ float grid2d_lower_outside_device(float x,
                                              float y,
                                              const CudaGridParams params,
                                              int x0,
@@ -223,7 +252,7 @@ __device__ float grid2d_lower_outside_device(float x,
   return best;
 }
 
-__device__ float grid3d_lower_outside_device(float x,
+__device__ __forceinline__ float grid3d_lower_outside_device(float x,
                                              float y,
                                              float z,
                                              const CudaGridParams params,
@@ -247,7 +276,7 @@ __device__ float grid3d_lower_outside_device(float x,
   return best;
 }
 
-__device__ void add_grid2d_cell_device(const float* data,
+__device__ __forceinline__ void add_grid2d_cell_device(const float* data,
                                        const int* offsets,
                                        const int* rows,
                                        const CudaGridParams params,
@@ -271,7 +300,7 @@ __device__ void add_grid2d_cell_device(const float* data,
   }
 }
 
-__device__ void add_grid3d_cell_device(const float* data,
+__device__ __forceinline__ void add_grid3d_cell_device(const float* data,
                                        const int* offsets,
                                        const int* rows,
                                        const CudaGridParams params,
@@ -571,7 +600,7 @@ __global__ void faiss_knn_rowmajor_to_column_kernel(const int64_t* in_idx,
   }
 }
 
-__device__ float self_distance_sq(const float* data,
+__device__ __forceinline__ float self_distance_sq(const float* data,
                                   int a,
                                   int b,
                                   int n,
@@ -586,7 +615,7 @@ __device__ float self_distance_sq(const float* data,
   return dist;
 }
 
-__device__ float self_dot_product(const float* data,
+__device__ __forceinline__ float self_dot_product(const float* data,
                                   int a,
                                   int b,
                                   int n,
@@ -904,6 +933,13 @@ extern "C" const char* faissr_cuda_last_error() {
 }
 
 extern "C" const char* faissr_cuda_device_info_json() {
+  int driver_version = 0;
+  int runtime_version = 0;
+  const cudaError_t driver_status = cudaDriverGetVersion(&driver_version);
+  const cudaError_t runtime_status = cudaRuntimeGetVersion(&runtime_version);
+  if (driver_status != cudaSuccess) driver_version = 0;
+  if (runtime_status != cudaSuccess) runtime_version = 0;
+
   int count = 0;
   cudaError_t code = cudaGetDeviceCount(&count);
   if (code != cudaSuccess) {
@@ -911,12 +947,19 @@ extern "C" const char* faissr_cuda_device_info_json() {
     set_error(error == nullptr ? "cudaGetDeviceCount failed" : error);
     std::ostringstream os;
     os << "{\"available\":false,\"device_count\":0,\"reason\":\""
-       << json_escape_cuda(error) << "\"}";
+       << json_escape_cuda(error) << "\"";
+    append_cuda_versions(os, driver_version, runtime_version);
+    os << "}";
     device_info_json = os.str();
     return device_info_json.c_str();
   }
   if (count <= 0) {
-    device_info_json = "{\"available\":false,\"device_count\":0,\"reason\":\"no_cuda_device\"}";
+    std::ostringstream os;
+    os << "{\"available\":false,\"device_count\":0,"
+       << "\"reason\":\"no_cuda_device\"";
+    append_cuda_versions(os, driver_version, runtime_version);
+    os << "}";
+    device_info_json = os.str();
     return device_info_json.c_str();
   }
 
@@ -935,7 +978,9 @@ extern "C" const char* faissr_cuda_device_info_json() {
     std::ostringstream os;
     os << "{\"available\":false,\"device_count\":" << count
        << ",\"device\":" << device
-       << ",\"reason\":\"" << json_escape_cuda(error) << "\"}";
+       << ",\"reason\":\"" << json_escape_cuda(error) << "\"";
+    append_cuda_versions(os, driver_version, runtime_version);
+    os << "}";
     device_info_json = os.str();
     return device_info_json.c_str();
   }
@@ -957,8 +1002,9 @@ extern "C" const char* faissr_cuda_device_info_json() {
      << ",\"total_memory\":" << static_cast<unsigned long long>(total_memory)
      << ",\"free_memory\":" << static_cast<unsigned long long>(free_memory)
      << ",\"warp_size\":" << prop.warpSize
-     << ",\"max_threads_per_block\":" << prop.maxThreadsPerBlock
-     << "}";
+     << ",\"max_threads_per_block\":" << prop.maxThreadsPerBlock;
+  append_cuda_versions(os, driver_version, runtime_version);
+  os << "}";
   device_info_json = os.str();
   return device_info_json.c_str();
 }

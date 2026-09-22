@@ -1,0 +1,6 @@
+Package: faiss
+Version: 1.14.3
+Source-URL: https://github.com/facebookresearch/faiss/archive/refs/tags/v${ver}.tar.gz
+Source-SHA256: 7f3c4ed9aec3bd7524382862f5fcbd4d8984e2a8979ff3bdb2c0bcea5144149e
+Build-system: cmake
+Configure: -DFAISS_ENABLE_GPU=OFF -DFAISS_ENABLE_CUVS=OFF -DFAISS_ENABLE_ROCM=OFF -DFAISS_ENABLE_METAL=OFF -DFAISS_ENABLE_MKL=OFF -DFAISS_ENABLE_PYTHON=OFF -DFAISS_ENABLE_C_API=OFF -DFAISS_ENABLE_EXTRAS=OFF -DFAISS_ENABLE_SVS=OFF -DFAISS_USE_LTO=OFF -DBUILD_TESTING=OFF -DFAISS_OPT_LEVEL=generic -DOpenMP_CXX_FLAGS="-Xpreprocessor -fopenmp -I/${prefix}/include" -DOpenMP_CXX_LIB_NAMES=omp -DOpenMP_omp_LIBRARY=/${prefix}/lib/libomp.dylib -DBLAS_LIBRARIES="-framework Accelerate" -DLAPACK_LIBRARIES="-framework Accelerate"

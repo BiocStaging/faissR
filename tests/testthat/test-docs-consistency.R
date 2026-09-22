@@ -404,9 +404,10 @@ test_that("fast_kmeans docs describe effective tuning metadata", {
     expect_true(grepl("does not expose an explicit seed", prose, fixed = TRUE), info = basename(docs_file))
     expect_true(grepl("centers = 1", prose, fixed = TRUE), info = basename(docs_file))
     expect_true(grepl("single_cluster_exact_mean", prose, fixed = TRUE), info = basename(docs_file))
-    expect_true(grepl("faissR.kmeans_cuda_work_threshold", prose, fixed = TRUE), info = basename(docs_file))
-    expect_true(grepl("faissR.kmeans_cuda_nbytes_threshold", prose, fixed = TRUE), info = basename(docs_file))
-    expect_true(grepl("faissR.kmeans_cuda_min_n_per_center", prose, fixed = TRUE), info = basename(docs_file))
+    expect_false(
+      grepl('backend = "auto"', prose, fixed = TRUE),
+      info = basename(docs_file)
+    )
   }
 
   readme_file <- test_path("../../README.md")
@@ -731,7 +732,7 @@ test_that("benchmark docs describe deterministic NN recall recommendation tie-br
   expect_true(grepl("below-threshold median-recall ties", prose, fixed = TRUE))
 })
 
-test_that("backend auto documentation states the CUDA runtime requirement", {
+test_that("documentation does not advertise automatic device selection", {
   docs_files <- test_path("../../docs", c(
     "backend-capabilities.md",
     "implementation.md",
@@ -745,8 +746,8 @@ test_that("backend auto documentation states the CUDA runtime requirement", {
 
   for (docs_file in docs_files) {
     prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
-    expect_true(
-      grepl("CUDA/cuVS runtime[[:space:]]+support is[[:space:]]+available", prose),
+    expect_false(
+      grepl("backend[[:space:]]*=[[:space:]]*['\"]auto['\"]", prose),
       info = basename(docs_file)
     )
   }

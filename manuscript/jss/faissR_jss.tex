@@ -38,10 +38,9 @@ Nearest-neighbor search is widely used in statistical learning, clustering,
 and local prediction. We present \pkg{faissR}, a Python-free \proglang{R}
 interface to the Facebook Artificial Intelligence Similarity Search (FAISS)
 library and optional NVIDIA Compute Unified Device Architecture (CUDA)
-support through RAPIDS cuVS. The package integrates these libraries rather
-than proposing a new approximate nearest-neighbor algorithm. A common
-interface supports exact and approximate search with Euclidean, cosine, and
-correlation distances. The interface accepts dense \proglang{R} double
+support through RAPIDS cuVS. A common interface supports exact and approximate
+search with Euclidean, cosine, and correlation distances. The interface
+accepts dense \proglang{R} double
 matrices and float32 matrices. FAISS and cuVS operate on float32 coordinates,
 so double inputs are converted at the compiled boundary. Users can reuse fitted
 indexes on the central processing unit (CPU) and retain results on a graphics
@@ -49,11 +48,12 @@ processing unit (GPU) for use by compiled \proglang{R} packages. Returned
 metadata identify the search implementation, input conversion, index reuse,
 and result location. We illustrate the interface and evaluate correctness,
 recall, and runtime across nine datasets, including comparisons with seven
-established \proglang{R} interfaces. Relative performance depended on the
-dataset and query workload, with index construction and repeated queries
-favoring different choices. An optional experimental selector uses calibration
-on an NVIDIA L40S for searches that include index construction and query every
-observation. Reproducible examples and benchmark code accompany the package.
+established \proglang{R} interfaces. The results show that the preferred search
+strategy depends on both the data and the workload: index construction affects
+one-off searches, whereas reusable indexes can reduce the cost of repeated
+queries. The package also provides an experimental calibration-based selector
+for full self-search workloads. Reproducible examples and benchmark code
+accompany the package.
 }
 
 \Keywords{nearest neighbors, approximate search, FAISS, CUDA, float32, \proglang{R}}
@@ -117,9 +117,9 @@ for nearest-neighbor descent (NN-descent)
 k-nearest-neighbor (kNN),
 vantage-point-tree, Annoy, and hierarchical navigable small-world (HNSW)
 implementations \citep{BiocNeighbors,MalkovYashunin2020}.
-These packages provide several choices for CPU search. \pkg{faissR} adds
-access to the broader FAISS index family and optional cuVS execution through
-one native \proglang{R} interface. FAISS includes inverted-file (IVF),
+These packages provide several choices for CPU search. \pkg{faissR} exposes
+the FAISS index family and optional cuVS execution through a native
+\proglang{R} interface. FAISS includes inverted-file (IVF),
 product-quantization (PQ), and graph indexes, as well as exhaustive search
 \citep{JohnsonDouzeJegou2021,DouzeEtAl2024}. The surveyed R interfaces return
 ordinary objects in host memory, whereas \pkg{faissR} can retain neighbor
@@ -163,21 +163,19 @@ interface (API) that can retain an index across queries within a session.}
 \end{table}
 
 RAPIDS cuVS provides CUDA vector search and is integrated with recent FAISS
-builds \citep{cuVS,FaissCuVS}. Connecting these libraries to R requires more
-than exposing their search functions. R commonly stores double-precision
-matrices by column, whereas the libraries predominantly use single-precision
-(float32) arrays stored by row. The interface must also return consistently
-ordered distances, support repeated queries without rebuilding compatible
-indexes, and make transfers between host and device memory explicit.
-
-\pkg{faissR} handles these operations in compiled code and accepts direct
-\pkg{float} input where supported \citep{float}. It returns information about the
-implementation and conversions used for each call. A C-callable interface
-allows other packages to consume GPU results without first copying them to
-the host. These integration features are the main contribution; automatic
-method selection is an optional experimental facility. The following
-sections explain the software and evaluate its correctness, recall, and
-runtime against existing R implementations.
+builds \citep{cuVS,FaissCuVS}. Their data representations differ from those
+typically used by \proglang{R}: R matrices are commonly double precision and
+column-major, whereas FAISS and cuVS predominantly use row-major float32
+arrays. \pkg{faissR} performs the required precision and memory-layout
+conversion in compiled code, or accepts a \pkg{float} matrix directly where
+supported \citep{float}. Neighbor results are returned in increasing order of
+distance. For supported CPU methods, a fitted index can be retained and used
+for later query matrices. CUDA results can remain in GPU memory until the user
+requests a host copy or passes them to another compiled R package. Returned
+metadata identify the implementation, conversion, and index-reuse status for
+each call. This article evaluates the correctness, recall, and runtime of these
+interfaces against existing R implementations. Automatic method selection is
+evaluated separately as an optional experimental facility.
 
 \FloatBarrier
 \section{Statistical and software design} \label{sec:design}
@@ -214,10 +212,9 @@ These package-defined values allow CPU search to continue. For CPU Flat search,
 ties created by this rule are ordered by row number. CUDA search stops with an
 error and does not silently switch to the CPU. Before running a search,
 \fct{nn\_metric\_preflight} can identify the affected rows in the reference and
-query matrices and report whether the requested device can proceed. With
-\code{backend = "auto"}, the answer depends on which device is selected. Search
-results record the distance definition and ordering in their metadata; the
-field-level contract is given in the supplement and reference manual.
+query matrices and report whether the requested CPU or CUDA device can proceed.
+Search results record the distance definition and ordering in their metadata;
+the field-level contract is given in the supplement and reference manual.
 
 All devices reject \code{NA}, \code{NaN}, and positive or negative infinity.
 FAISS/cuVS routes operate on float32 coordinates. Ordinary R doubles are
@@ -231,13 +228,10 @@ may resolve ties differently. For example, when the $k$th and $(k+1)$th
 observations are the same distance from a query, either observation is a valid
 $k$th neighbor. Two exhaustive implementations can therefore return different
 row identifiers even though their ordered distances agree. The exact-reference
-audit treats corresponding distances $a$ (observed) and $b$ (reference) as
-equal when
-$|a-b|\leq 10^{-5}+10^{-4}|b|$. The first term allows for rounding near zero,
-and the second allows a slightly larger difference for larger distances. This
-tolerance is used only by the exact-reference audit. It does not change the
-reported distances or determine whether an approximate method attains
-\code{target\_recall}.
+audit therefore accepts an alternative tied identifier when the sorted
+distances agree within the fixed float32 tolerance specified in Supplementary
+Section~\ref{supp-sec:supp-numerics}. That rule neither changes returned
+distances nor determines approximate-route recall.
 
 The \code{metric} argument accepts only \code{"euclidean"}, \code{"cosine"},
 and \code{"correlation"}. Other distances and aliases are rejected.
@@ -288,18 +282,13 @@ that executed it. The experimental CPU methods \method{nsg\_style},
 \method{vamana\_style}, and \method{nndescent\_style} are not complete
 implementations of the published navigating spreading-out graph (NSG), Vamana,
 or NN-descent algorithms
-\citep{FuEtAl2019,SubramanyaEtAl2019,DongMosesLi2011}. Published NSG and Vamana
-construct navigable graph indexes and define how new queries traverse them;
-NN-descent iteratively constructs an approximate $k$-nearest-neighbor graph.
-The package-owned routes instead refine a bounded candidate list for each row
-of a self-search and rescore the retained candidates exactly. They retain,
-respectively, an NSG-like relative-neighborhood rule, Vamana's $\alpha$-scaled
-robust-pruning rule, or bounded neighbor and reverse-neighbor updates. They
-omit the complete index-construction and query-traversal procedures, hence the
-\code{\_style} suffix. On CUDA, \method{nndescent\_style} can instead use the
-external cuVS implementation; returned metadata identify which route ran.
-Supplementary Table~\ref{supp-tab:supp-derived-methods} and the accompanying
-pseudocode give a stage-by-stage comparison.
+\citep{FuEtAl2019,SubramanyaEtAl2019,DongMosesLi2011}. They are package-owned
+candidate-refinement procedures that retain selected pruning or update ideas
+but omit the canonical index-construction and query-traversal algorithms,
+hence the \code{\_style} suffix. On CUDA, \method{nndescent\_style} can instead
+call the external cuVS implementation; returned metadata identify the route.
+Supplementary Table~\ref{supp-tab:supp-derived-methods} and its pseudocode give
+the algorithmic distinctions.
 
 The names \method{exact}, \method{flat}, and \method{bruteforce} all request
 exhaustive search but differ in how they choose a library. Use \method{exact}
@@ -336,14 +325,10 @@ principal controls.}
 \label{tab:methods}
 \end{table}
 
-The supplement describes the experimental graph refinements, including
-pseudocode, initialization, time and memory bounds, and differences from the
-canonical algorithms (Supplementary Table~\ref{supp-tab:supp-derived-methods}).
-Their correctness tests and calibration results are reported, but these
-methods are excluded from the principal performance comparisons. The
-low-dimensional grid method is checked separately as an exact method. IVF-PQ
-and FastScan call the corresponding library implementations; their evidence
-here covers route correctness and calibration.
+The experimental package-owned routes are excluded from the principal
+performance comparisons. The low-dimensional grid method is checked
+separately as an exact method; IVF-PQ and FastScan call their corresponding
+library implementations.
 
 With \code{method = "auto"}, the package chooses a method family. Once a method
 is known, \code{tuning = "auto"} retrieves its calibrated parameter settings.
@@ -375,14 +360,18 @@ Table~\ref{tab:api} lists the main functions and their return objects.
 We focus on nearest-neighbor search. Prediction by kNN and k-means clustering
 are secondary interfaces, documented with examples in the package vignette.
 
-The argument \code{backend} selects the execution device: CPU, CUDA, or
-automatic device selection. The metadata field \code{backend\_used} identifies
-the implementation, such as \code{faiss\_hnsw}. We use \emph{device} and
-\emph{implementation} to distinguish these meanings in the text.
-
-Automatic method selection is experimental. The CUDA policy was calibrated
-on an NVIDIA L40S for full self-search, including index construction.
-Section~\ref{sec:tuning} explains method selection and parameter tuning.
+The argument \code{backend} determines where the search is executed.
+With \code{backend = "cpu"}, \pkg{faissR} uses an available host-processor
+implementation, returns ordinary \proglang{R} matrices, and can retain fitted
+indexes for compatible methods. With \code{backend = "cuda"}, it uses a
+CUDA-enabled FAISS or cuVS implementation on an NVIDIA GPU. The function
+\fct{nn} copies CUDA results to host matrices, whereas \fct{nn\_gpu} can keep
+them in device memory. If \code{backend} is omitted, the package uses the
+session option, then the \code{FAISSR\_BACKEND} environment variable, and
+finally CPU. It does not choose automatically between CPU and CUDA. The
+metadata field \code{backend\_used} records the concrete
+implementation, such as \code{faiss\_hnsw}. Section~\ref{sec:tuning}
+describes automatic method selection and parameter tuning.
 
 \begin{table}[t]
 \centering
@@ -406,10 +395,10 @@ are given in the supplement and reference manual.}
 
 \subsection{Choosing a method and preparing the data}
 
-Exact search is a reference choice and is often competitive for a one-off call.
-HNSW is a useful CPU starting point for repeated queries; IVF offers a
-training/search tradeoff on large collections, and CAGRA provides CUDA graph
-search. Table~\ref{tab:methods} summarizes the main controls and route status.
+Exact search supplies a reference result and may be competitive for a one-off
+call. HNSW supports reusable CPU indexes; IVF separates index training from
+search on large collections, and CAGRA provides CUDA graph search.
+Table~\ref{tab:methods} summarizes the main controls and route status.
 Experimental
 automatic selection should be used within its documented calibration scope.
 
@@ -431,15 +420,11 @@ in memory. Indexes and working space require further memory. Direct
 \pkg{float} adapters can avoid numeric conversion, although a layout copy
 may still be needed.
 
-Native indexes are retained within the R session and released when their
-owning objects are garbage-collected. Saving a model with \fct{saveRDS}
-preserves its R components and training data. The serialized object excludes
-the native index, so \fct{predict} rebuilds it after reload and reports
-\code{query\_source = "nn"} for that call. GPU results cannot be serialized
-or shared between processes. Both host and CUDA identifiers are signed
-32-bit integers, limiting the interface to $2^{31}-1$ reference rows;
+Native indexes remain available while their owning R objects are alive.
+Both host and CUDA identifiers are signed 32-bit integers, limiting the
+interface to $2^{31}-1$ reference rows;
 available memory and library limits usually impose smaller limits.
-The supplement gives the detailed object-lifetime rules.
+The supplement describes memory ownership for GPU-resident results.
 The package-wide backend can be set with \fct{faissR\_backend}, an
 \proglang{R} option, or an environment variable. An explicit function argument
 has highest precedence. An unsupported backend produces an error without
@@ -471,7 +456,8 @@ brew install faiss libomp
 Then install and load the package in R:
 \begin{CodeChunk}
 \begin{CodeInput}
-R> install.packages("faissR_0.99.44.tar.gz", repos = NULL, type = "source")
+R> install.packages("/path/to/faissR_source.tar.gz",
++                   repos = NULL, type = "source")
 R> library("faissR")
 R> backend_info()
 R> subset(nn_capabilities(runtime = TRUE), runtime_available)
@@ -542,7 +528,6 @@ R> library("faissR")
 R> data("sample.ExpressionSet", package = "Biobase")
 R> expression_data <- Biobase::exprs(sample.ExpressionSet)
 R> x <- scale(expression_data)
-R> set.seed(1)
 R> exact <- nn(x, k = 15, exclude_self = TRUE, backend = "cpu",
 +             method = "exact", n_threads = 1)
 \end{CodeInput}
@@ -648,11 +633,16 @@ outside this interface example.
 
 \subsection{Automatic method selection and tuning} \label{sec:tuning}
 
-Three arguments control different decisions. \code{backend = "auto"} resolves
-the execution device, \code{method = "auto"} invokes the experimental
-method-family policy, and \code{tuning = "auto"} selects parameters within the
-resolved method. An unsupported explicit request fails before execution.
+The execution device is chosen explicitly with \code{backend = "cpu"} or
+\code{backend = "cuda"}, or through the session configuration when the
+argument is omitted. Two other arguments control separate decisions:
+\code{method = "auto"} invokes the experimental method-family policy for the
+chosen device, while \code{tuning = "auto"} selects parameters within the
+resolved method. An unsupported request fails before execution.
 The requested \code{target\_recall} is one of 0.90, 0.95, or 0.99.
+The bundled automatic policy was developed for the cold self-search workload
+defined below; its computing environment is reported in
+Section~\ref{sec:computing-environment}.
 
 For each dataset, device, method, metric, and value of $k$, we evaluated a
 predefined grid of parameter configurations. Each run included preprocessing,
@@ -728,9 +718,10 @@ The exact references comprise $9\times3\times3=81$ real-data records
 (dataset $\times$ metric $\times$ seed) and $2\times1\times3=6$ Euclidean
 synthetic-spatial records, for 87 records in total
 (Supplementary Table~\ref{supp-tab:reference-key}).
-The file \path{reference_record_dimensions.csv} records their dimensions,
-query counts, seeds, fingerprints, implementations, and independent CPU
-checks.
+Their dimensions, query counts, seeds, fingerprints, implementations, and
+independent CPU checks are provided in the
+\href{https://github.com/tkcaccia/faissR/tree/main/manuscript/jss}{public
+GitHub replication materials}.
 
 \begin{table}[t]
 \centering
@@ -755,18 +746,20 @@ USPS & 11,000 & 256 \\
 \end{table}
 
 \subsection{Computing environment}
+\label{sec:computing-environment}
 
-CPU jobs requested 12 threads on the heterogeneous University of Cape Town
-(UCT) \emph{ada} partition. Each CPU pair ran on the same node. CUDA jobs used
+CPU jobs ran on heterogeneous x86-64 compute nodes and requested 12 threads
+per job. Matched CPU routes shared the same allocation and node. CUDA jobs used
 one NVIDIA L40S with 46,068 mebibytes (MiB), compute capability 8.9, and driver
-595.58.03. Both used \proglang{R} 4.5.3 on Debian 13, OpenBLAS 0.3.33, and a
-checksummed Singularity image \citep{Singularity}. Supplementary
+595.58.03. Both CPU and CUDA jobs used \proglang{R} 4.5.3 on Debian 13,
+OpenBLAS 0.3.33, and a checksummed Singularity image \citep{Singularity}.
+Supplementary
 Table~\ref{supp-tab:supp-environment}
 lists the software and hardware details.
 
-The article accompanies \pkg{faissR} 0.99.44. The replication archive retains
-the package, library, container, and data identifiers recorded for each
-experiment. Runtime ratios compare calls within the same experiment.
+The replication archive retains the package commit, library versions,
+container digest, and data identifiers recorded for each experiment. Runtime
+ratios compare calls within the same experiment.
 
 \subsection{Comparisons and timing}
 
@@ -810,9 +803,10 @@ execution-order fields were checked before pairing. CUDA timers ended after
 synchronization.
 
 The independently tuned HNSW experiment selected a configuration for each
-implementation using calibration seed 20260706 and evaluated it using seed
-20260807. It measured cold calls, direct index construction, and fitted-index
-queries separately over five validation repetitions.
+implementation using a prespecified calibration sample and evaluated it on an
+independent validation sample. It measured cold calls, direct index
+construction, and fitted-index queries separately over five validation
+repetitions.
 
 The broader comparison included \pkg{FNN}, \pkg{RANN}, \pkg{Rnanoflann},
 \pkg{rnndescent}, \pkg{BiocNeighbors}, \pkg{RcppAnnoy}, and \pkg{RcppHNSW}.
@@ -828,7 +822,8 @@ alternatives rather than as algorithm comparisons. Finally,
 \code{nndescent\_style} route. That result is descriptive, appears only in
 the supplement, and is excluded from the principal performance table. Pairs
 shared the dataset, metric, $k$, validation seed, repeat, Slurm allocation,
-and node; order was randomized. The complete results appear in Supplementary
+and node; order was randomized. The complete dataset-level results appear in
+Supplementary Table~\ref{supp-tab:supp-comprehensive-datasets} and
 Figure~\ref{supp-fig:supp-comprehensive-r}.
 
 A separate workload experiment used 1, 32, and up to 1,024 external query rows
@@ -927,15 +922,9 @@ requested mean recall for both methods; 1,385 calls reached the time limit and
 principal same-family comparisons from the Annoy-versus-\code{auto}
 task-level comparisons. The experimental \pkg{rnndescent} comparison is
 reported only in the supplement. Supplementary
-Figure~\ref{supp-fig:supp-comprehensive-r} shows the class-level ratios and
-their interquartile intervals together with the individual dataset medians.
-Supplementary Table~\ref{supp-tab:supp-comprehensive-datasets} gives the
-numerical dataset-specific values and eligible-pair counts.
-Supplementary Table~\ref{supp-tab:supp-evidence-audit} summarizes test and
-experiment completion across the evidence streams used in the article.
-Per-dataset results for the fixed-configuration HNSW experiment appear in
-Supplementary Table~\ref{supp-tab:supp-cpu-paired} and
-Figure~\ref{supp-fig:supp-paired-cpu}.
+Table~\ref{supp-tab:supp-comprehensive-datasets} gives dataset-specific ratios
+and eligible-pair counts. Per-dataset results for the fixed-configuration HNSW
+experiment appear in Supplementary Table~\ref{supp-tab:supp-cpu-paired}.
 
 \begin{table}[H]
 \centering
@@ -975,9 +964,9 @@ Annoy rows compare alternative interfaces for the same task and do not
 measure an Annoy implementation in \pkg{faissR}. The separate HNSW experiment
 provides the independently tuned same-family comparison.
 
-\subsection{CUDA search and automatic selection}
+\subsection{CUDA search and automatic method selection}
 
-The installed experimental policy selected exact-audited Flat in 280 of
+The installed experimental method policy selected exact-audited Flat in 280 of
 324 combinations and IVF in 44. Supplementary
 Tables~\ref{supp-tab:supp-auto-routes} and \ref{supp-tab:auto-ivf-parameters}
 give the selections and IVF parameters. All combinations passed the recorded
@@ -1005,12 +994,11 @@ policy evaluation.
 \section{Discussion and limitations} \label{sec:limitations}
 \label{sec:conclusion}
 
-\pkg{faissR} brings FAISS and optional cuVS search to R through a common
-interface for dense input, reusable CPU indexes, and GPU-resident results.
-The comparisons show why method choice should reflect both the data and the
-query workload. In particular, the tuned HNSW results separate the cost of
-constructing an index from that of querying it: a faster build does not imply
-an equally large advantage for repeated queries.
+\pkg{faissR} provides an R interface to FAISS and optional cuVS search for
+dense input, reusable CPU indexes, and GPU-resident results. The measured
+runtime varied by dataset and query workload. In the tuned HNSW experiment,
+differences in index-construction time were larger than differences in queries
+against an existing index.
 
 The results describe the measured datasets and hardware. CPU pairs shared a
 node, and the requested thread limits were recorded, while actual internal
@@ -1021,21 +1009,20 @@ derived-route comparison is confined to the supplement. The narrower HNSW
 study tuned each implementation independently. Timeouts and failures are
 reported alongside the ratios.
 
-The optional automatic policy remains experimental. Its CUDA calibration
-used an L40S and full self-search including construction, while CPU automatic
-selection was not independently validated. The policy has no memory budget
-or expected-reuse input. Shape descriptors capture size and dimension but
-omit other aspects of data geometry, and one timing per calibration
+The optional automatic method policy remains experimental. Its CUDA calibration used
+the cold self-search workload described in Section~\ref{sec:tuning}, while CPU
+automatic method selection was not independently validated. The policy has no memory
+budget or expected-reuse input. Shape descriptors capture size and dimension
+but omit other aspects of data geometry, and one timing per calibration
 configuration leaves selection sensitive to timing noise. The holdout analyses
-cover the measured domains and hardware. Exact search remains a useful
-baseline for application-specific comparisons beyond that scope.
+cover the measured domains and computing environment. Exact search remains a
+useful baseline for application-specific comparisons beyond that scope.
 
-GPU-resident output allows another compiled package to use neighbor buffers
+GPU-resident output exposes neighbor buffers to another compiled package
 without a mandatory host copy. The reported tests cover ownership and transfer
 behavior; transfer speed remains unmeasured. Native indexes and GPU handles
-remain local to the R session. Together, these facilities let users choose
-among compiled search implementations while inspecting the method, input
-conversion, and index reuse behind each result.
+remain local to the R session. Returned metadata record the implementation,
+input conversion, and index-reuse status for each result.
 
 \section*{Data and code availability}
 
@@ -1055,9 +1042,7 @@ identifier is not currently available.
 The authors thank the University of Cape Town's Information and Communication
 Technology Services (ICTS) High Performance
 Computing team for providing a high-performance computing facility for this
-study (\url{https://ucthpc.uct.ac.za/}). We also acknowledge the developers and
-communities of FAISS, RAPIDS cuVS, CUDA, \proglang{R}, \pkg{Rcpp},
-\pkg{float}, Singularity, and Bioconductor.
+study (\url{https://ucthpc.uct.ac.za/}).
 
 \bibliography{faissR_jss}
 

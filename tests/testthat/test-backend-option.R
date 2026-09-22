@@ -24,10 +24,17 @@ test_that("faissR backend precedence is explicit, option, environment, CPU", {
     expect_identical(faissR_backend(), "cuda")
     options(faissR.backend = "cpu")
     expect_identical(faissR_backend(), "cpu")
-    expect_identical(
+    expect_error(
         faissR:::resolve_faissr_environment_backend("auto"),
-        "auto"
+        "cpu.*cuda"
     )
+    expect_error(faissR_backend("auto"), "cpu.*cuda")
+    options(faissR.backend = "auto")
+    expect_error(faissR_backend(), "option faissR.backend.*cpu.*cuda")
+    options(faissR.backend = NULL)
+    Sys.setenv(FAISSR_BACKEND = "auto")
+    expect_error(faissR_backend(), "FAISSR_BACKEND.*cpu.*cuda")
+    Sys.setenv(FAISSR_BACKEND = "cuda")
     expect_identical(
         faissR:::resolve_faissr_environment_backend("cuda"),
         "cuda"

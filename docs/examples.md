@@ -18,7 +18,7 @@ library(faissR)
 x <- scale(as.matrix(iris[, 1:4]))
 labels <- iris$Species
 
-nn_res <- nn(x, k = 15, backend = "auto", metric = "euclidean", n_threads = 4)
+nn_res <- nn(x, k = 15, backend = "cpu", metric = "euclidean", n_threads = 4)
 head(nn_res$indices)
 head(nn_res$distances)
 ```
@@ -29,7 +29,7 @@ Cosine and correlation use validated exact CPU paths, FAISS Flat/IVF/IVFPQ
 FAISS IP-capable routes where supported.
 
 ```r
-knn_cos <- nn(x, k = 15, backend = "auto", metric = "cosine", n_threads = 4)
+knn_cos <- nn(x, k = 15, backend = "cpu", metric = "cosine", n_threads = 4)
 knn_ip <- nn(x, k = 15, backend = "cpu", method = "flat",
 ```
 
@@ -40,7 +40,7 @@ set.seed(1)
 train <- sample(seq_len(nrow(x)), 100)
 test <- setdiff(seq_len(nrow(x)), train)
 
-fit <- knn(x[train, ], labels[train], backend = "auto", metric = "euclidean")
+fit <- knn(x[train, ], labels[train], backend = "cpu", metric = "euclidean")
 pred <- predict(fit, x[test, ], k = 5)
 mean(pred == labels[test])
 
@@ -48,7 +48,7 @@ prob <- predict(fit, x[test, ], k = 5, type = "prob")
 head(prob)
 
 # Fit and predict in one call
-pred2 <- knn(x[train, ], labels[train], x[test, ], backend = "auto", k = 5)
+pred2 <- knn(x[train, ], labels[train], x[test, ], backend = "cpu", k = 5)
 ```
 
 ## k-means
@@ -57,7 +57,7 @@ pred2 <- knn(x[train, ], labels[train], x[test, ], backend = "auto", k = 5)
 [7-8].
 
 ```r
-km <- fast_kmeans(x, centers = 3, backend = "auto", n_threads = 4)
+km <- fast_kmeans(x, centers = 3, backend = "cpu", n_threads = 4)
 table(km$cluster)
 km$parameters$tuning
 ```

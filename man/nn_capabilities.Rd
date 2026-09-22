@@ -17,7 +17,7 @@ preflight tables.}
 }
 \value{
 A data frame with one row per public \code{method}, \code{backend}
-(\code{"auto"}, \code{"cpu"}, or \code{"cuda"}), and \code{metric}
+(\code{"cpu"} or \code{"cuda"}), and \code{metric}
 combination. Columns include \code{supported}, \code{exact},
 \code{implementation}, \code{implementation_status}, and \code{notes}.
 Package-owned \code{*_style} routes are marked \code{"experimental"};

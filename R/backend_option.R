@@ -40,18 +40,12 @@ validate_faissr_environment_backend <- function(backend, label = "backend") {
     backend
 }
 
-resolve_faissr_environment_backend <- function(
-    backend = NULL,
-    allow_auto = TRUE
-) {
+resolve_faissr_environment_backend <- function(backend = NULL) {
     if (!is.null(backend)) {
         if (length(backend) != 1L || is.na(backend)) {
             stop("`backend` must be a single value.", call. = FALSE)
         }
         value <- tolower(as.character(backend))
-        if (allow_auto && identical(value, "auto")) {
-            return("auto")
-        }
         return(validate_faissr_environment_backend(value))
     }
     option <- getOption("faissR.backend", NULL)

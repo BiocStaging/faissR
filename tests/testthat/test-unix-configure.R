@@ -51,3 +51,69 @@ test_that("Unix FAISS builds link R numerical and Fortran libraries", {
     expect_match(configure_text, "LD_BIND_NOW=1", fixed = TRUE)
     expect_match(configure_text, "local = TRUE, now = TRUE", fixed = TRUE)
 })
+
+test_that("Unix configure uses system-library conventions without installation", {
+    configure <- test_path("../../configure")
+    if (!file.exists(configure)) {
+        skip("configure is unavailable in the installed-package context.")
+    }
+
+    configure_text <- paste(readLines(configure, warn = FALSE), collapse = "\n")
+    expect_match(configure_text, 'PKG_CONFIG_NAME="faiss"', fixed = TRUE)
+    expect_match(configure_text, 'PKG_DEB_NAME="libfaiss-dev', fixed = TRUE)
+    expect_match(configure_text, 'PKG_RPM_NAME="faiss-devel', fixed = TRUE)
+    expect_match(configure_text, "INCLUDE_DIR", fixed = TRUE)
+    expect_match(configure_text, "LIB_DIR", fixed = TRUE)
+    expect_match(configure_text, '/opt/R/$macos_arch', fixed = TRUE)
+    expect_false(grepl("FAISSR_AUTO_INSTALL_FAISS", configure_text, fixed = TRUE))
+    expect_false(grepl('brew_cmd" install', configure_text, fixed = TRUE))
+})
+
+test_that("Unix CUDA configuration probes the selected toolkit", {
+    configure <- test_path("../../configure")
+    if (!file.exists(configure)) {
+        skip("configure is unavailable in the installed-package context.")
+    }
+
+    configure_text <- paste(readLines(configure, warn = FALSE), collapse = "\n")
+    expect_match(configure_text, "nvcc\" --version", fixed = TRUE)
+    expect_match(configure_text, "CUDA compiler/linker probe failed", fixed = TRUE)
+    expect_match(configure_text, "FAISSR_REQUIRE_CUDA_RUNTIME", fixed = TRUE)
+    expect_match(configure_text, "FAISSR_CUDA_PTX_ARCH", fixed = TRUE)
+    expect_match(configure_text, "code=compute_$cuda_ptx_arch", fixed = TRUE)
+    expect_match(configure_text, "all: \\$(SHLIB)", fixed = TRUE)
+    expect_false(grepl(".DEFAULT_GOAL", configure_text, fixed = TRUE))
+    expect_match(configure_text, "cudaDriverGetVersion", fixed = TRUE)
+    expect_match(configure_text, "cudaRuntimeGetVersion", fixed = TRUE)
+    expect_match(configure_text, "cudaGetDeviceProperties", fixed = TRUE)
+    expect_match(configure_text, "capability=%d.%d", fixed = TRUE)
+    expect_match(
+        configure_text,
+        '"$cuda_home"/targets/*/include',
+        fixed = TRUE
+    )
+    expect_match(
+        configure_text,
+        '"$cuda_home"/targets/*/lib',
+        fixed = TRUE
+    )
+})
+
+test_that("Unix CUDA architecture settings reject malformed values", {
+    configure <- test_path("../../configure")
+    if (!file.exists(configure)) {
+        skip("configure is unavailable in the installed-package context.")
+    }
+
+    configure_text <- paste(readLines(configure, warn = FALSE), collapse = "\n")
+    expect_match(
+        configure_text,
+        "FAISSR_CUDA_ARCH must contain space-separated numeric",
+        fixed = TRUE
+    )
+    expect_match(
+        configure_text,
+        "FAISSR_CUDA_PTX_ARCH must be a numeric compute capability",
+        fixed = TRUE
+    )
+})

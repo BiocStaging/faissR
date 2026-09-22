@@ -49,13 +49,12 @@ compiled backend path rather than repaired by R-side post-processing. CUDA
 graph routes that do not yet expose compiled include-self output shaping
 require `exclude_self = TRUE` and fail clearly instead of reshaping in R.}
 
-\item{backend}{Requested execution device: `"auto"`, `"cpu"`, or `"cuda"`.
-The historical result field `backend_used` instead names the concrete
-resolved provider/route and is retained for API compatibility. `"auto"`
-uses a validated CUDA route only when the requested method/metric
-combination is supported and CUDA/cuVS runtime support is available, and
-otherwise resolves to CPU. Explicit `"cuda"` fails clearly when CUDA
-support or the selected CUDA combination is unavailable.}
+\item{backend}{Requested execution device: `"cpu"` or `"cuda"`. `NULL`
+follows `options(faissR.backend)`, then `FAISSR_BACKEND`, with CPU as the
+final default. The historical result field `backend_used` instead names
+the concrete resolved provider/route and is retained for API
+compatibility. CUDA requests fail clearly when CUDA support or the
+selected CUDA combination is unavailable.}
 
 \item{method}{Algorithm selector. `"auto"` chooses a shape-aware default for
  the selected backend. Other values include `"exact"`, `"flat"`,
@@ -151,7 +150,7 @@ selects direct RAPIDS cuVS CAGRA when both providers are available, while
 FAISS GPU CAGRA remains the default for other shapes. `"faiss_gpu"` and
 `"cuvs"` force one provider for benchmarking.
 This argument affects only public `backend = "cuda", method = "cagra"`
-requests and CUDA-auto routes that select CAGRA.}
+requests and CUDA `method = "auto"` routes that select CAGRA.}
 
 \item{cagra_build_algo}{Direct RAPIDS cuVS CAGRA graph-build algorithm for
 this call. `NULL` uses `options(faissR.cuvs_cagra_build_algo = "auto")`.
@@ -211,18 +210,19 @@ A list with integer matrix `indices`, `distances`, and stable
   backend, metric, exact/approximate flag, and self-query flag are stored in
   attributes including `attr(result, "requested_backend")`,
   `attr(result, "requested_method")`, `attr(result, "tuning")`, and
-  `attr(result, "resolved_backend")`. Auto requests also include
+  `attr(result, "resolved_backend")`. `method = "auto"` requests also include
   `attr(result, "auto_selection")`, a static workload/shape/k/metric decision
   record. It includes reference rows and variables, query-row count,
   self-query status, the `n * n_points * p` work estimate, and the predicted
   internal backend, public method class, device
   class, explicit backend/method flags, backend/method decision reasons, and
-  hardware provenance. CPU auto
+  hardware provenance. CPU `method = "auto"`
   records `auto_policy_status =
   "calibration_informed_not_independently_validated"` and
   `auto_policy_evidence_scope = "cpu_static_policy_experimental"`. CUDA
-  auto is a separately evaluated but still experimental L40S-calibrated
-  policy for cold full-self-search and records `auto_policy_status =
+  `method = "auto"` is a separately evaluated but still experimental
+  L40S-calibrated policy for cold full-self-search and records
+  `auto_policy_status =
   "experimental_l40s_calibrated_cold_full_self_search"`; neither label
   implies general workload or hardware validation.
   Expected future query batches are not an input; use a
@@ -231,7 +231,8 @@ A list with integer matrix `indices`, `distances`, and stable
   keeps the compiled policy but is labelled
   `hardware_extrapolated_unvalidated`. If either hardware identity cannot be
   determined, the label is `hardware_unidentified`. Hardware identity alone
-  never causes a silent method or device fallback. CUDA auto emits one
+  never causes a silent method or device fallback. CUDA method selection
+  emits one
   warning per confirmed, unmatched runtime GPU model unless
   `options(faissR.warn_hardware_extrapolation = FALSE)` is set. Pilot/cache
   tuning adjusts parameters within a method and does not install a new
@@ -267,8 +268,8 @@ A list with integer matrix `indices`, `distances`, and stable
 \description{
 `nn()` provides a package-native nearest-neighbor entry point compatible with
 the common `nn(data, points, k)` use case. The public API separates device
-selection from algorithm selection. `backend` is one of `"auto"`, `"cpu"`,
-or `"cuda"`; `method` chooses the algorithm. For example,
+selection from algorithm selection. `backend` is either `"cpu"` or
+`"cuda"`; `method` chooses the algorithm. For example,
 `backend = "cpu", method = "grid"` uses the CPU grid implementation, while
 `backend = "cuda", method = "grid"` uses the CUDA grid implementation.
 Invalid combinations stop clearly before computation; for example,

@@ -33,11 +33,8 @@ before conversion.}
 \item{Xtest}{Optional dense numeric or float32 query matrix. If supplied,
 \code{knn()} returns predictions for \code{Xtest}; otherwise it returns a
 fitted model.}
-\item{backend}{Device backend passed to \code{nn()}: \code{"auto"},
-\code{"cpu"}, or
-\code{"cuda"}. \code{"auto"} follows \code{nn()} backend/method/metric
-resolution, using CUDA only for validated CUDA combinations when CUDA/cuVS
-runtime support is available, and CPU otherwise.}
+\item{backend}{Device backend passed to \code{nn()}: \code{"cpu"} or
+\code{"cuda"}. \code{NULL} follows the package backend configuration.}
 \item{method}{Nearest-neighbour algorithm selector passed to \code{nn()}.
 \code{"auto"} chooses the most appropriate method for the selected backend.
 See \code{?nn} for descriptions and references for \code{"exact"},

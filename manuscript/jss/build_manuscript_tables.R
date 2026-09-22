@@ -133,18 +133,19 @@ environment <- data.frame(
     "GPU execution", "NVIDIA driver",
     "Calibration/reference/held-out representation",
     "Controlled CPU provider representation",
-    "faissR source release",
     "FAISS GPU/cuVS build", "RAPIDS cuVS", "CUDA toolkit",
     "External CPU comparators", "Frozen campaign container"
   ),
   configuration = c(
     "Debian GNU/Linux 13 (trixie) in Singularity",
     "4.5.3, x86_64-conda-linux-gnu", "OpenBLAS 0.3.33; LAPACK 3.12.0",
-    "UCT ada partition; 12 requested threads per job",
+    paste(
+      "Heterogeneous x86-64 compute nodes; 12 requested threads per job;",
+      "matched routes shared an allocation and node"
+    ),
     "NVIDIA L40S; 46,068 MiB; compute capability 8.9", "595.58.03",
     "Direct float32 input for timed calibration, reference, held-out, and CUDA selector rows",
     "Same R double matrix for both routes; faissR conversion included inside its timer",
-    "0.99.44",
     "1.14.3", "libcuvs 26.06", "13.2",
     "BiocNeighbors 2.4.0; RcppHNSW 0.7.0",
     "SHA-256 0cd4d0df406bd0075046b16d2e8a4d3ae78ee61d98e6d47c639986e28ea6f203"

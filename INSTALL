@@ -39,10 +39,25 @@ Example:
 
   FAISS_HOME=/path/to/faiss R CMD INSTALL .
 
+Separate include and library directories can be supplied with the conventional
+configure variables:
+
+  R CMD INSTALL --configure-vars='INCLUDE_DIR=/path/include LIB_DIR=/path/lib' .
+
 Linux CPU-only build
 --------------------
 
-Install or build FAISS with GPU support disabled. Then install faissR with:
+On Debian or Ubuntu, the usual development packages are:
+
+  sudo apt-get install libfaiss-dev libblas-dev liblapack-dev
+
+On RPM-based distributions, the corresponding names are commonly
+faiss-devel, blas-devel, and lapack-devel when FAISS is packaged by the
+enabled repositories. Not every RPM or Alpine repository supplies FAISS. In
+that case, build FAISS separately and set FAISS_HOME rather than asking the R
+package installation to change the operating system.
+
+After installing or building a CPU-only FAISS library, install faissR with:
 
   FAISS_HOME=/path/to/faiss-cpu \
   FAISSR_REQUIRE_FAISS=1 \
@@ -54,7 +69,9 @@ Linux NVIDIA GPU build
 ----------------------
 
 Install a compatible NVIDIA driver, CUDA toolkit, FAISS build, and any RAPIDS
-libraries required by the desired routes.
+libraries required by the desired routes. Toolkit headers and libraries below
+CUDA_HOME/targets/<platform>/ are detected alongside the conventional include,
+lib, and lib64 directories.
 
 Strict FAISS GPU / CUDA-native build:
 
@@ -80,10 +97,20 @@ macOS
 -----
 
 macOS builds are expected to be CPU/FAISS builds. NVIDIA CUDA is not supported
-on modern macOS/Apple Silicon systems. With Homebrew FAISS:
+on modern macOS/Apple Silicon systems. Bioconductor and CRAN macOS binary
+builders should obtain a static CPU FAISS library through the R-macos recipes
+system. The configure script detects recipe installations under
+/opt/R/arm64 and /opt/R/x86_64.
 
-  brew install faiss libomp
-  FAISS_HOME="$(brew --prefix faiss)" R CMD INSTALL .
+For a source build outside that environment, provide compatible FAISS and
+OpenMP prefixes explicitly:
+
+  FAISS_HOME=/path/to/faiss \
+  LIBOMP_HOME=/path/to/openmp \
+  FAISSR_REQUIRE_FAISS=1 \
+  R CMD INSTALL .
+
+The configure script does not invoke a package manager.
 
 Windows
 -------
@@ -106,6 +133,13 @@ Bioconductor and r-universe CPU builders need FAISS installed or FAISS_HOME set.
 CUDA/cuVS should not be required on CPU-only builders. If NVIDIA GPU support is
 required for a particular build environment, use the strict FAISSR_REQUIRE_*
 variables above.
+
+The repository declares optional GPU testing in .BBSoptions:
+
+  GPU_reliance: optional
+
+This keeps CUDA optional on ordinary CPU builders while allowing the
+Bioconductor GPU platform to exercise GPU-aware checks.
 
 Functional verification
 -----------------------

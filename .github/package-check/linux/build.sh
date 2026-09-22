@@ -24,6 +24,10 @@ if grep -q '@UBUNTU_BASE@' "$DEF"; then
     sed "s|@UBUNTU_BASE@|$BASE|" "$DEF" > "$ROOT/build-logs/$NAME.def"
     DEF="$ROOT/build-logs/$NAME.def"
 fi
-"$ENGINE" build --fakeroot --no-cleanup "$IMAGE" "$DEF" 2>&1 | tee "$ROOT/build-logs/$NAME.log"
+build_options=(--fakeroot)
+if [ "${PACKAGE_TEST_KEEP_FAILED_BUILD:-0}" = "1" ]; then
+    build_options+=(--no-cleanup)
+fi
+"$ENGINE" build "${build_options[@]}" "$IMAGE" "$DEF" 2>&1 | tee "$ROOT/build-logs/$NAME.log"
 sha256sum "$IMAGE" > "$IMAGE.sha256"
 "$ENGINE" inspect --deffile "$IMAGE" > "$IMAGE.def"

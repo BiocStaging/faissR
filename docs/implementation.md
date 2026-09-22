@@ -169,7 +169,7 @@ All KNN routes return a `faissR_nn` object with:
   approximate-method parameter rules also record `tuning_source = "cpp"`. For
   IVFPQ/PQ compression settings, PQ-specific fields are prefixed with `pq_`.
 - `attr(result, "auto_selection")`: for requests involving
-  `backend = "auto"` or `method = "auto"`, the compiled static
+  `method = "auto"`, the compiled static
   workload/shape/k/metric
   decision record. It stores
   `policy = "cpp_static_shape_k_metric_selector"`, the predicted concrete
@@ -186,11 +186,10 @@ construction, clustering, benchmarking, and supervised prediction.
 
 The public KNN API separates device choice from algorithm choice:
 
-- `backend = "auto"` uses a validated CUDA route only when the requested
-  method/metric combination is supported and CUDA/cuVS runtime support is
-  available, and otherwise resolves to CPU;
 - `backend = "cpu"` forces CPU execution;
 - `backend = "cuda"` forces CUDA execution and fails clearly if unavailable.
+- omitting `backend` follows the package option, then `FAISSR_BACKEND`, and
+  finally uses CPU; it does not select a device automatically.
 
 The public `method` argument selects the algorithm. `method = "auto"` is the
 shape-aware selector for the chosen device. On CPU, it uses exact CPU for
@@ -204,17 +203,14 @@ force [1-2,5,21]. On CUDA, it uses CUDA grid search for large 2D/3D
 Euclidean/cosine/correlation self-KNN, then chooses between exact FAISS GPU
 Flat/cuVS brute force and IVF-Flat for Euclidean self-KNN from dataset shape,
 `k`, and `target_recall`. Non-self Euclidean queries stay on exact Flat/brute
-[13-15]. If CUDA/cuVS is present but
-FAISS GPU Flat is not, `backend = "auto"` keeps non-grid non-Euclidean searches
-on CPU instead of selecting an unavailable GPU index. The same rule applies
-when `backend = "auto"` is combined with an explicit method such as `"flat"` or
-`"ivf"`: the selected method/metric must have a runtime-capable CUDA route, or
-auto uses the CPU route when that method/metric is supported on CPU.
+[13-15]. An explicit CUDA request fails when the selected method and metric do
+not have a runtime-capable CUDA route; it never moves the calculation to CPU.
 The public `tuning` argument controls method-specific pilot tuning. The default
 `tuning = "auto"` uses the recommended tuning policy for the resolved method;
 `"cache"`, `"pilot"`, and `"fixed"` can be selected explicitly, and
-`"off"`/`"none"` disables tuning. The route choice for `method = "auto"` and
-`backend = "auto"` is made by the C++ `nn_auto_select_backend_cpp()` selector.
+`"off"`/`"none"` disables tuning. The route choice for `method = "auto"` is
+made by the C++ `nn_auto_select_backend_cpp()` selector within the requested
+device.
 The R wrapper normalizes arguments, collects runtime capability flags and
 option thresholds, and dispatches to the compiled selector's backend.
 The deterministic parameter rules used by `tuning = "auto"` are also C++ owned:
@@ -565,43 +561,17 @@ can summarize the effective k-means run without comparing multiple parameter
 fields. The flat aliases `effective_max_iter`, `effective_n_init`, and
 `effective_tol` expose the same values for simple CSV summaries.
 
-The public backend policy follows the KNN device contract but adds a
-k-means-specific shape gate: `backend = "auto"` uses CUDA only when CUDA plus
-FAISS GPU k-means or direct cuVS k-means is compiled and available and the
-estimated work is large enough to justify GPU launch and host/device copy
-overhead. Small jobs resolve to CPU even on CUDA-capable machines;
-`backend = "cpu"` forces the CPU route; `backend = "cuda"` requires an
-accelerated route and errors if unavailable. This makes k-means behavior
-consistent with `nn()`.
+The k-means backend follows the same device contract: `backend = "cpu"` forces
+the CPU route, while `backend = "cuda"` requires an accelerated route and
+errors if unavailable.
 The auto `max_iter`/`n_init`/`tol` rule is implemented by
-`kmeans_auto_params_cpp()`, and the CUDA/CPU gate is implemented by
-`kmeans_auto_select_backend_cpp()` using the compiled policy from
-`kmeans_auto_backend_policy_cpp()`. The R layer only normalizes public
-arguments, reads documented option thresholds, and passes runtime availability
-flags before calling these compiled helpers. The gate is deterministic and recorded in
-`result$parameters$tuning$backend_policy`, with a `reason` such as
-`"small_cpu_preferred"`, `"few_points_per_center_cpu_preferred"`,
-`"work_at_least_1e8"`, `"input_at_least_256MiB"`,
-`"large_high_dimensional_input"`, `"single_cluster_exact_mean"`, or
-`"singleton_exact_identity"` so benchmark summaries can audit why
-`backend = "auto"` selected CPU or CUDA without running extra tuning jobs.
-For the size gate, the policy records both `nbytes` (ordinary R double input
-footprint) and `gpu_transfer_nbytes` (float32 data passed to FAISS/cuVS), and
-the CUDA threshold is applied to `gpu_transfer_nbytes`.
-Benchmark-derived threshold refinements can be applied without changing package
-code by setting
-`options(faissR.kmeans_cuda_work_threshold = ...)`,
-`options(faissR.kmeans_cuda_nbytes_threshold = ...)`,
-`options(faissR.kmeans_cuda_large_n_threshold = ...)`, or
-`options(faissR.kmeans_cuda_large_p_threshold = ...)`, or
-`options(faissR.kmeans_cuda_min_n_per_center = ...)`; invalid option values
-fall back to the documented defaults. `result$parameters$tuning$selection` is the compact
-no-pilot audit record: it stores the requested and predicted backends,
+`kmeans_auto_params_cpp()`. The R layer normalizes public arguments and passes
+runtime availability flags to the compiled helpers.
+`result$parameters$tuning$selection` is the compact no-pilot audit record: it
+stores the requested backend,
 runtime capability flags, shape/work estimates, effective `max_iter`, `n_init`,
 and `tol`, `explicit_backend`, `backend_decision`, and `slow_tuning = FALSE`.
-The `backend_decision` field is the shape-policy reason for auto requests and
-`explicit_cpu`/`explicit_cuda` for explicit device requests, so benchmark
-summaries do not confuse a forced backend with an automatic choice.
+The `backend_decision` field is `explicit_cpu` or `explicit_cuda`.
 The returned object also records `hit_max_iter` and `converged`, derived from
 the effective iteration cap and the backend-reported iteration count. These
 flags are conservative convergence diagnostics for benchmark tuning: they do
@@ -822,9 +792,8 @@ faissR also registers a C-callable entry point named
 `R_RegisterCCallable()`. Downstream packages can retrieve it with
 `R_GetCCallable("faissR", "faissR_nn_float32_call")` and call the CPU FAISS
 Flat float32 route without going through the R wrapper layer. The callable
-accepts `backend = "auto"` or CPU/FAISS Flat aliases, including
-`"cpu_faiss_flat"`, `"faiss_flat"`, and `"faiss_flat_l2"`; `"auto"` currently
-resolves to the CPU FAISS Flat float32 route. It accepts either a
+accepts `backend = "cpu"` or CPU/FAISS Flat aliases, including
+`"cpu_faiss_flat"`, `"faiss_flat"`, and `"faiss_flat_l2"`. It accepts either a
 `float::fl()`/`float32`
 object or an ordinary R double matrix; both are adapted once into the row-major
 `float*` buffers consumed by FAISS.

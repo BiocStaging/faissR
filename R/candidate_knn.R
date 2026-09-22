@@ -15,8 +15,9 @@
 #' @param points Dense numeric query matrix with observations in rows. Defaults
 #'   to `data`, i.e. self-query candidate KNN.
 #' @param k Number of neighbours to return from each candidate row.
-#' @param backend `"auto"`/`"cpu"` for the general CPU implementation,
-#'   `"cuda"` for the native CUDA row-candidate kernel. GPU backends currently
+#' @param backend `"cpu"` for the general CPU implementation or `"cuda"` for
+#'   the native CUDA row-candidate kernel. `NULL` follows the package backend
+#'   configuration. GPU backends currently
 #'   require self-query candidates with `exclude_self = TRUE` and `k <= 256`.
 #' @param metric `"euclidean"`, `"cosine"`, or `"correlation"`. Legacy
 #'   metric aliases such as `"l2"`, `"cor"`,
@@ -60,9 +61,6 @@ candidate_knn <- function(
         exclude_self
     )
     backend <- normalize_public_backend_arg(backend)
-    if (identical(backend, "auto")) {
-        backend <- "cpu"
-    }
     metric <- normalize_nn_metric(metric)
     n_threads <- normalize_nn_threads(n_threads)
 

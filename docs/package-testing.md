@@ -29,6 +29,13 @@ Rscript .github/package-check/dependencies.R /absolute/lab/dependencies
 export R_LIBS_USER=/absolute/lab/dependencies
 ```
 
+For Bioconductor/CRAN-style macOS dependency testing, use the candidate recipe
+in `.github/package-check/macos-recipes/` with the public R-macos recipes build
+system. Test both arm64 and x86_64 in its **Cook from Recipes** workflow before
+proposing the recipe upstream. The resulting prefix is `/opt/R/<architecture>`;
+faissR detects it without `FAISS_HOME`. Keep local package-manager testing as a
+separate compatibility row, not as the installation path recommended to users.
+
 On Windows, transfer the harness to `r-package-test-lab/harness` in the user's
 home and run `windows/prepare.ps1`, then `windows/build-faiss.ps1` in PowerShell.
 For the default lab location:
@@ -131,6 +138,22 @@ Individual calls are also available:
 bash .github/package-check/macos.sh /absolute/source.tar.gz /absolute/new-output
 bash harness/linux/run.sh /absolute/image.sif /absolute/source.tar.gz /absolute/new-output
 ```
+
+CUDA is a separate strict matrix because CPU Singularity tests do not expose a
+GPU. Its toolkit-only images preserve the host driver and test CUDA 12.4, 12.8,
+and 13.2 across Ubuntu 22.04, Ubuntu 24.04, and Debian 13, plus the direct cuVS
+stack. See `.github/package-check/CUDA.md`:
+
+```sh
+export PACKAGE_TEST_ROOT=/large-disk/r-package-test-lab
+bash .github/package-check/linux/build-cuda-matrix.sh
+bash .github/package-check/linux/run-cuda-matrix.sh \
+  /absolute/source.tar.gz "$PACKAGE_TEST_ROOT/runs/cuda-UNIQUE-ID"
+```
+
+Every GPU row uses `singularity exec --nv`, requires CUDA at configuration and
+runtime, and rejects CPU fallback. Never install or replace the host NVIDIA
+driver as part of a package check.
 
 For Windows use `windows/run.ps1 -Archive ... -Output ... -FaissHome ...
 -DependencyLibrary ...`. The `diagnostic` profile expects FAISS to be absent;

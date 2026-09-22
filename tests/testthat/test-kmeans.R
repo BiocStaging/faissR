@@ -90,17 +90,9 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_equal(auto$parameters$tuning$selection$backend_decision, "explicit_cpu")
   expect_false(auto$parameters$tuning$selection$backend_policy_prefer_cuda)
 
-  auto_backend <- fast_kmeans(x, centers = 3, backend = "auto", seed = 12, n_threads = 2)
-  expect_equal(auto_backend$parameters$requested_backend, "auto")
-  expect_true(auto_backend$parameters$resolved_backend %in% c("cpu", "cuda"))
-  expect_true(auto_backend$backend %in% c("cpu", "faiss", "cuda_faiss", "cuda_cuvs"))
-  expect_equal(auto_backend$parameters$tuning$selection$requested_backend, "auto")
-  expect_equal(auto_backend$parameters$tuning$selection$predicted_backend, auto_backend$parameters$resolved_backend)
-  expect_false(auto_backend$parameters$tuning$selection$explicit_backend)
-  expect_equal(auto_backend$parameters$tuning$selection$tuning_source, "cpp")
-  expect_equal(
-    auto_backend$parameters$tuning$selection$backend_decision,
-    auto_backend$parameters$tuning$selection$backend_policy_reason
+  expect_error(
+    fast_kmeans(x, centers = 3, backend = "auto", seed = 12),
+    "backend"
   )
 
   small_many <- faissR:::kmeans_auto_params(
@@ -176,16 +168,16 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_equal(explicit$parameters$tuning$effective$tol, 1e-5)
 })
 
-test_that("fast_kmeans uses an exact trivial solution for one cluster on CPU and auto", {
+test_that("fast_kmeans uses an exact trivial solution for one cluster", {
   set.seed(2021)
   x <- matrix(rnorm(120), ncol = 6)
   expected_center <- matrix(colMeans(x), nrow = 1L)
   expected_within <- sum(sweep(x, 2L, expected_center[1L, ], "-")^2)
 
-  fit <- fast_kmeans(x, centers = 1L, backend = "auto", seed = 99, n_threads = 2)
+  fit <- fast_kmeans(x, centers = 1L, backend = "cpu", seed = 99, n_threads = 2)
   expect_s3_class(fit, "faissR_kmeans")
   expect_equal(fit$backend, "trivial")
-  expect_equal(fit$parameters$requested_backend, "auto")
+  expect_equal(fit$parameters$requested_backend, "cpu")
   expect_equal(fit$parameters$resolved_backend, "trivial")
   expect_true(isTRUE(fit$parameters$exact_trivial_solution))
   expect_match(fit$parameters$backend_resolution_note, "no iterative CPU or CUDA backend was launched")
@@ -220,14 +212,14 @@ test_that("fast_kmeans uses an exact trivial solution for one cluster on CPU and
   expect_match(cuda_fit$parameters$backend_resolution_note, "Exact one-cluster solution")
 })
 
-test_that("fast_kmeans uses an exact trivial solution for singleton clusters on CPU and auto", {
+test_that("fast_kmeans uses an exact trivial solution for singleton clusters", {
   set.seed(2022)
   x <- matrix(rnorm(30), ncol = 3)
 
-  fit <- fast_kmeans(x, centers = nrow(x), backend = "auto", seed = 99, n_threads = 2)
+  fit <- fast_kmeans(x, centers = nrow(x), backend = "cpu", seed = 99, n_threads = 2)
   expect_s3_class(fit, "faissR_kmeans")
   expect_equal(fit$backend, "trivial")
-  expect_equal(fit$parameters$requested_backend, "auto")
+  expect_equal(fit$parameters$requested_backend, "cpu")
   expect_equal(fit$parameters$resolved_backend, "trivial")
   expect_true(isTRUE(fit$parameters$exact_trivial_solution))
   expect_match(fit$parameters$backend_resolution_note, "no iterative CPU or CUDA backend was launched")
@@ -398,10 +390,19 @@ test_that("fast_kmeans auto tuning is shape and center-count aware for benchmark
   expect_false(isTRUE(highdim_many$small_many_centers))
 })
 
-test_that("fast_kmeans auto backend requires a k-means capable CUDA route", {
-  expect_equal(
+test_that("fast_kmeans backend selection remains explicit", {
+  expect_error(
     faissR:::resolve_fast_kmeans_backend(
       "auto",
+      n = 100000L,
+      p = 784L,
+      centers = 10L
+    ),
+    "backend"
+  )
+  expect_equal(
+    faissR:::resolve_fast_kmeans_backend(
+      "cpu",
       n = 100000L,
       p = 784L,
       centers = 10L,
@@ -410,42 +411,6 @@ test_that("fast_kmeans auto backend requires a k-means capable CUDA route", {
       cuvs_available_value = TRUE
     ),
     "cpu"
-  )
-  expect_equal(
-    faissR:::resolve_fast_kmeans_backend(
-      "auto",
-      n = 100000L,
-      p = 784L,
-      centers = 10L,
-      cuda_available_value = TRUE,
-      faiss_gpu_available_value = FALSE,
-      cuvs_available_value = FALSE
-    ),
-    "cpu"
-  )
-  expect_equal(
-    faissR:::resolve_fast_kmeans_backend(
-      "auto",
-      n = 100000L,
-      p = 784L,
-      centers = 10L,
-      cuda_available_value = TRUE,
-      faiss_gpu_available_value = TRUE,
-      cuvs_available_value = FALSE
-    ),
-    "cuda"
-  )
-  expect_equal(
-    faissR:::resolve_fast_kmeans_backend(
-      "auto",
-      n = 100000L,
-      p = 784L,
-      centers = 10L,
-      cuda_available_value = TRUE,
-      faiss_gpu_available_value = FALSE,
-      cuvs_available_value = TRUE
-    ),
-    "cuda"
   )
   expect_equal(
     faissR:::resolve_fast_kmeans_backend(
@@ -462,7 +427,7 @@ test_that("fast_kmeans auto backend requires a k-means capable CUDA route", {
   )
 })
 
-test_that("fast_kmeans auto backend is shape-aware", {
+test_that("k-means selection metadata retains shape diagnostics", {
   expect_false(faissR:::kmeans_auto_prefers_cuda(n = 120L, p = 4L, centers = 3L))
   expect_false(faissR:::kmeans_auto_prefers_cuda(n = 1000000L, p = 784L, centers = 1L))
   expect_true(faissR:::kmeans_auto_prefers_cuda(n = 70000L, p = 784L, centers = 10L))
@@ -527,7 +492,7 @@ test_that("fast_kmeans auto backend is shape-aware", {
   expect_equal(work_policy$tuning_source, "cpp")
 
   cuda_selection <- faissR:::kmeans_selection_metadata(
-    requested_backend = "auto",
+    requested_backend = "cuda",
     resolved_backend = "cuda",
     n = 70000L,
     p = 784L,
@@ -543,11 +508,11 @@ test_that("fast_kmeans auto backend is shape-aware", {
   expect_equal(cuda_selection$tuning_source, "cpp")
   expect_equal(cuda_selection$predicted_backend, "cuda")
   expect_equal(cuda_selection$backend_policy_reason, "work_at_least_1e8")
-  expect_false(cuda_selection$explicit_backend)
-  expect_equal(cuda_selection$backend_decision, "work_at_least_1e8")
+  expect_true(cuda_selection$explicit_backend)
+  expect_equal(cuda_selection$backend_decision, "explicit_cuda")
   expect_true(cuda_selection$backend_policy_prefer_cuda)
   expect_true(cuda_selection$cuda_kmeans_route_available)
-  expect_equal(cuda_selection$runtime_decision, "cuda_kmeans_route_available")
+  expect_equal(cuda_selection$runtime_decision, "explicit_backend_no_auto_fallback")
   expect_equal(cuda_selection$input_nbytes, work_policy$input_nbytes)
   expect_equal(cuda_selection$gpu_transfer_nbytes, work_policy$gpu_transfer_nbytes)
   expect_true(cuda_selection$cuda_available)
@@ -593,7 +558,7 @@ test_that("fast_kmeans auto backend is shape-aware", {
   expect_equal(unknown_policy$reason, "unknown_shape")
 
   no_cuda_selection <- faissR:::kmeans_selection_metadata(
-    requested_backend = "auto",
+    requested_backend = "cpu",
     resolved_backend = NULL,
     n = 70000L,
     p = 784L,
@@ -607,44 +572,12 @@ test_that("fast_kmeans auto backend is shape-aware", {
   )
   expect_equal(no_cuda_selection$tuning_source, "cpp")
   expect_equal(no_cuda_selection$resolved_backend, "cpu")
-  expect_equal(no_cuda_selection$runtime_decision, "cuda_runtime_unavailable")
+  expect_equal(no_cuda_selection$runtime_decision, "explicit_backend_no_auto_fallback")
   expect_false(no_cuda_selection$cuda_kmeans_route_available)
 
-  expect_equal(
-    faissR:::resolve_fast_kmeans_backend(
-      "auto",
-      n = 120L,
-      p = 4L,
-      centers = 3L,
-      cuda_available_value = TRUE,
-      faiss_gpu_available_value = TRUE,
-      cuvs_available_value = TRUE
-    ),
-    "cpu"
-  )
-  expect_equal(
-    faissR:::resolve_fast_kmeans_backend(
-      "auto",
-      n = 1000000L,
-      p = 784L,
-      centers = 1L,
-      cuda_available_value = TRUE,
-      faiss_gpu_available_value = TRUE,
-      cuvs_available_value = TRUE
-    ),
-    "cpu"
-  )
-  expect_equal(
-    faissR:::resolve_fast_kmeans_backend(
-      "auto",
-      n = 70000L,
-      p = 784L,
-      centers = 10L,
-      cuda_available_value = TRUE,
-      faiss_gpu_available_value = TRUE,
-      cuvs_available_value = FALSE
-    ),
-    "cuda"
+  expect_error(
+    faissR:::resolve_fast_kmeans_backend("auto"),
+    "backend"
   )
 })
 

@@ -26,11 +26,11 @@ while FAISS GPU Flat remains the provider-backed alternative.
 
 `faissR` separates the public device selector from the algorithm selector:
 
-- `backend = "auto"` uses CUDA only for validated CUDA method/metric
-  combinations when CUDA/cuVS runtime support is available, otherwise CPU.
 - `backend = "cpu"` forces CPU execution.
 - `backend = "cuda"` forces CUDA execution and errors if no compatible CUDA
   backend is available.
+- Omitting `backend` follows `options(faissR.backend)`, then `FAISSR_BACKEND`,
+  and finally uses CPU. Device selection is never automatic.
 - `method` selects one canonical lowercase public algorithm family, for example
   `"auto"`, `"flat"`, `"hnsw"`, `"ivf"`, `"ivfpq_fastscan"`, `"cagra"`, or `"grid"`.
   Resolved implementation labels such as `faiss_hnsw` or `cuda_cuvs_cagra`
@@ -66,14 +66,12 @@ capability without making NVIDIA libraries required for CPU-only builders.
 
 | Public backend | Meaning | Failure behavior |
 | --- | --- | --- |
-| `"auto"` | Prefer CUDA/cuVS for validated CUDA method/metric combinations when CUDA/cuVS runtime support is available; otherwise use CPU. With an explicit method, the chosen method/metric must have a runtime-capable CUDA route before auto selects CUDA. | Falls back to CPU only because the user requested automatic device selection. |
 | `"cpu"` | Use CPU/native/FAISS CPU routes. | Errors for CUDA-only methods such as `method = "cagra"`. |
 | `"cuda"` | Use CUDA/FAISS GPU/cuVS routes. | Errors if CUDA/cuVS support is unavailable or if the selected method is CPU-only. |
 
-For explicit public methods under `backend = "auto"`, the selector checks the
-method/metric CUDA route before choosing a device. For example,
-`method = "hnsw"` is available on CPU and CUDA when the corresponding libraries
-are present. CUDA HNSW resolves to RAPIDS cuVS HNSW: faissR builds a CUDA CAGRA
+For example, `method = "hnsw"` is available on CPU and CUDA when the
+corresponding libraries are present. CUDA HNSW resolves to RAPIDS cuVS HNSW:
+faissR builds a CUDA CAGRA
 seed graph, converts it with `cuvsHnswFromCagraWithDataset`, and records
 `cuda_hnsw_design = "cuvs_hnsw_from_cagra_cpu_hierarchy"` because this is not a
 pure all-GPU HNSW search path. Use CUDA `method = "cagra"` for all-GPU graph
@@ -124,7 +122,7 @@ See the copy-ready [cuVS issue report](cuvs-nndescent-shared-memory-issue.md).
 
 | Function | CPU | CUDA | Notes |
 | --- | --- | --- | --- |
-| `fast_kmeans()` | native/FAISS CPU k-means | FAISS GPU or direct cuVS k-means where available | Uses `"auto"`, `"cpu"`, and `"cuda"` backend policy [7-8]. |
+| `fast_kmeans()` | native/FAISS CPU k-means | FAISS GPU or direct cuVS k-means where available | Uses explicit `"cpu"` or `"cuda"` device selection [7-8]. |
 | `knn()` / `predict()` | yes | yes, through `nn()` | Supervised classifier/regressor API reuses `nn()` backend and method resolution. |
 
 ## Availability Helpers
@@ -158,9 +156,8 @@ The boolean helpers return a single
 `TRUE`/`FALSE` value. They are useful for diagnostics and examples, but
 explicit backend calls still validate availability at execution time.
 `nn_capabilities()` returns a data frame with one row per public
-method/backend/metric combination, including `backend = "auto"`, `"cpu"`,
-and `"cuda"`, and marks unsupported combinations before a benchmark tries to run
-them.
+method/backend/metric combination for `"cpu"` and `"cuda"`, and marks
+unsupported combinations before a benchmark tries to run them.
 
 For benchmark launchers, `nn_capabilities(runtime = TRUE)` adds the
 implementation route that the public API would request on the current machine,
@@ -172,9 +169,8 @@ FAISS GPU Flat row on a CPU-only installation. Reason labels include
 `missing_cuda`, `missing_cuda_route`, and `missing_cuvs`, so benchmark scripts
 do not need to parse prose.
 
-The capability table is design-level. Runtime auto-selection can still choose
-CPU when the public CUDA design route needs a missing optional component. For
-example, CUDA Euclidean auto routes use CUDA grid for large 2D/3D self-KNN and
+The capability table is design-level. For example, CUDA Euclidean
+`method = "auto"` routes use CUDA grid for large 2D/3D self-KNN and
 otherwise choose between Flat/brute force and IVF-Flat by shape, `k`, and
 `target_recall`. Non-grid CUDA cosine and correlation auto routes use FAISS GPU
 Flat for exact small/query workloads when available, and can select validated
@@ -182,12 +178,11 @@ for exact small/query workloads when available, or a transformed validated graph
 route for large self-KNN when available.
 Explicit CUDA HNSW is routed to the
 cuVS HNSW-from-CAGRA wrapper path and labelled as such in metadata. On a
-cuVS-only runtime, CUDA auto non-Euclidean capability rows are reported as
+cuVS-only runtime, CUDA non-Euclidean capability rows are reported as
 shape-dependent rather than as a promise that every metric/method has a CUDA
 route. In mixed FAISS/cuVS builds, the shape-dependent route can choose
 transformed FAISS GPU/direct cuVS CAGRA for large self-KNN when those compiled
-routes are available. The same check is applied to explicit methods such as
-`"flat"`, `"ivf"`, and `"ivfpq"` under `backend = "auto"`.
+routes are available.
 FAISS CPU and FAISS GPU availability are checked separately at execution time:
 explicit FAISS GPU Flat, IVF, IVFPQ, and CAGRA routes require a FAISS build
 that reports GPU support, not only a CPU FAISS installation.
@@ -198,7 +193,8 @@ Approximate GPU routes use deterministic no-pilot defaults for
 `tuning = "auto"`. FAISS IVF records fixed shape/k/metric-aware
 `nlist`/`nprobe` metadata, and cuVS CAGRA records fixed graph/search metadata.
 The route selector and deterministic parameter selectors are compiled C++
-policies: `nn_auto_select_backend_cpp()` chooses the backend route, and
+policies: `nn_auto_select_backend_cpp()` chooses the method route within the
+requested device, and
 `nn_tune_*_cpp()` helpers choose HNSW/IVF/PQ/CAGRA/NSG/Vamana/NN-descent
 parameters. R wrappers read user options and pass values into C++, but do not
 maintain a separate tuning implementation. Approximate

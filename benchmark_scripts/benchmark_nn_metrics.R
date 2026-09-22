@@ -62,7 +62,7 @@ default_nn_method_values <- function() {
 }
 
 default_nn_backend_values <- function() {
-  c("auto", "cpu", "cuda")
+  c("cpu", "cuda")
 }
 
 canonical_backend_key <- function(backend) {
@@ -183,7 +183,7 @@ cagra_implementation_values_for <- function(backend, method, cagra_implementatio
                                             k = NULL) {
   method <- canonical_method_key(method)
   backend <- canonical_backend_key(backend)
-  if (!backend %in% c("auto", "cuda")) {
+  if (!identical(backend, "cuda")) {
     return(NA_character_)
   }
   if (identical(method, "cagra")) {
@@ -1672,23 +1672,8 @@ route_runtime_skip <- function(backend, method, metric) {
   NULL
 }
 
-auto_expected_skip <- function(caps, method, metric) {
-  auto <- capability_status(caps, "auto", method, metric)
-  if (!isTRUE(auto$supported)) {
-    return(list(skip = TRUE, reason = auto$runtime_reason %||% "unsupported_combination", notes = auto$notes))
-  }
-  runtime <- capability_runtime_skip(auto)
-  if (!is.null(runtime)) return(runtime)
-  runtime <- route_runtime_skip("auto", method, metric)
-  if (!is.null(runtime)) return(runtime)
-  NULL
-}
-
 is_expected_skip <- function(caps, backend, method, metric) {
   backend <- tolower(as.character(backend)[1L])
-  if (identical(backend, "auto")) {
-    return(auto_expected_skip(caps, method, metric))
-  }
   cap <- capability_status(caps, backend, method, metric)
   if (!isTRUE(cap$supported)) {
     return(list(skip = TRUE, reason = cap$runtime_reason %||% "unsupported_combination", notes = cap$notes))
@@ -1756,7 +1741,7 @@ nn_data_expected_skip <- function(x, method, metric = "euclidean", backend = "cp
       ))
     }
   }
-  if (backend %in% c("auto", "cuda") && identical(method, "nndescent")) {
+  if (identical(backend, "cuda") && identical(method, "nndescent")) {
     n <- nrow(x)
     p <- ncol(x)
     compact_very_wide <- length(n) == 1L && length(p) == 1L &&
@@ -2418,7 +2403,7 @@ materials <- c(
   "`nn_metric_cycle_summary.csv` aggregates successful rows across cycles by dataset/backend/method/CAGRA-implementation/metric/k and reports success counts, median/min/max elapsed time, recall stability, median mean relative distance error, median/min rank correlation, CPU thread count, preflight route, compact route-parameter metadata, tuning status, and the dominant implementation backend.",
   "`nn_metric_recommendations_from_cycles.csv` selects one method per dataset/backend/metric/k. When recall is available, it selects the fastest method whose median recall is at least `recall_threshold`; tied median times are broken by higher median recall, minimum recall, median minimum recall, rank correlation, and lower distance error. If no method reaches the threshold it selects the best-recall row and marks it as below threshold, breaking tied median recall by minimum recall, median minimum recall, rank correlation, distance error, and then speed. When recall is unavailable for the group, it selects the fastest successful row and marks the recommendation as speed-only.",
   "`nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate `method = \"auto\"` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median recall gap, CPU thread count, preflight route, route-parameter/tuning metadata, and backend/implementation agreement. Speed ratios and recall gaps are `NA` when the required timing or recall values are unavailable or invalid.",
-  "`nn_metric_global_recommendations_from_cycles.csv` pools requested CPU/CUDA/auto backends before selecting the fastest successful method within the recall threshold for each dataset/metric/k combination. This table audits the globally fastest observed backend/method route instead of only the fastest route inside each requested-backend group.",
+  "`nn_metric_global_recommendations_from_cycles.csv` pools requested CPU and CUDA backends before selecting the fastest successful method within the recall threshold for each dataset/metric/k combination. This table audits the globally fastest observed backend/method route instead of only the fastest route inside each requested-backend group.",
   "`nn_metric_auto_vs_global_recommendation.csv` compares aggregate `method = \"auto\"` rows with those global recommendations and records requested-backend agreement, result-backend agreement, resolved-backend agreement, implementation agreement, speed ratio, and recall gap. This table is intended for refining no-pilot `method = \"auto\"` selectors across CPU/CUDA choices.",
   "`nn_metric_best_by_dataset_backend_metric_k_cycle.csv` stores the best row within each cycle using the same recall-threshold rule as the cycle recommendations: fastest above threshold, best recall below threshold, and fastest when recall is unavailable; `nn_metric_best_by_dataset_backend_metric_k.csv` keeps the overall best row across cycles with the same rule for backward-compatible summaries.",
   "The script does not add benchmark-only helpers to the package API."

@@ -2,11 +2,17 @@
 # Shared, isolated source-package check. No default R library is modified.
 args <- commandArgs(TRUE)
 if (length(args) < 3L) {
-    stop("Usage: run.R SOURCE.tar.gz OUTPUT functional|diagnostic [SMOKE.R]")
+    stop(paste(
+        "Usage: run.R SOURCE.tar.gz OUTPUT",
+        "functional|diagnostic|cuda-native|cuda-cuvs [SMOKE.R]"
+    ))
 }
 source_archive <- normalizePath(args[[1]], mustWork = TRUE)
 out <- args[[2]]
-profile <- match.arg(args[[3]], c("functional", "diagnostic"))
+profile <- match.arg(
+    args[[3]],
+    c("functional", "diagnostic", "cuda-native", "cuda-cuvs")
+)
 dir.create(out, recursive = TRUE, showWarnings = FALSE)
 out <- normalizePath(out, mustWork = TRUE)
 if (file.exists(file.path(out, "status.csv"))) {
@@ -35,6 +41,24 @@ writeLines(c(capture.output(sessionInfo()), capture.output(Sys.info()),
     paste("commit:", Sys.getenv("PACKAGE_TEST_COMMIT", "UNRECORDED")),
     paste("image:", Sys.getenv("PACKAGE_TEST_IMAGE", "native"))),
     file.path(out, "environment.txt"))
+native_commands <- c("nvcc", "nvidia-smi")
+for (command in native_commands) {
+    executable <- Sys.which(command)
+    if (!nzchar(executable)) next
+    command_args <- if (command == "nvcc") "--version" else {
+        c("--query-gpu=name,driver_version,compute_cap,memory.total",
+            "--format=csv,noheader")
+    }
+    command_output <- tryCatch(
+        system2(executable, command_args, stdout = TRUE, stderr = TRUE),
+        error = conditionMessage
+    )
+    writeLines(
+        c(paste("command:", executable, paste(command_args, collapse = " ")),
+            command_output),
+        file.path(out, paste0(command, ".txt"))
+    )
+}
 status <- data.frame(stage = character(), exit_code = integer())
 record <- function(stage, code) {
     status[nrow(status) + 1L, ] <<- list(stage, as.integer(code))

@@ -27,12 +27,8 @@
 #' @param Xtest Optional dense numeric or float32 query matrix. If supplied,
 #'   `knn()` returns predictions for `Xtest`; otherwise it returns a fitted
 #'   model.
-#' @param backend Device backend passed to \code{\link{nn}()}: `"auto"`,
-#'   `"cpu"`, or
-#'  `"cuda"`. `"auto"` follows \code{\link{nn}()} backend/method/metric
-#'  resolution,
-#'   using CUDA only for validated CUDA combinations when CUDA/cuVS runtime
-#'   support is available, and CPU otherwise.
+#' @param backend Device backend passed to \code{\link{nn}()}: `"cpu"` or
+#'   `"cuda"`. `NULL` follows the package backend configuration.
 #' @param method Nearest-neighbour algorithm selector passed to
 #'   \code{\link{nn}()}. See \code{\link{nn}()} for method descriptions and
 #'   references.
@@ -349,8 +345,9 @@ new_knn_model <- function(x, response, args, index) {
 #'   observations in rows. Float32 queries are preserved for methods with
 #'   direct float32 adapters.
 #' @param k Number of neighbours.
-#' @param backend Device backend used for this prediction call: `"auto"`,
-#'   `"cpu"`, or `"cuda"`. The fitted model's method and metric are always
+#' @param backend Device backend used for this prediction call: `"cpu"` or
+#'   `"cuda"`. `NULL` follows the package backend configuration. The fitted
+#'   model's method and metric are always
 #'   reused.
 #' @param tuning Tuning policy used for this prediction call. `"auto"` uses the
 #'   deterministic default for the resolved method; pilot/cache tuning is
@@ -752,7 +749,7 @@ knn_build_fitted_nn_index <- function(
 
 knn_fitted_index_spec <- function(x, backend, method, metric, k) {
     if (
-        !backend %in% c("auto", "cpu") ||
+        !identical(backend, "cpu") ||
             !identical(metric, "euclidean") ||
             !isTRUE(faiss_available())
     ) {
@@ -954,7 +951,7 @@ knn_fitted_index_settings_match <- function(
     tuning,
     target_recall
 ) {
-    if (!backend %in% c("auto", "cpu")) {
+    if (!identical(backend, "cpu")) {
         return(FALSE)
     }
     if (!identical(tuning, object$tuning %||% "auto")) {

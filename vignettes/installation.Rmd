@@ -42,7 +42,7 @@ nearest-neighbour search and is not a functional platform result.
 # Tested combinations
 
 * **Functional CPU package check:** macOS arm64 with R 4.6.0, FAISS 1.14.3,
-    libomp 22.1.x, Homebrew clang 22.1.1, and GNU Fortran 12.2.0.
+    libomp 22.1.x, clang 22.1.1, and GNU Fortran 12.2.0.
 * **Publication CPU/CUDA campaign:** Debian 13 with R 4.5.3, FAISS 1.14.3,
     cuVS 26.06, CUDA 13.2, and an NVIDIA L40S with driver 595.58.03. The frozen
     image did not retain the compiler executable and version.
@@ -50,8 +50,8 @@ nearest-neighbour search and is not a functional platform result.
     FAISS 1.14.3 built from source, and the hosted GCC/GFortran toolchain
     recorded by the job.
 * **macOS CPU CI definition:** macOS with the current Bioconductor devel R,
-    Homebrew FAISS and libomp, and the hosted clang/GFortran toolchain recorded
-    by the job.
+    static FAISS supplied through an R-macos recipe prefix, and the hosted
+    clang/GFortran toolchain recorded by the job.
 
 The CI rows describe tracked workflows. They become release evidence only
 after the corresponding hosted jobs complete successfully.
@@ -128,20 +128,28 @@ for provider-specific thread controls.
 
 # macOS CPU-only installation
 
-The tested Apple Silicon path is:
+Bioconductor and CRAN macOS binary builders use the
+[R-macos recipes](https://github.com/R-macos/recipes) system for static native
+dependencies. faissR's `configure` detects `/opt/R/arm64` and
+`/opt/R/x86_64`. The repository contains a candidate FAISS recipe that must
+pass the upstream arm64 and x86_64 recipe builds before submission.
+
+For a source build outside a prepared binary-builder environment, point the
+package at compatible FAISS and OpenMP prefixes. `configure` does not invoke a
+system package manager:
 
 ```{bash, eval=FALSE}
-brew install faiss libomp gcc
-
-FAISS_HOME="$(brew --prefix faiss)" \
-LIBOMP_HOME="$(brew --prefix libomp)" \
+FAISS_HOME=/path/to/faiss \
+LIBOMP_HOME=/path/to/openmp \
 FAISSR_REQUIRE_FAISS=1 \
 R CMD INSTALL faissR_0.99.44.tar.gz
 ```
 
-An already active conda/mamba environment is also accepted when it contains
-`faiss-cpu` and `libomp`; set both `FAISS_HOME` and `LIBOMP_HOME` to
-`$CONDA_PREFIX`. `configure` does not create or modify the environment.
+Alternatively, pass separate FAISS paths with
+`--configure-vars='INCLUDE_DIR=... LIB_DIR=...'`. An already active conda or
+mamba environment is also accepted when it contains `faiss-cpu` and `libomp`;
+set both `FAISS_HOME` and `LIBOMP_HOME` to `$CONDA_PREFIX`. `configure` never
+creates or modifies the environment.
 
 # Windows CPU-only installation
 
@@ -169,9 +177,17 @@ The reproducible native Windows build recipe and test instructions are in
 # Linux CUDA and cuVS installation
 
 The CUDA toolkit, driver, FAISS GPU build, cuVS, R, and C++ runtime must come
-from one compatible stack. After those providers have been installed in known
-prefixes, use strict switches so that a CPU-only build cannot be mistaken for
-the requested GPU build:
+from one compatible stack. `faissR` never installs or changes an NVIDIA driver.
+On Debian or Ubuntu, do not add a distribution CUDA metapackage to a server
+whose driver is managed separately. With NVIDIA's repository, a versioned
+`cuda-toolkit-X-Y` package installs development tools without the driver;
+the `cuda` and `cuda-runtime-X-Y` metapackages can include driver packages.
+Inspect a package-manager simulation before changing a shared machine.
+
+Several CUDA toolkits can coexist in separate prefixes. Select one explicitly
+with `CUDA_HOME`; FAISS GPU and cuVS must have been built for a compatible
+CUDA stack. After those providers have been installed, use strict switches so
+that a CPU-only build cannot be mistaken for the requested GPU build:
 
 ```{bash, eval=FALSE}
 CUDA_HOME=/usr/local/cuda \
@@ -179,9 +195,24 @@ FAISS_HOME=/opt/faiss-gpu \
 CUVS_HOME=/opt/rapids \
 FAISSR_REQUIRE_FAISS=1 \
 FAISSR_REQUIRE_CUDA=1 \
+FAISSR_REQUIRE_CUDA_RUNTIME=1 \
 FAISSR_REQUIRE_CUVS=1 \
 R CMD INSTALL faissR_0.99.44.tar.gz
 ```
+
+Configuration compiles and links a small CUDA probe and records the toolkit,
+runtime, driver API, and device compute capability. A visible GPU is required
+at configuration only when `FAISSR_REQUIRE_CUDA_RUNTIME=1`; omit that switch
+for a build image that intentionally has no attached GPU. `FAISSR_CUDA_ARCH`
+accepts space-separated numeric capabilities such as `"80 90 120"`. The
+highest requested architecture is also retained as Parallel Thread Execution
+(PTX) code for forward compatibility; set `FAISSR_CUDA_PTX_ARCH` explicitly
+to choose another PTX target or to `none` to disable it.
+
+CUDA compatibility is reported per component. Native faissR kernels, FAISS
+GPU, and direct cuVS are separate capabilities, and availability of one does
+not establish compatibility of the others. The reproducible multi-toolkit
+test matrix is documented in `.github/package-check/CUDA.md`.
 
 Native RAPIDS builds are Linux-oriented; WSL2 is the documented
 Windows route for CUDA/cuVS.
@@ -221,7 +252,8 @@ compiled against the provider and the runtime device must also be available.
     Set `FAISS_HOME`, then verify `include/faiss/IndexFlat.h` and
     `lib/libfaiss.*`.
 * **`omp.h` not found on macOS:** FAISS headers require an OpenMP runtime that
-    clang cannot see. Install `libomp` and set `LIBOMP_HOME`.
+    clang cannot see. Use the R-macos recipe/toolchain runtime or set
+    `LIBOMP_HOME` to a compatible prefix.
 * **The package loads but `faiss_available()` is false:** this is a
     diagnostic-only artifact. Install from source with FAISS and set
     `FAISSR_REQUIRE_FAISS=1`.
@@ -235,6 +267,13 @@ compiled against the provider and the runtime device must also be available.
     directory through the platform linker path.
 * **CUDA requested but `nvcc` is missing:** the CUDA toolkit was not found.
     Set `CUDA_HOME` or `NVCC`, then check `nvcc --version`.
+* **The CUDA compiler/linker probe fails:** the selected compiler, headers,
+    runtime libraries, or architecture flags do not form a coherent toolkit.
+    Inspect `config.log`; do not repair this by replacing the host driver.
+* **The CUDA runtime probe reports no device:** run `nvidia-smi`, then compare
+    the compiled toolkit, runtime, driver API, and compute capability shown by
+    `backend_info()`. A build-only host may omit
+    `FAISSR_REQUIRE_CUDA_RUNTIME=1`.
 * **cuVS route unavailable:** cuVS was absent at compile time or cannot load at
     runtime. Set `CUVS_HOME`, use `FAISSR_REQUIRE_CUVS=1`, and repair the
     runtime library path.

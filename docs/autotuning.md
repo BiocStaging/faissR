@@ -49,7 +49,7 @@ The tuning workflow is:
    it. That measures the path we want faissR to use in practice: float32 input,
    C++/CUDA processing, and minimal R-side conversion.
 3. Run one method and one backend at a time. CPU and CUDA are benchmarked in
-   separate launchers, and `backend = "auto"` is not used. This separation is
+   separate launchers with explicit device requests. This separation is
    essential because a CPU HNSW setting and a CUDA CAGRA setting can both reach
    recall 0.99 while having completely different bottlenecks, memory traffic,
    and parameter meanings.
@@ -391,16 +391,17 @@ used.
 
 ## Default Policy
 
-Use these rules for `backend = "auto"` and for explicit backend
-recommendations. Public calls should use canonical method names such as
+Use these rules for explicit CPU and CUDA recommendations. Public calls should
+use canonical method names such as
 `"exact"`, `"flat"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"ivfpq_fastscan"`,
 `"nndescent"`, or `"cagra"`; labels such as `faiss_hnsw`,
 `faiss_ivfpq_fastscan`, `cuda_cuvs_ivfpq_fastscan`, or `cuda_cuvs_cagra` are resolved
 implementation routes recorded in benchmark output, not separate public
 `method` values.
 
-Both parts of the automatic policy are compiled C++ rules. The method/backend
-route is selected by `nn_auto_select_backend_cpp()`, and deterministic
+Both parts of the automatic method policy are compiled C++ rules. The method
+route within the requested backend is selected by
+`nn_auto_select_backend_cpp()`, and deterministic
 `tuning = "auto"` parameters are selected by C++ helpers such as
 `nn_tune_faiss_hnsw_cpp()`, `nn_tune_faiss_ivf_cpp()`,
 `nn_tune_cuvs_cagra_cpp()`, `nn_tune_native_nsg_cpp()`, and
@@ -410,15 +411,10 @@ separate R implementation of the shape/k/metric policy. Returned tuning
 metadata includes `tuning_source = "cpp"` for deterministic approximate-method
 parameter rules.
 
-`fast_kmeans()` follows the same compiled-policy contract. Its automatic
-`max_iter`, `n_init`, and `tol` values are selected by
-`kmeans_auto_params_cpp()`, and its `backend = "auto"` CUDA/CPU gate is
-selected by `kmeans_auto_select_backend_cpp()`, using the policy object from
-`kmeans_auto_backend_policy_cpp()`. The R layer reads documented threshold
-options and runtime availability flags, then forwards them into C++; it does
-not maintain a separate R implementation of the k-means shape policy or final
-CPU/CUDA selection. Returned k-means metadata records `tuning_source = "cpp"`
-for the parameter rule, backend policy, and final selection.
+`fast_kmeans()` follows the same compiled-policy contract for its automatic
+`max_iter`, `n_init`, and `tol` values, which are selected by
+`kmeans_auto_params_cpp()`. CPU or CUDA is selected explicitly. Returned
+k-means metadata records `tuning_source = "cpp"` for the parameter rule.
 
 - Prefer `method = "flat"`/`"exact"` on CUDA when the data fits and target
   recall is very high. The resolved routes `faiss_gpu_flat_l2` and
@@ -608,7 +604,7 @@ or `backend = "cuda"`, `method = "hnsw"`, metric-specific wrappers such as
 `run_hpc_hnsw_tuning_cuda_euclidean.sh` and
 `run_hpc_hnsw_tuning_cuda_cosine.sh`, `k = 15, 30, 50, 100`,
 `target_recall = 0.9, 0.95, 0.99`, and a
-2000-second timeout per candidate. `backend = "auto"` is not used. Result rows
+2000-second timeout per candidate. Result rows
 record the requested target, actual target, HNSW parameters, sampled recall,
 speed, memory, output type, and backend metadata. If a dataset has no completed
 `*_float32.RData` file, the manifest marks it as missing and the result table
@@ -682,15 +678,15 @@ run on a host with enough RAM for the source data, converted matrix, and
 backend-side buffers.
 
 
-## Shape-Aware `backend` Plus `method = "auto"`
+## Shape-Aware `method = "auto"` By Backend
 
 A follow-up auto-policy run tested the CPU-only and CUDA-only automatic
 selectors on simulated shapes and benchmark dataset folders. The automatic
 route policy is implemented in C++ by `nn_auto_select_backend_cpp()`. The R
 front end supplies normalized arguments, runtime availability flags
 (`faiss_available`, `faiss_gpu_available`, `cuvs_available`, `cuda_available`),
-and option thresholds, but the selected backend and auto-selection metadata are
-produced by the compiled selector. The metadata policy string is
+and option thresholds, but the selected method route and auto-selection
+metadata are produced by the compiled selector. The metadata policy string is
 `cpp_static_shape_k_metric_selector`.
 
 The frozen policy profile is `uct_hpc_cpu12_nvidia_l40s_2026`: calibration

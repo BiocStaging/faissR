@@ -20,7 +20,7 @@ test_that("Windows diagnostic Makevars do not pass unsupported flang flags", {
     old <- setwd(root)
     on.exit(setwd(old), add = TRUE)
     withr::local_envvar(c(FAISS_HOME = "", CONDA_PREFIX = "",
-        FAISSR_REQUIRE_FAISS = "0"))
+        INCLUDE_DIR = "", LIB_DIR = "", FAISSR_REQUIRE_FAISS = "0"))
     status <- system2("sh", "configure.win", stdout = TRUE, stderr = TRUE)
     exit_status <- attr(status, "status")
     if (is.null(exit_status)) {
@@ -47,6 +47,8 @@ test_that("Windows FAISS linkage probes complete numerical libraries", {
     expect_match(source, "conftest.dll", fixed = TRUE)
     expect_match(source, "local = TRUE, now = TRUE", fixed = TRUE)
     expect_match(source, "FAISSR_NUMERICAL_LIBS", fixed = TRUE)
+    expect_match(source, "INCLUDE_DIR", fixed = TRUE)
+    expect_match(source, "LIB_DIR", fixed = TRUE)
     expect_match(source, "'-llapack -lblas'", fixed = TRUE)
     expect_match(source, "faiss_numerical_libs.*LAPACK_LIBS.*BLAS_LIBS.*FLIBS")
 })

@@ -164,6 +164,10 @@ def word_source(source: str) -> str:
         r"\begin{tabular}{p{0.42\textwidth}p{0.48\textwidth}}",
     )
     source = source.replace(
+        r"\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.30\textwidth}Y@{}}",
+        r"\begin{tabular}{p{0.30\textwidth}p{0.60\textwidth}}",
+    )
+    source = source.replace(
         r"\begin{tabularx}{\textwidth}{@{}p{0.13\textwidth}p{0.23\textwidth}X p{0.09\textwidth}@{}}",
         r"\begin{tabular}{p{0.13\textwidth}p{0.23\textwidth}p{0.45\textwidth}p{0.09\textwidth}}",
     )

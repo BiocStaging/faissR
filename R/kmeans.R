@@ -9,11 +9,9 @@
 #' @param data Dense numeric matrix with observations in rows. Sparse, delayed,
 #'   file-backed, and other matrix-like objects are rejected before conversion.
 #' @param centers Number of clusters.
-#' @param backend Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
-#'   uses CUDA only when CUDA plus FAISS GPU k-means or direct cuVS k-means is
-#'   compiled and available and the deterministic shape rule estimates enough
-#'   work to offset GPU launch and host/device copy overhead; otherwise it
-#'   resolves to CPU.
+#' @param backend Device backend: `"cpu"` or `"cuda"`. `NULL` follows
+#'   `options(faissR.backend)`, then `FAISSR_BACKEND`, with CPU as the final
+#'   default.
 #' @param max_iter Maximum number of Lloyd iterations, or `"auto"` for a
 #'   deterministic shape-aware default computed by the compiled C++ tuning
 #'   helper.
@@ -50,13 +48,12 @@
 #'   `size`, `iter`, `converged`, `hit_max_iter`, `backend`, and
 #'   `parameters`. `backend` records the
 #'   implementation that actually ran, while `parameters$requested_backend` and
-#'   `parameters$resolved_backend` record the public backend request and device
-#'  policy result. `parameters$tuning` records the deterministic k-means
-#'  policy,
+#'   `parameters$resolved_backend` record the public backend request and
+#'   resolved device. `parameters$tuning` records the deterministic k-means
+#'   policy,
 #'   stable `rule` label, shape metadata, and whether `max_iter`, `n_init`, and
-#'   `tol` were auto-selected or supplied explicitly. The auto parameter,
-#'   backend-policy, and final auto backend-selection rules are computed by
-#'   compiled C++ helpers and record `tuning_source = "cpp"`.
+#'   `tol` were auto-selected or supplied explicitly. The parameter rules are
+#'   computed by compiled C++ helpers and record `tuning_source = "cpp"`.
 #'   `parameters$tuning$rule_detail` records the exact
 #'   `n`/`p`/`centers`/work values used to choose the rule.
 #'   `parameters$tuning$effective` records
@@ -64,24 +61,9 @@
 #'   been resolved; `parameters$tuning$effective_max_iter`,
 #'   `parameters$tuning$effective_n_init`, and
 #'   `parameters$tuning$effective_tol` expose the same values as flat fields for
-#'   benchmark summaries. `parameters$tuning$backend_policy` records the
-#'   deterministic shape rule used by `backend = "auto"` to decide whether CUDA
-#'   has enough estimated work or float32 transfer size to offset transfer
-#'   overhead. The policy keeps `nbytes` as the ordinary R double input
-#'   footprint and records `gpu_transfer_nbytes` for the float32 data passed to
-#'   FAISS/cuVS. The default thresholds can be overridden without adding pilot
-#'   work by setting
-#'   `options(faissR.kmeans_cuda_work_threshold = ...)`,
-#'   `options(faissR.kmeans_cuda_nbytes_threshold = ...)`,
-#'   `options(faissR.kmeans_cuda_large_n_threshold = ...)`, or
-#'   `options(faissR.kmeans_cuda_large_p_threshold = ...)`, or
-#'   `options(faissR.kmeans_cuda_min_n_per_center = ...)`.
-#'   `parameters$tuning$selection` stores the static no-pilot backend and
-#'   effective-parameter decision used for benchmark auditing, including
-#'   `explicit_backend` and `backend_decision` fields that distinguish an
-#'   explicit `"cpu"`/`"cuda"` request from an automatic shape-policy choice,
-#'   plus `runtime_decision` and CUDA k-means capability flags from the C++
-#'   selector.
+#'   benchmark summaries. `parameters$tuning$selection` stores the explicit
+#'   device request, effective-parameter decision, runtime capability flags,
+#'   and input shape used by the compiled selector.
 #'  CUDA runs also record `parameters$cuda_provider_selection` as
 #'  `"faiss_gpu"`,
 #'   `"direct_cuvs"`, or `"direct_cuvs_after_faiss_gpu_unavailable_or_failed"`;
@@ -713,7 +695,7 @@ finish_fast_kmeans <- function(
 finish_trivial_one_cluster_kmeans <- function(
     x,
     tuning_metadata = NULL,
-    requested_backend = "auto",
+    requested_backend = "cpu",
     resolved_backend = "cpu"
 ) {
     center <- matrix(colMeans(x), nrow = 1L)
@@ -777,7 +759,7 @@ trivial_one_cluster_parameters <- function(
 finish_trivial_singleton_kmeans <- function(
     x,
     tuning_metadata = NULL,
-    requested_backend = "auto",
+    requested_backend = "cpu",
     resolved_backend = "cpu"
 ) {
     max_iter <- tuning_metadata$effective$max_iter %||%

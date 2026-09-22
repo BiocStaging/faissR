@@ -153,10 +153,7 @@ resolve_cuda_nn_backend <- function(method, metric, n, p, k, self_query) {
     )
 }
 
-resolve_public_auto_method_backend <- function(requested_device, device) {
-    if (identical(requested_device, "auto")) {
-        return("auto")
-    }
+resolve_public_auto_method_backend <- function(device) {
     if (identical(device, "cuda")) {
         return("cuda_auto")
     }

@@ -50,6 +50,14 @@ are intentionally not listed as mandatory CPU-builder requirements; they should
 be supplied only by GPU-capable builders or users who explicitly request a GPU
 build.
 
+The configure diagnostics use the conventional system-package names
+`libfaiss-dev` for Debian-family systems and `faiss-devel` for RPM-family
+systems where that package is available. Not every Fedora/RHEL or Alpine
+repository currently ships FAISS. On a distribution without a native
+development package, build FAISS separately and set `FAISS_HOME`, or pass
+`INCLUDE_DIR` and `LIB_DIR`; faissR does not download a substitute library
+during installation.
+
 ## Known cuVS NN-Descent Issue
 
 Direct RAPIDS cuVS NN-descent can fail on high-dimensional FP32 Euclidean/L2
@@ -94,10 +102,12 @@ automatically. Building the vignettes also requires `BiocStyle`, `knitr`, and
 not compile the Fortran source.
 
 `configure` searches common compiler/linker paths, `pkg-config`, and
-environment variables. The most portable explicit install is:
+environment variables. It does not invoke `apt`, `dnf`, `apk`, Homebrew, or
+another package manager. The most portable explicit installs are:
 
 ```sh
 FAISS_HOME=/path/to/faiss R CMD INSTALL .
+R CMD INSTALL --configure-vars='INCLUDE_DIR=/path/include LIB_DIR=/path/lib' .
 ```
 
 `FAISS_HOME` should be a prefix containing files such as:
@@ -106,7 +116,7 @@ FAISS_HOME=/path/to/faiss R CMD INSTALL .
 /path/to/faiss/include/faiss/IndexFlat.h
 /path/to/faiss/lib/libfaiss.so      # Linux
 /path/to/faiss/lib/libfaiss.dylib   # macOS
-/path/to/faiss/lib/faiss.lib        # Windows-style toolchains
+/path/to/faiss/lib/libfaiss.a       # static Unix or Rtools build
 ```
 
 ## Debian With R's Bundled Numerical Libraries
@@ -155,26 +165,29 @@ for provider-specific thread controls.
 
 ## macOS CPU Installation
 
-macOS is recommended for CPU/FAISS builds. NVIDIA CUDA is not supported on
-modern Apple Silicon/macOS systems, so CUDA/cuVS backends are expected to be
-unavailable.
+macOS supports CPU/FAISS builds. NVIDIA CUDA is not supported on modern Apple
+Silicon/macOS systems, so CUDA/cuVS backends are expected to be unavailable.
 
-Install R, Xcode command line tools, GNU Fortran if needed by your R setup, and
-FAISS and the OpenMP runtime required by Homebrew FAISS headers:
+Bioconductor and CRAN macOS binary builders use the
+[R-macos recipes](https://github.com/R-macos/recipes) system for static system
+dependencies. The faissR repository contains a candidate FAISS recipe under
+`.github/package-check/macos-recipes/`; it must pass the upstream arm64 and
+x86_64 recipe builds before it is proposed for the shared builder. `configure`
+detects recipe prefixes under `/opt/R/arm64` or `/opt/R/x86_64` automatically.
+
+A source build outside that environment must provide compatible FAISS and
+OpenMP installations without asking `configure` to modify the system. Set
+`FAISS_HOME` and `LIBOMP_HOME`, or use `INCLUDE_DIR` and `LIB_DIR` for FAISS:
 
 ```sh
-xcode-select --install
-brew install faiss libomp
+FAISS_HOME=/path/to/faiss \
+LIBOMP_HOME=/path/to/openmp \
+FAISSR_REQUIRE_FAISS=1 \
+R CMD INSTALL .
 ```
 
-Then install faissR:
-
-```sh
-FAISS_HOME="$(brew --prefix faiss)" R CMD INSTALL .
-```
-
-If Homebrew FAISS is already visible to `pkg-config` and the dynamic linker,
-`FAISS_HOME` may not be needed. Validate with:
+If FAISS is visible through `pkg-config` and OpenMP is in the R toolchain
+prefix, explicit variables may not be needed. Validate with:
 
 ```r
 library(faissR)
@@ -185,24 +198,8 @@ backend_info()
 Expected macOS result: FAISS CPU should be available; CUDA and cuVS
 should report unavailable.
 
-For GitHub installs on a new macOS machine, faissR can call Homebrew when the
-user explicitly opts in:
-
-```r
-Sys.setenv(FAISSR_AUTO_INSTALL_FAISS = "1")
-remotes::install_github("tkcaccia/faissR")
-```
-
-This runs `brew install faiss libomp` during `configure` if FAISS or the macOS
-OpenMP runtime is missing and Homebrew is available. It is never inferred from
-generic CI variables: the explicit `FAISSR_AUTO_INSTALL_FAISS=1` request is
-required. Bioconductor/r-universe macOS binary workers may not provide FAISS,
-so those automated binary builds use diagnostic stubs rather than a hidden
-dependency manager. The stubs report that native FAISS functionality is
-unavailable.
-
-If Homebrew is unavailable on a user macOS machine, a pre-existing conda or
-mamba environment can provide CPU FAISS:
+A pre-existing conda or mamba environment can also provide a local CPU FAISS
+prefix for source installation:
 
 ```sh
 conda install -c conda-forge faiss-cpu libomp
@@ -212,9 +209,8 @@ R CMD INSTALL .
 ```
 
 The configure script also detects `CONDA_PREFIX` directly when FAISS and libomp
-are installed in the active environment. It does not install conda or
-micromamba automatically; that keeps Bioconductor/r-universe builds aligned
-with the system-dependency model and avoids silently changing shared systems.
+are installed in the active environment. It never creates or modifies that
+environment.
 
 ## Linux CPU/FAISS
 
@@ -254,6 +250,21 @@ CUDA builds require:
 - FAISS built with GPU support if you want FAISS GPU indexes;
 - RAPIDS cuVS headers/library if you want direct cuVS routes.
 
+`faissR` never installs or changes an NVIDIA driver. On Debian or Ubuntu, do
+not add a distribution CUDA metapackage to a server whose working driver is
+managed separately. With NVIDIA's package repository, use a versioned
+`cuda-toolkit-X-Y` package for development tools without a driver. The `cuda`
+and `cuda-runtime-X-Y` metapackages can include driver packages. Always inspect
+a package-manager simulation before changing a shared GPU host.
+
+Multiple toolkit versions can coexist in separate prefixes. Select one with
+`CUDA_HOME`, and use FAISS GPU and cuVS libraries built for a compatible CUDA
+stack. Configuration compiles and links a small CUDA probe before building the
+package. Toolkit headers and libraries stored below
+`CUDA_HOME/targets/<platform>/` are detected in addition to the conventional
+`CUDA_HOME/include`, `CUDA_HOME/lib`, and `CUDA_HOME/lib64` directories. This
+also supports the layout used by conda and micromamba CUDA toolkits.
+
 The source-build install command is:
 
 ```sh
@@ -261,9 +272,15 @@ CUDA_HOME=/usr/local/cuda \
 FAISS_HOME=/path/to/faiss-gpu \
 CUVS_HOME=/path/to/rapids \
 FAISSR_REQUIRE_CUDA=1 \
+FAISSR_REQUIRE_CUDA_RUNTIME=1 \
 FAISSR_REQUIRE_CUVS=1 \
 R CMD INSTALL .
 ```
+
+`FAISSR_REQUIRE_CUDA_RUNTIME=1` additionally requires a usable GPU during
+configuration. Omit it for a build container with no attached device. The
+installed package reports compiled-toolkit, runtime, driver API, and compute
+capability information through `backend_info()`.
 
 Set only the features you actually have. For example, FAISS GPU without direct
 cuVS:
@@ -322,11 +339,6 @@ FAISS as unavailable instead of failing with invalid `/include` and `/lib`
 paths. A functional Windows FAISS route requires an Rtools-compatible library;
 set `FAISSR_REQUIRE_FAISS=1` to make its absence a configuration error.
 
-Automated Bioconductor and r-universe macOS workers may lack FAISS because
-their system-library bundle does not include it. On those workers, `configure`
-emits diagnostic stubs so the binary can load and report FAISS as unavailable;
-it does not provide working FAISS methods. macOS users can install a functional
-source build with Homebrew or conda/mamba as described above.
 Windows users can use a native Rtools-compatible CPU build, or WSL2 for the
 Linux-style CPU and CUDA installation paths.
 
@@ -409,20 +421,22 @@ Linux and macOS source builds still require real FAISS.
 | Variable | Purpose |
 |---|---|
 | `FAISS_HOME` | Prefix containing FAISS headers and libraries. Mandatory when FAISS is not visible through compiler defaults or `pkg-config`. |
+| `INCLUDE_DIR`, `LIB_DIR` | Conventional configure overrides for separate FAISS include and library directories. Both must be set together. |
 | `FAISSR_REQUIRE_FAISS` | Set to `1` in production or CI to reject diagnostic-only builds when a functional FAISS library is required. |
-| `FAISSR_AUTO_INSTALL_FAISS` | Explicit macOS/Homebrew convenience switch. Set to `1` to let `configure` run `brew install faiss libomp` if FAISS or the macOS OpenMP runtime is missing. Generic CI variables never enable this path. Bioconductor/r-universe macOS binary workers may provide diagnostic-only builds until their system-library bundle provides FAISS. |
 | `FAISSR_NUMERICAL_LIBS` | Explicit link flags for complete, ABI-compatible LP64 BLAS/LAPACK dependencies of FAISS. On Linux and Windows the flags must pass a compile/load check. R's own numerical-library flags are retained. |
 | `FAISSR_RUNIVERSE_MACOS_STUBS` | r-universe/BiocStaging macOS-only diagnostic switch. Defaults to `1`, allowing diagnostic stubs only on those macOS binary workers when FAISS is absent. Set to `0` to make that worker fail instead. User macOS installs are unaffected and still require FAISS. |
-| `LIBOMP_HOME` or `FAISSR_LIBOMP_HOME` | macOS OpenMP prefix containing `include/omp.h` and `lib/libomp.*`. Usually `$(brew --prefix libomp)`. |
+| `LIBOMP_HOME` or `FAISSR_LIBOMP_HOME` | macOS OpenMP prefix containing `include/omp.h` and `lib/libomp.*`. Recipe and R toolchain prefixes are detected automatically. |
 | `CONDA_PREFIX` | Active conda/mamba prefix. Used only as a passive fallback when `faiss-cpu` and `libomp` are already installed there. |
 | `FAISSR_USE_CUDA` | Set to `1` to request CUDA native/FAISS GPU build paths; set to `0` to force CPU-only stubs. |
 | `FAISSR_USE_CUVS` | Set to `1` to request direct RAPIDS cuVS build paths; set to `0` to force cuVS stubs. |
 | `FAISSR_REQUIRE_CUDA` | Strict alias for a NVIDIA GPU build. Set to `1` to make missing CUDA toolkit/`nvcc` fatal at configure time. |
+| `FAISSR_REQUIRE_CUDA_RUNTIME` | Set to `1` to require a visible, usable CUDA device during configuration as well as a successful compiler/linker probe. Leave unset on build-only hosts. |
 | `FAISSR_REQUIRE_CUVS` | Strict direct cuVS request. Set to `1` to make missing RAPIDS cuVS fatal at configure time. |
 | `CUDA_HOME` | CUDA toolkit prefix, for example `/usr/local/cuda`. |
 | `CUVS_HOME` | RAPIDS cuVS prefix containing headers and `libcuvs`. |
 | `NVCC` | Optional explicit CUDA compiler path. |
-| `FAISSR_CUDA_ARCH` | Optional CUDA architectures passed to `nvcc`, for example `80 89`. |
+| `FAISSR_CUDA_ARCH` | Optional space-separated numeric CUDA architectures passed to `nvcc`, for example `80 89 120`. |
+| `FAISSR_CUDA_PTX_ARCH` | Optional PTX target. By default, the highest value in `FAISSR_CUDA_ARCH` is also retained as forward-compatible PTX. Use `none` only when PTX must be disabled deliberately. |
 | `FAISSR_CUDA_FLAGS` | Optional extra flags appended to CUDA compilation. |
 | `PKG_CONFIG_PATH` | Helps locate FAISS/cuVS `.pc` files. |
 | `LD_LIBRARY_PATH` | Linux runtime library search path. |
@@ -467,13 +481,13 @@ prevent accidental diagnostic-only installation.
 ## Tested Configurations
 
 A functional source build was installed and smoke-tested on macOS arm64 with R 4.6.0,
-Homebrew FAISS 1.14.3, Homebrew clang 22.1.1, GNU Fortran 12.2.0, and libomp
-22.1.x. The publication CUDA environment used Debian 13, R 4.5.3, FAISS
+FAISS 1.14.3, clang 22.1.1, GNU Fortran 12.2.0, and libomp 22.1.x. The
+publication CUDA environment used Debian 13, R 4.5.3, FAISS
 1.14.3, cuVS 26.06, CUDA 13.2, and an NVIDIA L40S with driver 595.58.03. The
 exact compiler executable used to construct that frozen CUDA image was not
 retained, so this runtime combination is reported without inventing compiler
-provenance. Repository CI definitions build FAISS 1.14.3 from source on Linux
-and use Homebrew FAISS on macOS.
+provenance. Repository CI definitions build FAISS 1.14.3 from source on Linux;
+the macOS dependency path is being migrated to the R-macos recipe candidate.
 
 ## Validation
 
@@ -514,6 +528,8 @@ available at runtime.
 | Package loading reports an undefined numerical symbol such as `ssyrk_` | R's bundled numerical libraries can lack single-precision FAISS dependencies | Install complete LP64 BLAS/LAPACK development libraries and use the current Linux or Windows compile/load check; inspect `config.log` or set `FAISSR_NUMERICAL_LIBS` for a custom provider. R's link flags alone are not sufficient on every installation. |
 | `GLIBCXX_* not found` on Linux | R loaded an older system `libstdc++` before FAISS/RAPIDS libraries | Use a consistent compiler/runtime stack; set `LD_LIBRARY_PATH` and, if necessary for benchmarks, `LD_PRELOAD` to the intended `libstdc++.so.6`. |
 | CUDA build cannot find `nvcc` | CUDA toolkit is missing or not on path | Set `CUDA_HOME` and/or `NVCC`; check `nvcc --version`. |
+| CUDA compiler/linker probe fails | Compiler, headers, runtime libraries, or architecture flags come from incompatible toolkit installations | Select one `CUDA_HOME`, inspect `config.log`, and do not replace the host driver as a package-install workaround. |
+| CUDA runtime probe reports no device | The build host has no passed-through GPU, or the driver cannot use the selected runtime | Use `nvidia-smi`; compare toolkit/runtime/driver metadata in `backend_info()`. Omit `FAISSR_REQUIRE_CUDA_RUNTIME=1` only for an intentional build-only host. |
 | cuVS routes unavailable | cuVS headers/library were not found at build time | Set `CUVS_HOME`, `FAISSR_USE_CUVS=1`, and runtime `LD_LIBRARY_PATH`. |
 | Windows GPU build is difficult | Native RAPIDS/cuVS C++ libraries are Linux-oriented | Use WSL2 and follow the Linux CUDA instructions. |
 

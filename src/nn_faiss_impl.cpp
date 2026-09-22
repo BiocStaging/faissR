@@ -28,6 +28,9 @@
 #include <faiss/IndexNNDescent.h>
 #include <faiss/IndexNSG.h>
 
+#define FAISSR_STRINGIFY_IMPL(value) #value
+#define FAISSR_STRINGIFY(value) FAISSR_STRINGIFY_IMPL(value)
+
 #if __has_include(<faiss/IndexIVFPQFastScan.h>) && __has_include(<faiss/IndexRefine.h>)
 #define FAISSR_HAS_FAISS_FASTSCAN 1
 #include <faiss/IndexIVFPQFastScan.h>
@@ -1420,6 +1423,15 @@ bool faiss_gpu_bfknn_float32_gpu_available_impl() {
 }
 
 std::string faiss_info_json_impl() {
+#if defined(FAISS_VERSION_MAJOR) && defined(FAISS_VERSION_MINOR) && \
+    defined(FAISS_VERSION_PATCH)
+  const std::string version =
+    FAISSR_STRINGIFY(FAISS_VERSION_MAJOR) "." \
+    FAISSR_STRINGIFY(FAISS_VERSION_MINOR) "." \
+    FAISSR_STRINGIFY(FAISS_VERSION_PATCH);
+#else
+  const std::string version = "unknown";
+#endif
 #ifdef FAISSR_HAS_FAISS_GPU
   const char* gpu = "true";
 #else
@@ -1436,6 +1448,7 @@ std::string faiss_info_json_impl() {
   const char* fastscan = "false";
 #endif
   return std::string("{\"available\":true,\"library\":\"faiss\",\"interface\":\"c++\",") +
+    "\"version\":\"" + version + "\"," +
     "\"gpu\":" + gpu + ",\"gpu_cagra\":" + gpu_cagra +
     ",\"fastscan\":" + fastscan + "}";
 }
@@ -1714,9 +1727,6 @@ List faiss_gpu_bfknn_float32_gpu_impl(SEXP data,
   args.outIndicesType = faiss::gpu::IndicesDataType::I64;
   args.outIndices = d_raw_indices.ptr;
   args.device = device;
-#ifdef FAISSR_HAS_CUVS
-  args.use_cuvs = true;
-#endif
 
   faiss::gpu::StandardGpuResources& resources = reusable_faiss_gpu_resources();
   faiss::gpu::bfKnn(&resources, args);

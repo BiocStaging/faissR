@@ -29,8 +29,9 @@ to `data`, i.e. self-query candidate KNN.}
 
 \item{k}{Number of neighbours to return from each candidate row.}
 
-\item{backend}{`"auto"`/`"cpu"` for the general CPU implementation,
-`"cuda"` for the native CUDA row-candidate kernel. GPU backends currently
+\item{backend}{`"cpu"` for the general CPU implementation or `"cuda"` for
+the native CUDA row-candidate kernel. `NULL` follows the package backend
+configuration. GPU backends currently
 require self-query candidates with `exclude_self = TRUE` and `k <= 256`.}
 
 \item{metric}{`"euclidean"`, `"cosine"`, or `"correlation"`. Legacy
