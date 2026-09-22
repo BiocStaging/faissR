@@ -106,6 +106,18 @@ to conceal missing R graphics capabilities.
 
 ## Run the complete matrix
 
+After changing an `Rcpp::export` declaration, regenerate and format the native
+wrappers before building the source archive:
+
+```sh
+Rscript -e 'Rcpp::compileAttributes(".")'
+Rscript .github/scripts/format-rcpp-exports.R
+```
+
+The second command changes layout only. It keeps generated wrapper signatures
+within Bioconductor's 80-column recommendation without changing their parsed R
+expressions.
+
 Build the package using `R CMD build` first. Run from the controller:
 
 ```sh
