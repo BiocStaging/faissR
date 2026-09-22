@@ -426,7 +426,8 @@ be inspected, but they do not provide nearest-neighbour computation.
 ## Bioconductor Readiness
 
 `faissR` includes the `GPU` `biocViews` term, a `BiocStyle` vignette,
-a standard `License: MIT + file LICENSE` declaration, and a top-level
+the R-standard `License: MIT + file LICENSE` identifier for the Expat
+License, and a top-level
 `.BBSoptions` file with `GPU_reliance: optional`. This opts the package into
 Bioconductor GPU builders without making NVIDIA libraries mandatory for the
 regular CPU/FAISS build. Local submission checks should be run from a source
@@ -434,14 +435,14 @@ tarball:
 
 ```sh
 R CMD build .
-R CMD check --as-cran faissR_0.99.46.tar.gz
+R CMD check --as-cran faissR_0.99.47.tar.gz
 ```
 
 and then:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.46.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.47.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA and cuVS are
@@ -644,10 +645,12 @@ nn_res$indices[1:3, 1:5]
 
 ## License
 
-`faissR` is released under the MIT license. FAISS is MIT-licensed and cuVS is
-Apache-2.0-licensed; both are supplied by the user's system and are not
-vendored. The CUDA toolkit and driver remain subject to NVIDIA's CUDA SDK
-license. See `inst/THIRD_PARTY_LICENSES.md` for links and the distribution
-boundary. External libraries such as FAISS
+`faissR` is distributed under the Expat License, a permissive,
+GPL-compatible free-software license. R package metadata identifies this
+standard license template as `MIT + file LICENSE`. FAISS also uses the Expat
+License, while cuVS uses Apache-2.0; both are supplied by the user's system and
+are not vendored. The CUDA toolkit and driver remain subject to NVIDIA's CUDA
+SDK license. See `LICENSE.note` and `inst/THIRD_PARTY_LICENSES.md` for links
+and the distribution boundary. External libraries such as FAISS
 and RAPIDS cuVS are linked as system dependencies and are not vendored into
 the R package [1-3,13-16].

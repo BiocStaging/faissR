@@ -832,9 +832,10 @@ was used.
 
 ## Licensing And Acknowledgement
 
-faissR is released under the MIT license. The implementation is inspired by and
-links against external work including FAISS, FAISS GPU/cuVS integration, RAPIDS
-cuVS, HNSW, NN-Descent, IVF, product quantization, k-means, NSG,
+faissR is distributed under the Expat License. R package metadata identifies
+this standard template as `MIT + file LICENSE`. The implementation is inspired
+by and links against external work including FAISS, FAISS GPU/cuVS integration,
+RAPIDS cuVS, HNSW, NN-Descent, IVF, product quantization, k-means, NSG,
 DiskANN/Vamana, and related ANN
 designs such as GGNN, SONG, BANG, and PilotANN [1-8,13-16,20-29]. See
 [References](references.md) for papers, software projects, and acknowledgements.

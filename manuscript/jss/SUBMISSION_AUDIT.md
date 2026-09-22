@@ -1,6 +1,6 @@
 # Submission audit
 
-Date: 2026-09-22. Package: faissR 0.99.46.
+Date: 2026-09-22. Package: faissR 0.99.47.
 This is a maintenance report, not part of the scientific article.
 
 ## Corrections
@@ -45,29 +45,35 @@ This is a maintenance report, not part of the scientific article.
 - Reconciled the publication evidence matrix with completed audits and removed
   stale statements that described completed HNSW and query-workload work as
   pending.
+- Named the package and FAISS license as the Expat License in public-facing
+  material while retaining R's standardized `MIT + file LICENSE` metadata.
 
 ## Verification
 
-- Functional local installation of 0.99.46 with external FAISS succeeded.
-- R CMD check --as-cran --no-manual: 0 errors, 0 warnings, 1 note (new
-  submission). Tests, examples, compiled-code checks, Rd consistency, online
-  incoming checks, and vignette rebuilding passed under a valid UTF-8 locale.
+- Functional local installation of 0.99.47 with external FAISS succeeded.
+- R CMD check --as-cran --no-manual: 0 errors, 0 warnings, 1 note. Tests,
+  examples, compiled-code checks, Rd consistency, and vignette rebuilding
+  passed under a valid UTF-8 locale. The note records Apple compiler result
+  bundles left in the temporary check directory; remote incoming checks and the
+  unavailable suggested data package were skipped in the offline environment.
   The reference manual was built separately.
-- BiocCheck 1.49.30: 0 errors, 0 warnings, 1 note. The note reports that
+- The previous complete BiocCheck 1.49.30 run reported 0 errors, 0 warnings,
+  and 1 note. The note reports that
   subscription to the bioc-devel mailing list cannot be verified without
   Bioconductor administrative credentials; the maintainer is registered at
   the support site and watches the `faissr` tag. All package-source,
   function-length, formatting, documentation, dependency, license, vignette,
-  and unit-test checks ran.
+  and unit-test checks ran. The current rerun could not obtain Bioconductor's
+  online status data in the offline test environment.
 - The complete replication entry point passed checksum validation, archive
   analysis and compact examples. Completed-systems audits passed for 720 tuned
   HNSW repetitions and 60 CPU plus 60 CUDA query-workload cells.
 - Static manuscript/reference/version and asset checks passed. The current
-  JSS-layout article has 20 pages and the supplement has 21 pages. Both editable
+  JSS-layout article has 19 pages and the supplement has 20 pages. Both editable
   Word documents were rendered and visually inspected.
-- A clean `git archive` of commit `79f4d6b` reproduced the checksum-gated
+- A clean `git archive` of the audited source reproduced the checksum-gated
   analyses, compact CPU example, all 18 evidence tables, both figures, the
-  20-page article, the 21-page supplement, and both editable Word documents.
+  article, supplement, and both editable Word documents.
 
 ## Publication boundary
 

@@ -57,6 +57,6 @@ robust-pruned graph construction [24] and uses faissR-owned candidate
 refinement code; GGNN, SONG, BANG, and PilotANN are acknowledged as related GPU
 ANN systems and design references, but their source code is not vendored or
 copied into faissR [25-28]. The distinct native CUDA NSG/MRNG-derived route is inspired by the
-NSG paper and official MIT-licensed NSG software, but no ZJULearning/nsg source
+NSG paper and official Expat-licensed NSG software, but no ZJULearning/nsg source
 code is vendored or copied into faissR [21,29]. The package does not use a
 Python bridge.

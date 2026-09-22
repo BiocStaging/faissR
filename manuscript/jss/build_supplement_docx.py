@@ -145,7 +145,11 @@ def word_source(source: str) -> str:
         lambda match: r"\texttt{" + match.group(1).replace("_", r"\_") + "}",
         source,
     )
-    source = source.replace(r"\textsuperscript{\(\dagger\)}", " ")
+    source = source.replace(r"$^{1,2,\dagger}$", " (1,2; co-first)")
+    source = source.replace(r"$^{1,2,\ast}$", " (1,2; corresponding)")
+    source = source.replace(r"\textsuperscript{$\dagger$}", "† ")
+    source = source.replace(r"\textsuperscript{\(\dagger\)}", "† ")
+    source = source.replace(r"\textsuperscript{*}", "* ")
     source = source.replace(r"\dagger", "")
     source = source.replace(r"\ast", "")
     source = expand_latex_multicolumns(source)
@@ -288,7 +292,7 @@ def polish(path: Path) -> None:
         text = paragraph.text.strip()
         if paragraph.style.name in {"First Paragraph", "Body Text"} and (
             text.startswith("(1) Bioinformatics Unit")
-            or text.startswith("Moussa Kassim and Martin Ocharo")
+            or text.startswith("Moussa Kassim Mohamed and Martin Ocharo")
         ):
             paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
             paragraph.paragraph_format.line_spacing = 1.0

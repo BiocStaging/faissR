@@ -1,11 +1,12 @@
 # External native libraries
 
-`faissR` is distributed under the MIT license. It does not vendor or
+`faissR` is distributed under the Expat License. R package metadata identifies
+this standard template as `MIT + file LICENSE`. The package does not vendor or
 redistribute FAISS, cuVS, the CUDA toolkit, or NVIDIA drivers.
 
 | Component | License | Distribution relationship |
 |---|---|---|
-| FAISS | MIT ([license](https://github.com/facebookresearch/faiss/blob/main/LICENSE)) | Required system library supplied by the user or build environment. |
+| FAISS | Expat ([license](https://github.com/facebookresearch/faiss/blob/main/LICENSE)) | Required system library supplied by the user or build environment. |
 | RAPIDS cuVS | Apache License 2.0 ([license](https://github.com/rapidsai/cuvs/blob/main/LICENSE)) | Optional system library supplied by the user or build environment. |
 | NVIDIA CUDA toolkit and driver | NVIDIA CUDA SDK EULA ([terms](https://docs.nvidia.com/cuda/eula/index.html)) | Optional user-installed runtime/toolkit; not redistributed by `faissR`. |
 
